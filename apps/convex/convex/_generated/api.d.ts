@@ -110,23 +110,6 @@ export declare const api: {
         }
       >;
     };
-    stats: {
-      overview: FunctionReference<
-        "query",
-        "public",
-        {},
-        {
-          failedJobs: number;
-          failedJobsCapped: boolean;
-          recentSignups: Array<{
-            _id: Id<"users">;
-            createdAt: number;
-            email?: string;
-            name?: string;
-          }>;
-        }
-      >;
-    };
     users: {
       deleteAccount: FunctionReference<
         "mutation",

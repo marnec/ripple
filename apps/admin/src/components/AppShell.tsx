@@ -11,7 +11,6 @@ import { navigate, useRouteSegments } from "@/hooks/useHashRoute";
 import { cn } from "@/lib/utils";
 import { InvitesPage } from "@/pages/Invites";
 import { JobsPage } from "@/pages/Jobs";
-import { OverviewPage } from "@/pages/Overview";
 import { UserDetailPage, UsersPage } from "@/pages/Users";
 import { WorkspaceDetailPage, WorkspacesPage } from "@/pages/Workspaces";
 import { useAuthActions } from "@convex-dev/auth/react";
@@ -20,7 +19,6 @@ import type { Id } from "@convex/_generated/dataModel";
 import { useQuery } from "convex/react";
 import {
   Building2Icon,
-  GaugeIcon,
   HeartPulseIcon,
   LogOutIcon,
   MailIcon,
@@ -28,16 +26,24 @@ import {
   UsersIcon,
   type LucideIcon,
 } from "lucide-react";
+import { useEffect } from "react";
 
 type NavItem = { label: string; path: string; icon: LucideIcon };
 
 const NAV: NavItem[] = [
-  { label: "Overview", path: "/", icon: GaugeIcon },
   { label: "Users", path: "/users", icon: UsersIcon },
   { label: "Workspaces", path: "/workspaces", icon: Building2Icon },
   { label: "Invites", path: "/invites", icon: MailIcon },
   { label: "Jobs", path: "/jobs", icon: HeartPulseIcon },
 ];
+
+/**
+ * There is no dashboard: platform-wide totals need un-namespaced aggregates
+ * (the ones in `dbTriggers.ts` are keyed by `workspaceId`), so until those
+ * exist the console lands on its first real page rather than on a page whose
+ * only honest content was a failed-jobs tile.
+ */
+const HOME = NAV[0].path;
 
 // Surfaced but inert — signals the roadmap without pretending to work.
 const SOON: NavItem[] = [{ label: "Integrations", path: "/integrations", icon: PlugIcon }];
@@ -45,6 +51,12 @@ const SOON: NavItem[] = [{ label: "Integrations", path: "/integrations", icon: P
 export function AppShell() {
   const segments = useRouteSegments();
   const top = segments[0] ?? "";
+
+  // A bare "#/" renders HOME already; rewriting the hash canonicalises the URL
+  // so the sidebar highlights the page the operator is actually looking at.
+  useEffect(() => {
+    if (segments.length === 0) navigate(HOME);
+  }, [segments.length]);
 
   return (
     <TooltipProvider>
@@ -63,8 +75,9 @@ export function AppShell() {
 function Routed({ segments }: { segments: string[] }) {
   const [top, id] = segments;
   switch (top) {
+    // `undefined` is the bare "#/" that AppShell is about to rewrite to HOME;
+    // rendering the same page for both means no blank frame and no remount.
     case undefined:
-      return <OverviewPage />;
     case "users":
       return id ? <UserDetailPage userId={id as Id<"users">} /> : <UsersPage />;
     case "workspaces":
@@ -78,7 +91,7 @@ function Routed({ segments }: { segments: string[] }) {
     case "jobs":
       return <JobsPage />;
     default:
-      return <OverviewPage />;
+      return <UsersPage />;
   }
 }
 
@@ -158,7 +171,7 @@ function Sidebar({ active }: { active: string }) {
 }
 
 function isActive(active: string, path: string) {
-  if (path === "/") return active === "";
+  if (active === "") return path === HOME;
   return "/" + active === path;
 }
 

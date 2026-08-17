@@ -12,7 +12,6 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Avatar, AvatarFallback, AvatarImage } from "@ripple/ui/components/avatar";
 import { Button } from "@ripple/ui/components/button";
-import { Card } from "@ripple/ui/components/card";
 import {
   Dialog,
   DialogContent,
@@ -169,38 +168,6 @@ export function UserAvatar({
       {image && <AvatarImage src={image} alt="" />}
       <AvatarFallback className="font-mono text-[11px]">{initials(name, email)}</AvatarFallback>
     </Avatar>
-  );
-}
-
-// ── Metrics ──────────────────────────────────────────────────────────────
-export function StatCard({
-  label,
-  value,
-  sub,
-  accent,
-  delay = 0,
-}: {
-  label: string;
-  value: ReactNode;
-  sub?: ReactNode;
-  accent?: boolean;
-  delay?: number;
-}) {
-  return (
-    <Card className="animate-rise gap-0 p-4" style={{ animationDelay: `${delay}ms` }}>
-      <div className="font-mono text-[11px] tracking-[0.16em] text-muted-foreground uppercase">
-        {label}
-      </div>
-      <div
-        className={cn(
-          "mt-2 font-mono text-3xl font-semibold tabular-nums",
-          accent ? "text-primary" : "text-foreground",
-        )}
-      >
-        {value}
-      </div>
-      {sub && <div className="mt-1 text-xs text-muted-foreground">{sub}</div>}
-    </Card>
   );
 }
 

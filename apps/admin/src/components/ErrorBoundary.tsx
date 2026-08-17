@@ -32,7 +32,7 @@ export class ErrorBoundary extends Component<
             window.location.hash = "/";
           }}
         >
-          Back to overview
+          Back to the console
         </Button>
       </div>
     );
