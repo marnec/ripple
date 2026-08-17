@@ -11,7 +11,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@ripple/ui/components/select";
 import { GitMerge, Plus, X } from "lucide-react";
 import { BranchPicker } from "./BranchPicker";
 

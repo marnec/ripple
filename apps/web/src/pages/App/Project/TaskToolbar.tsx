@@ -10,7 +10,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@ripple/ui/components/select";
 import { cn } from "@/lib/utils";
 import {
   PRIORITIES,

@@ -1,8 +1,15 @@
-import { Field, FormDialog, SelectInput } from "@/components/console";
+import { Field, FormDialog } from "@/components/console";
 import { errorMessage } from "@/lib/errors";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 import { Input } from "@ripple/ui/components/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@ripple/ui/components/select";
 import { useMutation, useQuery } from "convex/react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -39,7 +46,8 @@ export function InviteMemberDialog({
   );
 
   const [email, setEmail] = useState("");
-  const [picked, setPicked] = useState("");
+  // `null` rather than "" so the Select renders its placeholder.
+  const [picked, setPicked] = useState<Id<"workspaces"> | null>(null);
   const [busy, setBusy] = useState(false);
 
   // Clear the form when the dialog (re)opens — during render via the
@@ -49,11 +57,11 @@ export function InviteMemberDialog({
     setWasOpen(open);
     if (open) {
       setEmail("");
-      setPicked("");
+      setPicked(null);
     }
   }
 
-  const targetId = workspaceId ?? (picked as Id<"workspaces"> | "");
+  const targetId = workspaceId ?? picked;
 
   const submit = () => {
     if (!targetId) return;
@@ -84,21 +92,33 @@ export function InviteMemberDialog({
             {workspaceName ?? workspaceId}
           </div>
         ) : (
-          <SelectInput
-            id="invite-workspace"
+          <Select
             value={picked}
             disabled={workspaces === undefined}
             onValueChange={setPicked}
           >
-            <option value="" disabled>
-              {workspaces === undefined ? "Loading…" : "Choose a workspace…"}
-            </option>
-            {workspaces?.map((w) => (
-              <option key={w._id} value={w._id}>
-                {w.name}
-              </option>
-            ))}
-          </SelectInput>
+            <SelectTrigger id="invite-workspace" className="h-9 w-full">
+              {/* A function child owns the label outright — base-ui ignores
+                  `placeholder` as soon as one is given — so the unselected case
+                  is spelled out here rather than delegated. */}
+              <SelectValue>
+                {(value: Id<"workspaces"> | null) =>
+                  value === null
+                    ? workspaces === undefined
+                      ? "Loading…"
+                      : "Choose a workspace…"
+                    : (workspaces?.find((w) => w._id === value)?.name ?? value)
+                }
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              {workspaces?.map((w) => (
+                <SelectItem key={w._id} value={w._id}>
+                  {w.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         )}
       </Field>
 

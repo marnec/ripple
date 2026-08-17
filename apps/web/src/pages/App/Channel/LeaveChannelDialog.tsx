@@ -13,7 +13,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@ripple/ui/components/select";
 import { useViewer } from "../UserContext";
 import { useQuery } from "convex-helpers/react/cache";
 import { useMutation } from "convex/react";

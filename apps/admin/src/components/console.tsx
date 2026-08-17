@@ -286,41 +286,6 @@ export function Field({
   );
 }
 
-/**
- * Native `<select>` themed to match the console's inputs. There is no Select
- * primitive in `@ripple/ui`, and the pickers here are short, single-choice and
- * keyboard-driven — which is exactly what the platform control already is.
- */
-export function SelectInput({
-  id,
-  value,
-  onValueChange,
-  disabled,
-  children,
-}: {
-  id: string;
-  value: string;
-  onValueChange: (value: string) => void;
-  disabled?: boolean;
-  children: ReactNode;
-}) {
-  return (
-    <select
-      id={id}
-      value={value}
-      disabled={disabled}
-      onChange={(e) => onValueChange(e.target.value)}
-      className={cn(
-        "h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs outline-none transition-[color,box-shadow]",
-        "focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50",
-        "disabled:cursor-not-allowed disabled:opacity-50",
-      )}
-    >
-      {children}
-    </select>
-  );
-}
-
 // ── Destructive-action dialogs ───────────────────────────────────────────
 export function ConfirmDialog({
   open,

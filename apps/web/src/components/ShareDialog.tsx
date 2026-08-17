@@ -14,7 +14,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@ripple/ui/components/select";
 import { Input } from "@ripple/ui/components/input";
 import { Label } from "@/components/ui/label";
 import { useMutation } from "convex/react";

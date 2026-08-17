@@ -5,7 +5,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@ripple/ui/components/select";
 import { useViewer } from "../UserContext";
 import { useMutation } from "convex/react";
 import { useQuery } from "convex-helpers/react/cache";

@@ -7,7 +7,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "../../../components/ui/select";
+} from "@ripple/ui/components/select";
 import { Switch } from "../../../components/ui/switch";
 import { useAudioLevel } from "../../../hooks/use-audio-level";
 import { useMediaDevices } from "../../../hooks/use-media-devices";

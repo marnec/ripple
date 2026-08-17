@@ -5,7 +5,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@ripple/ui/components/select";
 import { toast } from "sonner";
 import { ChannelRole } from "@ripple/shared/enums";
 import { getUserDisplayName } from "@ripple/shared/displayName";

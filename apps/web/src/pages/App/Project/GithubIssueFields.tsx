@@ -6,7 +6,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@ripple/ui/components/select";
 import { GitBranch } from "lucide-react";
 import type { Id } from "@convex/_generated/dataModel";
 import type { ActiveRepoLink } from "./useGithubIssueEligibility";
