@@ -15,7 +15,19 @@
   max-height: inherit;
 }
 
-.bn-shadcn .bn-editor {
+/*
+ * Collapse BlockNote's default 54px inline padding for the chat composer — its
+ * wrapper already supplies the padding.
+ *
+ * MUST stay scoped to `.message-composer-frame`. This file is imported by
+ * `Chat.tsx`, but a stylesheet is global once its chunk loads: as
+ * `.bn-shadcn .bn-editor` this rule silently stripped the padding from EVERY
+ * shadcn BlockNote editor in the app — most visibly the document editor, whose
+ * side margins vanished the moment anything pulled in the chat chunk (hovering
+ * a channel/DM row in the sidebar preloads it via `preloadChatContainer`).
+ * Keep two class selectors so it still outweighs core's `.bn-editor`.
+ */
+.message-composer-frame .bn-editor {
   padding-inline: 0;
 }
 

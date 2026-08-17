@@ -528,7 +528,9 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
             why it never showed the artifact.) */}
         <div
           className={cn(
-            "w-full grow min-w-0 box-border border rounded-md px-2 transition-shadow focus-within:ring-2 focus-within:ring-offset-1",
+            // `message-composer-frame` scopes message-composer.css's BlockNote
+            // padding override to this editor — see the comment on that rule.
+            "message-composer-frame w-full grow min-w-0 box-border border rounded-md px-2 transition-shadow focus-within:ring-2 focus-within:ring-offset-1",
             isEditing
               ? "border-amber-500/50 focus-within:ring-amber-500"
               : "focus-within:ring-ring",
