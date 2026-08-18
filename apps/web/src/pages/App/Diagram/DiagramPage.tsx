@@ -133,6 +133,7 @@ function DiagramPageContent({ diagramId, workspaceId }: { diagramId: Id<"diagram
     awareness,
     provider,
     isConnected,
+    isConnecting,
     isOffline,
     isLoading,
     isHydrated,
@@ -219,7 +220,11 @@ function DiagramPageContent({ diagramId, workspaceId }: { diagramId: Id<"diagram
           <TagInlineStrip tags={diagram?.tags ?? []} />
         </div>
         <div className="flex h-8 items-center gap-3">
-          <ConnectionStatus isConnected={isConnected} hasSyncError={syncDegraded} />
+          <ConnectionStatus
+            isConnected={isConnected}
+            isConnecting={isConnecting}
+            hasSyncError={syncDegraded}
+          />
           {isConnected && (
             <ActiveUsers
               remoteUsers={remotePointers.map((p) => ({

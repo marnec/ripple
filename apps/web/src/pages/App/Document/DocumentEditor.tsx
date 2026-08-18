@@ -103,7 +103,7 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
   // the collaboration hook run before the metadata it now supplies the cache for.
   const fileUpload = useUploadFile(workspaceId);
 
-  const { editor, isLoading, isConnected, isOffline, isHydrated, provider, roomStore } =
+  const { editor, isLoading, isConnected, isConnecting, isOffline, isHydrated, provider, roomStore } =
     useDocumentCollaboration({
       documentId,
       userName: viewer?.name ?? "Anonymous",
@@ -394,7 +394,7 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
           <TagInlineStrip tags={document?.tags ?? []} />
         </div>
         <div className="flex h-8 items-center gap-3">
-          <ConnectionStatus isConnected={isConnected} />
+          <ConnectionStatus isConnected={isConnected} isConnecting={isConnecting} />
           {isConnected && (
             <ActiveUsers
               remoteUsers={remoteUsers}

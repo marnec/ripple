@@ -17,6 +17,8 @@ export interface UseDiagramCollaborationResult {
   provider: CollaborativeDoc["provider"];
   isConnected: boolean;
   isOffline: boolean;
+  /** Still trying to reach the room — see `CollaborativeDoc.isConnecting`. */
+  isConnecting: boolean;
   isLoading: boolean;
   /** See `CollaborativeDoc.isHydrated` — false means "contents unknown". */
   isHydrated: boolean;
@@ -43,7 +45,7 @@ export function useDiagramCollaboration({
   userName,
   userId,
 }: UseDiagramCollaborationOptions): UseDiagramCollaborationResult {
-  const { yDoc, provider, awareness, isConnected, isLoading, isOffline, isHydrated, roomStore } =
+  const { yDoc, provider, awareness, isConnected, isLoading, isOffline, isHydrated, roomStore, isConnecting } =
     useResourceDoc({
       resourceType: "diagram",
       resourceId: diagramId,
@@ -63,6 +65,7 @@ export function useDiagramCollaboration({
     yDoc,
     provider,
     isConnected,
+    isConnecting,
     isOffline,
     isLoading,
     isHydrated,

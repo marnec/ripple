@@ -189,10 +189,10 @@ describe("connection status", () => {
     );
 
   it("shows a spinner only while a connection is genuinely in flight", () => {
-    expect(statusAfter()).toMatchObject({ isLoading: true });
+    expect(statusAfter()).toMatchObject({ isConnecting: true });
     expect(statusAfter({ type: "synced", at: 0 })).toEqual({
       isConnected: true,
-      isLoading: false,
+      isConnecting: false,
       isOffline: false,
     });
   });
@@ -202,7 +202,7 @@ describe("connection status", () => {
     // sat under a spinner that could never resolve.
     expect(statusAfter({ type: "permission-revoked", at: 0 })).toEqual({
       isConnected: false,
-      isLoading: false,
+      isConnecting: false,
       isOffline: true,
     });
   });
@@ -210,7 +210,7 @@ describe("connection status", () => {
   it("reports offline without claiming to still be connected", () => {
     expect(statusAfter({ type: "browser-offline", at: 0 })).toEqual({
       isConnected: false,
-      isLoading: false,
+      isConnecting: false,
       isOffline: true,
     });
   });
@@ -263,6 +263,16 @@ describe("connection status", () => {
 
       const { state } = reduceConnection(synced, { type: "reset", at: 2_000 });
       expect(state.hasSynced).toBe(false);
+    });
+  });
+
+  it("reports connecting before anything has been attempted", () => {
+    // Not offline: nothing has failed yet, and saying so would strand a
+    // document that is about to connect.
+    expect(connectionStatus(initialConnectionState())).toEqual({
+      isConnected: false,
+      isConnecting: true,
+      isOffline: false,
     });
   });
 });

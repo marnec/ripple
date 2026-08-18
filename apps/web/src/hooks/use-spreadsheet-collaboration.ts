@@ -17,6 +17,8 @@ export interface UseSpreadsheetCollaborationResult {
   awareness: Awareness;
   isConnected: boolean;
   isOffline: boolean;
+  /** Still trying to reach the room — see `CollaborativeDoc.isConnecting`. */
+  isConnecting: boolean;
   isLoading: boolean;
   /** See `CollaborativeDoc.isHydrated` — false means "contents unknown". */
   isHydrated: boolean;
@@ -36,7 +38,7 @@ export function useSpreadsheetCollaboration({
   userName,
   userId,
 }: UseSpreadsheetCollaborationOptions): UseSpreadsheetCollaborationResult {
-  const { yDoc, provider, awareness, isConnected, isLoading, isOffline, isHydrated, roomStore } =
+  const { yDoc, provider, awareness, isConnected, isLoading, isOffline, isHydrated, roomStore, isConnecting } =
     useResourceDoc({
       resourceType: "spreadsheet",
       resourceId: spreadsheetId,
@@ -52,6 +54,7 @@ export function useSpreadsheetCollaboration({
     provider,
     awareness,
     isConnected,
+    isConnecting,
     isOffline,
     isLoading,
     isHydrated,

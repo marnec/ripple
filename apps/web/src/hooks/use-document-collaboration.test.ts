@@ -16,9 +16,11 @@ import { useDocumentCollaboration, type DescriptionSeed } from "./use-document-c
  * what that typing would cost.
  */
 
-const { FakeProvider, cache, convexQuery } = vi.hoisted(() => {
+const { FakeProvider, cache, convexQuery, mint } = vi.hoisted(() => {
   const cache = new Map<string, (doc: unknown) => void>();
   const convexQuery = vi.fn();
+  /** How the collaboration token behaves. Tests can make it never arrive. */
+  const mint = { run: async () => ({ token: "t", roomId: "doc-doc-1" }) };
 
   class FakeProvider {
     static instances: FakeProvider[] = [];
@@ -51,7 +53,7 @@ const { FakeProvider, cache, convexQuery } = vi.hoisted(() => {
     }
   }
 
-  return { FakeProvider, cache, convexQuery };
+  return { FakeProvider, cache, convexQuery, mint };
 });
 
 vi.mock("y-partyserver/provider", () => ({ default: FakeProvider }));
@@ -75,7 +77,7 @@ vi.mock("y-indexeddb", () => ({
 vi.mock("convex/react", () => ({
   useConvex: () => ({ query: convexQuery }),
   useConvexAuth: () => ({ isAuthenticated: true, isLoading: false }),
-  useAction: () => async () => ({ token: "t", roomId: "doc-doc-1" }),
+  useAction: () => () => mint.run(),
 }));
 
 const schema = BlockNoteSchema.create({ blockSpecs: defaultBlockSpecs });
@@ -118,6 +120,7 @@ beforeEach(() => {
   cache.clear();
   convexQuery.mockReset();
   convexQuery.mockResolvedValue({ status: "unavailable" });
+  mint.run = async () => ({ token: "t", roomId: "doc-doc-1" });
   clearCollaborationTokenCache();
 });
 
@@ -141,6 +144,46 @@ describe("useDocumentCollaboration", () => {
     await waitFor(() => expect(result.current.isHydrated).toBe(true));
     // The provider is built but has not synced; the cache alone is enough.
     await waitFor(() => expect(result.current.editor).not.toBeNull());
+  });
+
+  /**
+   * Opening a cached document must not wait on the network deciding what it
+   * is. When the browser still believes it is online but nothing answers, the
+   * token mint hangs: no provider is ever built and the connection sits in
+   * `connecting`. The editor used to require one of those to resolve, so a
+   * document already on the device sat behind a blank page until the mint
+   * finally failed — and then opened already marked offline.
+   */
+  it("opens a cached document immediately, while the connection is still being attempted", async () => {
+    cacheDocument("doc-doc-1", "written on a previous visit");
+    // A token that never arrives, so no provider is ever constructed.
+    mint.run = () => new Promise(() => {});
+
+    const { result } = render();
+
+    await waitFor(() => expect(result.current.isHydrated).toBe(true));
+    expect(result.current.editor).not.toBeNull();
+    // Still trying — not connected, and not yet given up. That is what the
+    // toolbar shows while the document is already readable.
+    expect(result.current.isConnected).toBe(false);
+    expect(result.current.isConnecting).toBe(true);
+    expect(result.current.isOffline).toBe(false);
+  });
+
+  it("settles from connecting to offline without taking the document away", async () => {
+    cacheDocument("doc-doc-1", "written on a previous visit");
+    mint.run = () => new Promise(() => {});
+
+    const { result } = render();
+    await waitFor(() => expect(result.current.editor).not.toBeNull());
+    expect(result.current.isConnecting).toBe(true);
+
+    window.dispatchEvent(new Event("offline"));
+
+    await waitFor(() => expect(result.current.isOffline).toBe(true));
+    expect(result.current.isConnecting).toBe(false);
+    // The verdict changes the indicator, never the content.
+    expect(result.current.editor).not.toBeNull();
   });
 
   /**

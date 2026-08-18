@@ -58,6 +58,8 @@ export interface UseDocumentCollaborationResult<
   isLoading: boolean;
   isConnected: boolean;
   isOffline: boolean;
+  /** Still trying to reach the room — see `CollaborativeDoc.isConnecting`. */
+  isConnecting: boolean;
   provider: CollaborativeDoc["provider"];
   yDoc: CollaborativeDoc["yDoc"];
   /**
@@ -104,6 +106,7 @@ export function useDocumentCollaboration<
     provider,
     awareness,
     isConnected,
+    isConnecting,
     isLoading,
     isOffline,
     isCacheLoaded,
@@ -113,15 +116,13 @@ export function useDocumentCollaboration<
 
   // Derived, not stored: `isCacheLoaded` only flips once per document, and
   // reading the fragment is what "did the cache have anything" means.
+  //
+  // Only the seed gate needs this, and it needs actual TEXT rather than block
+  // count: BlockNote seeds an empty document with a blank paragraph, so a count
+  // would falsely report "cached content" and unblock the editor before a
+  // GitHub description seed lands. Whether there is anything to *show* is
+  // `isHydrated`'s question, not this one.
   const cachedFragment = isCacheLoaded ? yDoc.getXmlFragment(DOCUMENT_FRAGMENT) : null;
-  // True when the cache replayed AND the fragment holds cached blocks (any
-  // count). Shows the editor from cache without waiting for the provider —
-  // valid for docs/diagrams whose content may be non-text.
-  const cachedContentReady = cachedFragment !== null && cachedFragment.length > 0;
-  // Like above but requires actual TEXT. The seed gate must use this: BlockNote
-  // seeds an empty doc with a blank paragraph (block count 1, no text), so the
-  // plain count would falsely report "cached content" and unblock the editor
-  // before the GitHub seed lands.
   const cachedTextReady =
     cachedFragment !== null && extractTextFromXml(cachedFragment).trim().length > 0;
 
@@ -246,25 +247,24 @@ export function useDocumentCollaboration<
   }, [isHydrated, descriptionReady, yDoc]);
 
   return {
-    // Gate editor on content readiness to prevent empty-editor flash:
-    // - isConnected: provider synced (authoritative state, even if empty)
-    // - isOffline: timeout fallback, show whatever we have
-    // - cachedContentReady && provider: IndexedDB had real content AND editor
-    //   already recreated with real provider awareness (no second flash)
-    // ...AND descriptionReady, so a task expecting a seed stays gated until the
-    // seed loads (or times out). Non-task callers always have descriptionReady.
-    // ...AND isHydrated, which outranks all of it: `isOffline` alone used to
-    // hand back a writable editor bound to a document we had never been told
-    // the contents of, and every keystroke into that document was a rival root
-    // waiting to destroy the real one on reconnect.
-    editor:
-      isHydrated &&
-      (isConnected || isOffline || (cachedContentReady && !!provider)) &&
-      descriptionReady
-        ? editor
-        : null,
+    // One gate: do we hold the document's state? `isHydrated` is exactly the
+    // question the editor needs answered — a sync, a non-empty cache, or a
+    // stored snapshot — and nothing else about the connection matters.
+    //
+    // It used to additionally require `isConnected || isOffline || provider`,
+    // which meant a document already cached on the device stayed behind a
+    // blank page until the *network* reached a verdict. With the browser still
+    // reporting itself online but nothing answering, that verdict only came
+    // when the token mint gave up, so the page hung and then opened already
+    // marked offline. Connection state belongs in the toolbar, not in whether
+    // there is a document to show.
+    //
+    // `descriptionReady` stays: a task expecting a GitHub seed is waiting on
+    // content that really is still coming.
+    editor: isHydrated && descriptionReady ? editor : null,
     isLoading,
     isConnected,
+    isConnecting,
     isOffline,
     isHydrated,
     roomStore,

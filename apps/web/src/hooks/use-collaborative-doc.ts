@@ -58,6 +58,8 @@ export interface CollaborativeDoc {
    */
   awareness: Awareness;
   isConnected: boolean;
+  /** Still trying to reach the room: neither connected nor given up. */
+  isConnecting: boolean;
   isLoading: boolean;
   isOffline: boolean;
   /** True once IndexedDB has replayed this room's offline cache. */
@@ -477,12 +479,11 @@ export function useCollaborativeDoc({
     isHydrated,
     roomStore,
     ...status,
-    // Loading means "nothing to show yet", not "no socket yet". Holding the
-    // room's state is something to show, so it ends the wait exactly as a sync
-    // does — which is why every editor used to re-derive this itself. An
-    // offline cache that replayed *nothing* is not something to show, which is
-    // the part this used to get wrong.
-    isLoading: status.isLoading && !isHydrated,
+    // Loading means "nothing to show yet", not "no socket yet" — which is why
+    // it is derived from `isConnecting` rather than being the same boolean.
+    // Holding the room's state ends the wait exactly as a sync does; an
+    // offline cache that replayed *nothing* does not.
+    isLoading: status.isConnecting && !isHydrated,
   };
 }
 

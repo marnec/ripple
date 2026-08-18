@@ -92,17 +92,24 @@ export function initialConnectionState(): ConnectionState {
   };
 }
 
-/** The three booleans every collaboration surface renders from. */
+/**
+ * The three booleans every collaboration surface renders from.
+ *
+ * `isConnecting` is about the socket, not about the page: it means we are
+ * still trying, and have neither succeeded nor given up. Whether there is
+ * anything to *show* is a separate question, answered by `isHydrated` — a
+ * cached document is readable while this is still true.
+ */
 export interface ConnectionStatus {
   isConnected: boolean;
-  isLoading: boolean;
+  isConnecting: boolean;
   isOffline: boolean;
 }
 
 export function connectionStatus(state: ConnectionState): ConnectionStatus {
   return {
     isConnected: state.phase === "connected",
-    isLoading: state.phase === "idle" || state.phase === "connecting",
+    isConnecting: state.phase === "idle" || state.phase === "connecting",
     isOffline: state.phase === "offline" || state.phase === "stopped",
   };
 }
