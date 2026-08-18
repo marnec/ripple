@@ -20,6 +20,8 @@ export interface UseSpreadsheetCollaborationResult {
   isLoading: boolean;
   /** See `CollaborativeDoc.isHydrated` — false means "contents unknown". */
   isHydrated: boolean;
+  /** This room's local key/value store — see `CollaborativeDoc.roomStore`. */
+  roomStore: CollaborativeDoc["roomStore"];
 }
 
 /**
@@ -34,7 +36,7 @@ export function useSpreadsheetCollaboration({
   userName,
   userId,
 }: UseSpreadsheetCollaborationOptions): UseSpreadsheetCollaborationResult {
-  const { yDoc, provider, awareness, isConnected, isLoading, isOffline, isHydrated } =
+  const { yDoc, provider, awareness, isConnected, isLoading, isOffline, isHydrated, roomStore } =
     useResourceDoc({
       resourceType: "spreadsheet",
       resourceId: spreadsheetId,
@@ -45,5 +47,14 @@ export function useSpreadsheetCollaboration({
     awareness.setLocalStateField("user", { name: userName, color: userColor });
   }, [awareness, userName, userColor]);
 
-  return { yDoc, provider, awareness, isConnected, isOffline, isLoading, isHydrated };
+  return {
+    yDoc,
+    provider,
+    awareness,
+    isConnected,
+    isOffline,
+    isLoading,
+    isHydrated,
+    roomStore,
+  };
 }

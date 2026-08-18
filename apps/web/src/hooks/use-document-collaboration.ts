@@ -66,6 +66,8 @@ export interface UseDocumentCollaborationResult<
    * `CollaborativeDoc.isHydrated`.
    */
   isHydrated: boolean;
+  /** This room's local key/value store — see `CollaborativeDoc.roomStore`. */
+  roomStore: CollaborativeDoc["roomStore"];
   /**
    * False only while a task editor is intentionally held back waiting for a
    * GitHub description seed to load. `true` for all other cases (no seed
@@ -106,6 +108,7 @@ export function useDocumentCollaboration<
     isOffline,
     isCacheLoaded,
     isHydrated,
+    roomStore,
   } = useResourceDoc({ resourceType, resourceId: documentId, enabled });
 
   // Derived, not stored: `isCacheLoaded` only flips once per document, and
@@ -264,6 +267,7 @@ export function useDocumentCollaboration<
     isConnected,
     isOffline,
     isHydrated,
+    roomStore,
     provider,
     yDoc,
     descriptionReady,

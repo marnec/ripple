@@ -63,28 +63,6 @@ export function recordLocalVisit(
   notify();
 }
 
-/**
- * The last-known name for a resource, from whichever workspace's recents hold
- * it. Offline, the Convex metadata query never resolves, so this is the only
- * name a collaborative page has for the thing it is showing.
- */
-export function localResourceName(resourceId: string): string | undefined {
-  try {
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (!key?.startsWith(STORAGE_PREFIX)) continue;
-      const raw = localStorage.getItem(key);
-      if (!raw) continue;
-      const items = JSON.parse(raw) as RecentItem[];
-      const hit = items.find((item) => item.resourceId === resourceId);
-      if (hit) return hit.resourceName;
-    }
-  } catch {
-    // Unreadable or unparseable storage — no name, which the caller handles.
-  }
-  return undefined;
-}
-
 /** React hook — returns the N most recent items for a workspace. */
 export function useLocalRecents(workspaceId: string | undefined, limit: number = 8): RecentItem[] {
   const subscribe = useCallback((cb: () => void) => {

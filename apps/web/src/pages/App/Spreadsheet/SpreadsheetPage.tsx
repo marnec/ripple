@@ -13,8 +13,8 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { useJSpreadsheetInstance } from "@/hooks/use-jspreadsheet-instance";
 import { useSpreadsheetCollaboration } from "@/hooks/use-spreadsheet-collaboration";
 import { useSpreadsheetContextMenu } from "@/hooks/use-spreadsheet-context-menu";
-import { localResourceName } from "@/hooks/use-local-recents";
 import { useRecordVisit } from "@/hooks/use-record-visit";
+import { useRoomCached } from "@/hooks/use-room-cached";
 import { tagsOptimisticUpdate } from "@/lib/tag-optimistic";
 import { getUserColor } from "@/lib/user-colors";
 import { NotAvailableOffline } from "@/components/NotAvailableOffline";
@@ -251,11 +251,7 @@ function SpreadsheetEditor({
   const importedRows =
     (location.state as { importedRows?: unknown[][] } | null)?.importedRows ??
     null;
-  const spreadsheet = useQuery(api.spreadsheets.get, { id: spreadsheetId });
-  useRecordVisit(spreadsheet?.workspaceId, "spreadsheet", spreadsheetId, spreadsheet?.name);
-  // Offline the metadata query never resolves; recents is the only place a
-  // name for this spreadsheet survives on the device.
-  const spreadsheetName = spreadsheet?.name ?? localResourceName(spreadsheetId) ?? "";
+  const liveSpreadsheet = useQuery(api.spreadsheets.get, { id: spreadsheetId });
   const viewer = useViewer();
   const rawRefs = useQuery(api.spreadsheetCellRefs.listBySpreadsheet, { spreadsheetId });
   // Cell highlights mirror the references drawer: on while it's open.
@@ -267,7 +263,8 @@ function SpreadsheetEditor({
   const [formulaBarFocused, setFormulaBarFocused] = useState(false);
   const myRole = useQuery(
     api.workspaceMembers.myRole,
-    spreadsheet ? { workspaceId: spreadsheet.workspaceId } : "skip",
+    // The live row, not the cached one: this is another server read.
+    liveSpreadsheet ? { workspaceId: liveSpreadsheet.workspaceId } : "skip",
   );
   const isAdmin = myRole === "admin";
   const updateTags = useMutation(api.spreadsheets.updateTags).withOptimisticUpdate(
@@ -290,11 +287,18 @@ function SpreadsheetEditor({
     isOffline,
     isLoading: collabLoading,
     isHydrated,
+    roomStore,
   } = useSpreadsheetCollaboration({
     spreadsheetId: spreadsheetId,
     userName: viewer?.name ?? "Anonymous",
     userId: viewer?._id ?? "unknown",
   });
+
+  // Metadata kept in the room's own store, so offline — where this query never
+  // resolves — the page still knows what it is showing.
+  const spreadsheet = useRoomCached(roomStore, "meta", liveSpreadsheet);
+  useRecordVisit(spreadsheet?.workspaceId, "spreadsheet", spreadsheetId, spreadsheet?.name);
+  const spreadsheetName = spreadsheet?.name ?? "";
 
   const { remoteUsers } = useCursorAwareness(awareness);
 

@@ -20,6 +20,7 @@ import {
   type ConnectionEvent,
 } from "@/lib/collab/connection-policy";
 import type { CollabRoom } from "@/lib/collab/room";
+import { createRoomStore, type RoomStore } from "@/lib/collab/room-store";
 import { guardAuthFailure } from "@/lib/yjs-auth-guard";
 
 /** How long a provider may take to sync before we show the offline state. */
@@ -74,6 +75,11 @@ export interface CollaborativeDoc {
    * editor may bind for writing until this is true.
    */
   isHydrated: boolean;
+  /**
+   * Local storage scoped to this room, sharing the room's IndexedDB database.
+   * Null when the room keeps no cache at all — a guest's does not.
+   */
+  roomStore: RoomStore | null;
 }
 
 /** Whether a Y.Doc holds any state at all (from any client, including us). */
@@ -167,10 +173,20 @@ export function useCollaborativeDoc({
   // Offline cache. Deliberately independent of the provider: content from a
   // previous visit should appear without waiting on a socket.
   const persistenceKey = enabled ? (room?.persistenceKey ?? null) : null;
+  // Stable per room, and never state: the instance behind it comes and goes
+  // with the effect below, but callers keep one object to depend on. The
+  // memo is load-bearing, not an optimisation — `useRoomCached` treats a new
+  // store identity as "different room" and drops what it had, so a store
+  // rebuilt each render would never manage to show a cached value.
+  const roomStore = useMemo(
+    () => (persistenceKey ? createRoomStore() : null),
+    [persistenceKey],
+  );
   useEffect(() => {
     if (!persistenceKey) return;
 
     const persistence = new IndexeddbPersistence(persistenceKey, yDoc);
+    roomStore?.attach(persistence);
     persistence.on("synced", () => {
       setIsCacheLoaded(true);
       // `synced` fires for an empty database too — it means "the replay is
@@ -180,11 +196,12 @@ export function useCollaborativeDoc({
     });
 
     return () => {
+      roomStore?.attach(null);
       void persistence.destroy();
       setIsCacheLoaded(false);
       setCacheHasState(false);
     };
-  }, [persistenceKey, yDoc]);
+  }, [persistenceKey, yDoc, roomStore]);
 
   useEffect(() => {
     if (!enabled) return;
@@ -458,6 +475,7 @@ export function useCollaborativeDoc({
     awareness: provider?.awareness ?? localAwareness,
     isCacheLoaded,
     isHydrated,
+    roomStore,
     ...status,
     // Loading means "nothing to show yet", not "no socket yet". Holding the
     // room's state is something to show, so it ends the wait exactly as a sync

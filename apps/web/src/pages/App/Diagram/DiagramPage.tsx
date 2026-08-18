@@ -31,8 +31,8 @@ import { useDiagramCollaboration } from "@/hooks/use-diagram-collaboration";
 import { useDiagramCursorAwareness } from "@/hooks/use-diagram-cursor-awareness";
 import { ActiveUsers } from "../Document/ActiveUsers";
 import { ConnectionStatus } from "../Document/ConnectionStatus";
-import { localResourceName } from "@/hooks/use-local-recents";
 import { useRecordVisit } from "@/hooks/use-record-visit";
+import { useRoomCached } from "@/hooks/use-room-cached";
 import { getExcalidrawCollaboratorColor } from "@/lib/user-colors";
 import { getCameraFromAppState } from "@/lib/canvas-coordinates";
 import type { Theme } from "@excalidraw/excalidraw/element/types";
@@ -49,11 +49,7 @@ function DiagramPageContent({ diagramId, workspaceId }: { diagramId: Id<"diagram
   const importedScene =
     (location.state as { importedScene?: ImportedScene } | null)
       ?.importedScene ?? null;
-  const diagram = useQuery(api.diagrams.get, { id: diagramId });
-  useRecordVisit(workspaceId, "diagram", diagramId, diagram?.name);
-  // Offline the metadata query never resolves; recents is the only place a
-  // name for this diagram survives on the device.
-  const diagramName = diagram?.name ?? localResourceName(diagramId) ?? "";
+  const liveDiagram = useQuery(api.diagrams.get, { id: diagramId });
   const [excalidrawAPI, setExcalidrawAPI] = useState<ExcalidrawImperativeAPI | null>(null);
   // Snapshot of the scene captured when entering presentation mode (null = not presenting).
   const [presentationScene, setPresentationScene] = useState<{
@@ -70,7 +66,9 @@ function DiagramPageContent({ diagramId, workspaceId }: { diagramId: Id<"diagram
   // warning. Each row is one (source, frame) place that embeds a specific frame.
   const frameEmbeds = useQuery(
     api.edges.getFrameEmbeds,
-    diagram ? { diagramId, workspaceId } : "skip",
+    // The live row, not the cached one: this is another server read, so there
+    // is nothing to gain from asking for it on the strength of a cached copy.
+    liveDiagram ? { diagramId, workspaceId } : "skip",
   );
   const embeddedFrameIds = new Set((frameEmbeds ?? []).map((r) => r.frameId));
   // Pending guarded deletion: the embedded frames + the full selection to
@@ -138,11 +136,18 @@ function DiagramPageContent({ diagramId, workspaceId }: { diagramId: Id<"diagram
     isOffline,
     isLoading,
     isHydrated,
+    roomStore,
   } = useDiagramCollaboration({
     diagramId,
     userName: viewer?.name ?? "Anonymous",
     userId: viewer?._id ?? "anonymous",
   });
+
+  // Metadata kept in the room's own store, so offline — where this query never
+  // resolves — the page still knows what it is showing.
+  const diagram = useRoomCached(roomStore, "meta", liveDiagram);
+  useRecordVisit(workspaceId, "diagram", diagramId, diagram?.name);
+  const diagramName = diagram?.name ?? "";
 
   // Get remote pointers for jump-to-user and avatar stack
   const { remotePointers } = useDiagramCursorAwareness(awareness);

@@ -30,8 +30,9 @@ import { Link, useLocation, useParams } from "react-router-dom";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 import { useViewer } from "../UserContext";
-import { localResourceName, useLocalRecents } from "@/hooks/use-local-recents";
+import { useLocalRecents } from "@/hooks/use-local-recents";
 import { useRecordVisit } from "@/hooks/use-record-visit";
+import { useRoomCached } from "@/hooks/use-room-cached";
 import { en as bnEn } from "@blocknote/core/locales";
 import { useDocumentCollaboration } from "../../../hooks/use-document-collaboration";
 
@@ -94,11 +95,37 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
   const location = useLocation();
   const importedHTML = (location.state as { importedHTML?: string } | null)?.importedHTML;
   const importInjectedRef = useRef(false);
-  const document = useQuery(api.documents.get, { id: documentId });
+  const { workspaceId } = useParams<QueryParams>();
+  const viewer = useViewer();
+
+  // Keyed off the route, not the document row: `useUploadFile` reads the
+  // workspace from a ref at call time, and taking it from the URL is what lets
+  // the collaboration hook run before the metadata it now supplies the cache for.
+  const fileUpload = useUploadFile(workspaceId);
+
+  const { editor, isLoading, isConnected, isOffline, isHydrated, provider, roomStore } =
+    useDocumentCollaboration({
+      documentId,
+      userName: viewer?.name ?? "Anonymous",
+      userId: viewer?._id ?? "anonymous",
+      schema,
+      uploadFile: fileUpload?.uploadFile,
+      dictionary: documentDictionary,
+      // Collaborative comments — gated on a real viewer so threads are never
+      // attributed to the "anonymous" fallback id.
+      enableComments: !!viewer?._id,
+    });
+
+  // The document's metadata, kept in the room's own store so that offline —
+  // where this query never resolves — the page still knows what it is showing.
+  const document = useRoomCached(
+    roomStore,
+    "meta",
+    useQuery(api.documents.get, { id: documentId }),
+  );
   useRecordVisit(document?.workspaceId, "document", documentId, document?.name);
-  // Offline the metadata query never resolves; the recents list is the only
-  // place a name for this document survives on the device.
-  const documentName = document?.name ?? localResourceName(documentId) ?? "";
+  const documentName = document?.name ?? "";
+
   const [hashSearch, setHashSearch] = useState("");
   const [debouncedHashSearch, setDebouncedHashSearch] = useState("");
 
@@ -124,7 +151,6 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
     api.workspaceMembers.membersByWorkspace,
     document ? { workspaceId: document.workspaceId } : "skip",
   );
-  const viewer = useViewer();
   const ensureCellRef = useMutation(api.spreadsheetCellRefs.ensureCellRef);
   const removeCellRef = useMutation(api.spreadsheetCellRefs.removeCellRef);
   const ensureBlockRef = useMutation(api.documentBlockRefs.ensureBlockRef);
@@ -161,19 +187,6 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
 
   const reportMention = useMutation(api.documents.reportMention);
 
-  const fileUpload = useUploadFile(document?.workspaceId);
-
-  const { editor, isLoading, isConnected, isOffline, isHydrated, provider } = useDocumentCollaboration({
-    documentId,
-    userName: viewer?.name ?? "Anonymous",
-    userId: viewer?._id ?? "anonymous",
-    schema,
-    uploadFile: fileUpload?.uploadFile,
-    dictionary: documentDictionary,
-    // Collaborative comments — gated on a real viewer so threads are never
-    // attributed to the "anonymous" fallback id.
-    enableComments: !!viewer?._id,
-  });
 
   // Mirrors `enableComments` above: the comments extension only exists for a
   // real viewer, so all comment UI (toggle, rail, reporter) is gated on this.

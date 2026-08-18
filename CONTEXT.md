@@ -38,6 +38,16 @@ unhydrated replica: authoring into one creates a structure that competes with
 the real document instead of merging into it.
 _Avoid_: loaded, synced doc, warm doc, has content
 
+**Room store**:
+A small key/value store scoped to one collaborative room, living in the
+`custom` object store of that room's IndexedDB database — the one y-indexeddb
+opens for the Yjs cache and never writes to itself. Holds what the server told
+us *about* a resource (its name, its tags) beside the resource's content, so
+the two are evicted together and can never disagree about what this device
+knows. Reached through `CollaborativeDoc.roomStore`, read through
+`useRoomCached`; null for a guest, whose device keeps no cache at all.
+_Avoid_: metadata cache, local storage, offline store
+
 **Empty-document root**:
 The canonical `blockGroup` a BlockNote document starts life with, shipped as
 one fixed-client-id Yjs update (`collab/empty-document.ts`) so that every

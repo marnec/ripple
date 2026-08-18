@@ -20,6 +20,8 @@ export interface UseDiagramCollaborationResult {
   isLoading: boolean;
   /** See `CollaborativeDoc.isHydrated` — false means "contents unknown". */
   isHydrated: boolean;
+  /** This room's local key/value store — see `CollaborativeDoc.roomStore`. */
+  roomStore: CollaborativeDoc["roomStore"];
   yElements: Y.Array<Y.Map<any>>;
   yAssets: Y.Map<any>;
   awareness: Awareness;
@@ -41,7 +43,7 @@ export function useDiagramCollaboration({
   userName,
   userId,
 }: UseDiagramCollaborationOptions): UseDiagramCollaborationResult {
-  const { yDoc, provider, awareness, isConnected, isLoading, isOffline, isHydrated } =
+  const { yDoc, provider, awareness, isConnected, isLoading, isOffline, isHydrated, roomStore } =
     useResourceDoc({
       resourceType: "diagram",
       resourceId: diagramId,
@@ -64,6 +66,7 @@ export function useDiagramCollaboration({
     isOffline,
     isLoading,
     isHydrated,
+    roomStore,
     yElements,
     yAssets,
     awareness,
