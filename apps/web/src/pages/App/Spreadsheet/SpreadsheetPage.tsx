@@ -296,7 +296,13 @@ function SpreadsheetEditor({
 
   // Metadata kept in the room's own store, so offline — where this query never
   // resolves — the page still knows what it is showing.
-  const spreadsheet = useRoomCached(roomStore, "meta", liveSpreadsheet);
+  // `isLive` gates every control that would change the spreadsheet — see the
+  // same split in DocumentEditor.
+  const { value: spreadsheet, isLive } = useRoomCached(
+    roomStore,
+    "meta",
+    liveSpreadsheet,
+  );
   useRecordVisit(spreadsheet?.workspaceId, "spreadsheet", spreadsheetId, spreadsheet?.name);
   const spreadsheetName = spreadsheet?.name ?? "";
 
@@ -334,7 +340,7 @@ function SpreadsheetEditor({
           The grid below still works from the local copy.
         */}
         <div className="flex h-8 min-w-0 items-center gap-4">
-          {spreadsheet && (
+          {isLive && spreadsheet && (
             <>
               <FavoriteButton
                 resourceType="spreadsheet"
@@ -370,7 +376,7 @@ function SpreadsheetEditor({
               }
             />
           )}
-          {spreadsheet && (
+          {isLive && spreadsheet && (
             <>
               <BacklinksButton
                 resourceId={spreadsheetId}
@@ -385,7 +391,7 @@ function SpreadsheetEditor({
               />
             </>
           )}
-          {spreadsheet && !isMobile && (
+          {isLive && spreadsheet && !isMobile && (
             <Link
               to="settings"
               className="inline-flex items-center justify-center rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
@@ -396,7 +402,7 @@ function SpreadsheetEditor({
           )}
         </div>
       </div>
-      {isMobile && (
+      {isLive && isMobile && (
         <HeaderSlot>
           <Button
             variant="ghost"

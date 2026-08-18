@@ -118,7 +118,10 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
 
   // The document's metadata, kept in the room's own store so that offline —
   // where this query never resolves — the page still knows what it is showing.
-  const document = useRoomCached(
+  // `isLive` gates every control that would change the document: a stored copy
+  // is fine to read from, but a tag picker rendered over one is a button that
+  // does nothing. Display uses `document`, mutation uses `isLive`.
+  const { value: document, isLive } = useRoomCached(
     roomStore,
     "meta",
     useQuery(api.documents.get, { id: documentId }),
@@ -373,7 +376,7 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
           the name and nothing else. The editor below still works.
         */}
         <div className="flex h-8 min-w-0 items-center gap-4">
-          {document && (
+          {isLive && document && (
             <>
               <FavoriteButton
                 resourceType="document"
@@ -405,7 +408,7 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
               }
             />
           )}
-          {document && (
+          {isLive && document && (
             <BacklinksButton
               resourceId={documentId}
               workspaceId={document.workspaceId}
@@ -413,7 +416,7 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
           )}
           {/* Threads live in the Y.Doc, so commenting works offline too. */}
           {commentsEnabled && <CommentsToggleButton />}
-          {document && (
+          {isLive && document && (
             <DocumentActionsMenu
               documentId={documentId}
               documentName={document.name}
@@ -421,7 +424,7 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
               editor={editor}
             />
           )}
-          {document && !isMobile && (
+          {isLive && document && !isMobile && (
             <Link
               to="settings"
               className="inline-flex items-center justify-center rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
@@ -432,7 +435,7 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
           )}
         </div>
       </div>
-      {isMobile && (
+      {isLive && isMobile && (
         <HeaderSlot>
           <Button
             variant="ghost"

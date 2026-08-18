@@ -30,9 +30,9 @@ describe("useRoomCached", () => {
       useRoomCached(store, "meta", { name: "Live name" }),
     );
 
-    expect(result.current).toEqual({ name: "Live name" });
+    expect(result.current.value).toEqual({ name: "Live name" });
     // Still true after the cached read has had a chance to land.
-    await waitFor(() => expect(result.current).toEqual({ name: "Live name" }));
+    await waitFor(() => expect(result.current.value).toEqual({ name: "Live name" }));
   });
 
   it("falls back to the stored value while the query has not answered", async () => {
@@ -42,9 +42,9 @@ describe("useRoomCached", () => {
 
     // Reading IndexedDB is asynchronous, so the first render has nothing —
     // reserved space, then content, which is how this app loads anyway.
-    expect(result.current).toBeUndefined();
+    expect(result.current.value).toBeUndefined();
     await waitFor(() =>
-      expect(result.current).toEqual({ name: "From the last visit" }),
+      expect(result.current.value).toEqual({ name: "From the last visit" }),
     );
   });
 
@@ -60,7 +60,7 @@ describe("useRoomCached", () => {
       useRoomCached<{ name: string } | null>(store, "meta", null),
     );
 
-    await waitFor(() => expect(result.current).toBeNull());
+    await waitFor(() => expect(result.current.value).toBeNull());
   });
 
   it("stores each live answer, so the next visit has one to fall back on", async () => {
@@ -90,7 +90,7 @@ describe("useRoomCached", () => {
   it("is a pass-through when the room keeps no store", async () => {
     const { result } = renderHook(() => useRoomCached(null, "meta", undefined));
 
-    await waitFor(() => expect(result.current).toBeUndefined());
+    await waitFor(() => expect(result.current.value).toBeUndefined());
   });
 
   /**
@@ -106,11 +106,63 @@ describe("useRoomCached", () => {
       ({ store }: { store: RoomStore }) => useRoomCached(store, "meta", undefined),
       { initialProps: { store: first } },
     );
-    await waitFor(() => expect(result.current).toEqual({ name: "First room" }));
+    await waitFor(() => expect(result.current.value).toEqual({ name: "First room" }));
 
     rerender({ store: second });
 
-    expect(result.current).not.toEqual({ name: "First room" });
-    await waitFor(() => expect(result.current).toEqual({ name: "Second room" }));
+    expect(result.current.value).not.toEqual({ name: "First room" });
+    await waitFor(() => expect(result.current.value).toEqual({ name: "Second room" }));
+  });
+
+  /**
+   * A page has to be able to tell the two apart: a cached value is fine to
+   * *show*, but the controls that would change it need a server that is
+   * answering. Rendering them enabled over a stored copy is how a click
+   * silently does nothing.
+   */
+  describe("telling a live answer from a stored one", () => {
+    it("reports a value from the server as live", async () => {
+      const store = fakeStore();
+
+      const { result } = renderHook(() =>
+        useRoomCached(store, "meta", { name: "Live" }),
+      );
+
+      await waitFor(() => expect(result.current.isLive).toBe(true));
+    });
+
+    it("reports a value recovered from the store as not live", async () => {
+      const store = fakeStore({ meta: { name: "From the last visit" } });
+
+      const { result } = renderHook(() => useRoomCached(store, "meta", undefined));
+
+      await waitFor(() =>
+        expect(result.current.value).toEqual({ name: "From the last visit" }),
+      );
+      expect(result.current.isLive).toBe(false);
+    });
+
+    /**
+     * "This resource is gone" is something only the server can tell us, so it
+     * counts as live even though there is no value to show.
+     */
+    it("counts a deleted resource as a live answer", async () => {
+      const store = fakeStore();
+
+      const { result } = renderHook(() =>
+        useRoomCached<{ name: string } | null>(store, "meta", null),
+      );
+
+      await waitFor(() => expect(result.current.isLive).toBe(true));
+    });
+
+    it("is not live when there is nothing to show at all", async () => {
+      const store = fakeStore();
+
+      const { result } = renderHook(() => useRoomCached(store, "meta", undefined));
+
+      await waitFor(() => expect(result.current.value).toBeUndefined());
+      expect(result.current.isLive).toBe(false);
+    });
   });
 });

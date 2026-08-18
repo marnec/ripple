@@ -1,6 +1,19 @@
 import { useEffect, useState } from "react";
 import type { RoomStore } from "@/lib/collab/room-store";
 
+export interface RoomCached<T> {
+  /** What to render: the server's answer, or the copy kept for this room. */
+  value: T | undefined;
+  /**
+   * Whether `value` came from the server on this page load. False means it is
+   * a stored copy — fine to show, but nothing that would *change* the resource
+   * should be offered over it, because the server is not answering.
+   *
+   * A deleted resource counts as live: only the server can report that.
+   */
+  isLive: boolean;
+}
+
 /**
  * The last value a query gave for this room, kept beside the room's content.
  */
@@ -8,7 +21,7 @@ export function useRoomCached<T>(
   roomStore: RoomStore | null,
   key: string,
   live: T | undefined,
-): T | undefined {
+): RoomCached<T> {
   const [cached, setCached] = useState<T | undefined>(undefined);
 
   // A value cached for one room says nothing about the next. Cleared while
@@ -43,5 +56,6 @@ export function useRoomCached<T>(
 
   // `undefined` is the only "no answer yet". A live `null` means the resource
   // is gone, and must not be papered over with the copy we kept of it.
-  return live !== undefined ? live : cached;
+  const isLive = live !== undefined;
+  return { value: isLive ? live : cached, isLive };
 }

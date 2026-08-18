@@ -1,27 +1,21 @@
 NEXT STEPS:
 
-- local-first follow-ups (the reconciliation pass is done — see `isHydrated` in
-  `use-collaborative-doc.ts`, `collab/empty-document.ts`, and the case matrix in
-  `lib/collab/empty-document.test.ts`)
-    - [ ] Convex metadata is unavailable offline: pages render from the Yjs
-      copy with a degraded header (name from `localResourceName`), but tags,
-      favourites, backlinks, the actions menu and `@`-mention suggestions need
-      a round-trip. Closing it means a hand-rolled write-through localStorage
-      cache for `documents.get`/`diagrams.get`/`spreadsheets.get` — convex
-      1.43 has no local-persistence option for the web client. Read-only: the
-      `#` picker needs server-side search, and offline mutations would need a
-      write queue, which is a separate (larger) decision
-    - the sidebar and every list page also need Convex, so offline the only
-      reachable resources are ones already open or reachable by URL. Not a
-      task on its own — it follows from the metadata cache above, plus a
-      decision about how stale a cached workspace tree may be
-    - **won't do**: backfill `EMPTY_DOCUMENT_UPDATE` into documents that
-      predate it. Rewriting a document's root server-side changes every item's
-      identity, so any device still holding the old state in IndexedDB would
-      merge old-root + new-root — the exact corruption the seed prevents — and
-      there is no way to purge those caches. The `isHydrated` gate is what
-      protects legacy documents; the seed is the second line, not the
-      load-bearing one
+- local-first: done for collaborative content and per-resource metadata.
+  `isHydrated` in `use-collaborative-doc.ts` (no editor binds to a replica whose
+  contents we were never told), `collab/empty-document.ts` (shared empty root),
+  the **room store** in `collab/room-store.ts` + `use-room-cached.ts` (metadata
+  cached in the room's own IndexedDB database, `isLive` gating every control
+  that would mutate). Case matrix in `lib/collab/empty-document.test.ts`.
+    - [ ] the sidebar and every list page still need Convex, so offline the only
+      reachable resources are ones already open or reachable by URL. The room
+      store can't help — it is per-room and these lists aren't. Needs a
+      workspace-scoped cache plus a decision on how stale a cached tree may be.
+      Convex still ships no local persistence for web (checked 1.44, Aug 2026);
+      PowerSync's experimental Convex support moves authorization into Sync
+      Streams, which conflicts with this app's two-access-rules design
+    - [ ] offline mutations are not queued for resources loaded cold offline —
+      controls are hidden rather than offered and silently dropped. A write
+      queue is the separate, larger project if that isn't good enough
 
 - cascade delete collection phase is bounded even for batched deletes and will hit a ceiling for extremely large cascaded entities.
 

@@ -145,7 +145,9 @@ function DiagramPageContent({ diagramId, workspaceId }: { diagramId: Id<"diagram
 
   // Metadata kept in the room's own store, so offline — where this query never
   // resolves — the page still knows what it is showing.
-  const diagram = useRoomCached(roomStore, "meta", liveDiagram);
+  // `isLive` gates every control that would change the diagram — see the same
+  // split in DocumentEditor.
+  const { value: diagram, isLive } = useRoomCached(roomStore, "meta", liveDiagram);
   useRecordVisit(workspaceId, "diagram", diagramId, diagram?.name);
   const diagramName = diagram?.name ?? "";
 
@@ -199,16 +201,20 @@ function DiagramPageContent({ diagramId, workspaceId }: { diagramId: Id<"diagram
       {/* Header bar */}
       <div className="flex items-center justify-between px-3 py-1.5 border-b">
         <div className="flex h-8 min-w-0 items-center gap-4">
-          <FavoriteButton
-            resourceType="diagram"
-            resourceId={diagramId}
-            workspaceId={workspaceId}
-          />
-          <TagPickerButton
-            workspaceId={workspaceId}
-            value={diagram?.tags ?? []}
-            onChange={(tags) => void updateTags({ id: diagramId, tags })}
-          />
+          {isLive && (
+            <>
+              <FavoriteButton
+                resourceType="diagram"
+                resourceId={diagramId}
+                workspaceId={workspaceId}
+              />
+              <TagPickerButton
+                workspaceId={workspaceId}
+                value={diagram?.tags ?? []}
+                onChange={(tags) => void updateTags({ id: diagramId, tags })}
+              />
+            </>
+          )}
           <h1 className="hidden sm:block text-lg font-semibold truncate">{diagramName}</h1>
           <TagInlineStrip tags={diagram?.tags ?? []} />
         </div>
@@ -224,7 +230,7 @@ function DiagramPageContent({ diagramId, workspaceId }: { diagramId: Id<"diagram
               onUserClick={handleJumpToUser}
             />
           )}
-          <BacklinksButton resourceId={diagramId} workspaceId={workspaceId} />
+          {isLive && <BacklinksButton resourceId={diagramId} workspaceId={workspaceId} />}
           {diagram && (
             <button
               type="button"
@@ -242,7 +248,7 @@ function DiagramPageContent({ diagramId, workspaceId }: { diagramId: Id<"diagram
               <Presentation className="size-4" />
             </button>
           )}
-          {diagram && (
+          {isLive && diagram && (
             <DiagramActionsMenu
               diagramId={diagramId}
               diagramName={diagram.name}
