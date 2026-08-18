@@ -5,6 +5,7 @@ import { BlockNoteView } from "@blocknote/shadcn";
 import "@blocknote/core/fonts/inter.css";
 import "@blocknote/shadcn/style.css";
 import { FileText, PenTool, Table } from "lucide-react";
+import { NotAvailableOffline } from "@/components/NotAvailableOffline";
 import { RippleSpinner } from "@/components/RippleSpinner";
 import { useAction, useConvex, useMutation } from "convex/react";
 import { useState } from "react";
@@ -33,6 +34,11 @@ type TaskDescriptionEditorProps = {
    * Distinct from the plain "no editor yet" empty state.
    */
   loading?: boolean;
+  /**
+   * This device has never held the description and nothing can reach it. Not a
+   * loading state — there is nothing on the way.
+   */
+  unavailableOffline?: boolean;
 };
 
 export function TaskDescriptionEditor({
@@ -42,6 +48,7 @@ export function TaskDescriptionEditor({
   className,
   hideLabel,
   loading,
+  unavailableOffline,
 }: TaskDescriptionEditorProps) {
   const { resolvedTheme } = useTheme();
   const convex = useConvex();
@@ -219,6 +226,13 @@ export function TaskDescriptionEditor({
     };
 
   if (!editor) {
+    if (unavailableOffline) {
+      return (
+        <div className={className}>
+          <NotAvailableOffline resource="description" compact />
+        </div>
+      );
+    }
     // Blocking wait for a GitHub description seed: reserved space + spinner
     // (no skeletons, per the design rules). Plain empty space otherwise.
     if (loading) {

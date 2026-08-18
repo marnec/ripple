@@ -18,6 +18,8 @@ export interface UseSpreadsheetCollaborationResult {
   isConnected: boolean;
   isOffline: boolean;
   isLoading: boolean;
+  /** See `CollaborativeDoc.isHydrated` — false means "contents unknown". */
+  isHydrated: boolean;
 }
 
 /**
@@ -32,15 +34,16 @@ export function useSpreadsheetCollaboration({
   userName,
   userId,
 }: UseSpreadsheetCollaborationOptions): UseSpreadsheetCollaborationResult {
-  const { yDoc, provider, awareness, isConnected, isLoading, isOffline } = useResourceDoc({
-    resourceType: "spreadsheet",
-    resourceId: spreadsheetId,
-  });
+  const { yDoc, provider, awareness, isConnected, isLoading, isOffline, isHydrated } =
+    useResourceDoc({
+      resourceType: "spreadsheet",
+      resourceId: spreadsheetId,
+    });
 
   const userColor = getUserColor(userId);
   useEffect(() => {
     awareness.setLocalStateField("user", { name: userName, color: userColor });
   }, [awareness, userName, userColor]);
 
-  return { yDoc, provider, awareness, isConnected, isOffline, isLoading };
+  return { yDoc, provider, awareness, isConnected, isOffline, isLoading, isHydrated };
 }

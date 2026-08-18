@@ -214,4 +214,55 @@ describe("connection status", () => {
       isOffline: true,
     });
   });
+
+  /**
+   * `hasSynced` is a fact about history, not about the present: it records
+   * that this room once handed us its state. Everything downstream that has
+   * to tell "this document is empty" from "I have never seen this document"
+   * is built on it.
+   */
+  describe("remembering that the room has answered at least once", () => {
+    it("starts out not having synced", () => {
+      expect(initialConnectionState().hasSynced).toBe(false);
+    });
+
+    it("records a sync and keeps it through disconnects and failures", () => {
+      let state = reduceConnection(initialConnectionState(), {
+        type: "synced",
+        at: 1_000,
+      }).state;
+      expect(state.hasSynced).toBe(true);
+
+      for (const event of [
+        { type: "status-disconnected", at: 2_000 },
+        { type: "browser-offline", at: 3_000 },
+        { type: "connect-timed-out", at: 4_000 },
+        { type: "auth-rejected", at: 5_000 },
+        { type: "permission-revoked", at: 6_000 },
+      ] as ConnectionEvent[]) {
+        state = reduceConnection(state, event).state;
+        expect(state.hasSynced).toBe(true);
+      }
+    });
+
+    it("is not set by a socket that opened but never synced", () => {
+      const { state } = reduceConnection(initialConnectionState(), {
+        type: "status-connected",
+        at: 1_000,
+      });
+      // The socket being up says nothing about having received the document.
+      expect(state.phase).toBe("connected");
+      expect(state.hasSynced).toBe(false);
+    });
+
+    it("is cleared when a different room is opened", () => {
+      const synced = reduceConnection(initialConnectionState(), {
+        type: "synced",
+        at: 1_000,
+      }).state;
+
+      const { state } = reduceConnection(synced, { type: "reset", at: 2_000 });
+      expect(state.hasSynced).toBe(false);
+    });
+  });
 });

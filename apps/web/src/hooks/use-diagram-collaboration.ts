@@ -18,6 +18,8 @@ export interface UseDiagramCollaborationResult {
   isConnected: boolean;
   isOffline: boolean;
   isLoading: boolean;
+  /** See `CollaborativeDoc.isHydrated` — false means "contents unknown". */
+  isHydrated: boolean;
   yElements: Y.Array<Y.Map<any>>;
   yAssets: Y.Map<any>;
   awareness: Awareness;
@@ -39,10 +41,11 @@ export function useDiagramCollaboration({
   userName,
   userId,
 }: UseDiagramCollaborationOptions): UseDiagramCollaborationResult {
-  const { yDoc, provider, awareness, isConnected, isLoading, isOffline } = useResourceDoc({
-    resourceType: "diagram",
-    resourceId: diagramId,
-  });
+  const { yDoc, provider, awareness, isConnected, isLoading, isOffline, isHydrated } =
+    useResourceDoc({
+      resourceType: "diagram",
+      resourceId: diagramId,
+    });
 
   const bindingRef = useRef<ExcalidrawBinding | null>(null);
 
@@ -60,6 +63,7 @@ export function useDiagramCollaboration({
     isConnected,
     isOffline,
     isLoading,
+    isHydrated,
     yElements,
     yAssets,
     awareness,

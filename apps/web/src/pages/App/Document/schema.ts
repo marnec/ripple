@@ -11,7 +11,7 @@ import { User } from "./CustomBlocks/UserBlock";
 import { EventBlock } from "./CustomBlocks/EventBlock";
 import { DocumentBlockEmbed } from "./CustomBlocks/DocumentBlockEmbed";
 
-/** BlockNote schema shared by DocumentEditor and SnapshotFallback. */
+/** BlockNote schema for the document editor. */
 export const documentSchema = BlockNoteSchema.create({
   blockSpecs: {
     ...defaultBlockSpecs,

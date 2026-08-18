@@ -1,7 +1,7 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Awareness } from "y-protocols/awareness";
-import type * as Y from "yjs";
+import * as Y from "yjs";
 import { clearCollaborationTokenCache } from "@/lib/collaboration-token-cache";
 import { collabRoom } from "@/lib/collab/room";
 import type { CollabSession } from "./use-collaborative-doc";
@@ -14,8 +14,21 @@ import { useCollaborativeDoc } from "./use-collaborative-doc";
  * `vi.mock` factories are hoisted above the imports, so the fakes have to be
  * declared in a hoisted block to be visible to them.
  */
-const { FakeProvider, FakeIndexeddbPersistence, persistenceInstances } = vi.hoisted(() => {
+const {
+  FakeProvider,
+  FakeIndexeddbPersistence,
+  persistenceInstances,
+  cache,
+  convexQuery,
+} = vi.hoisted(() => {
   const persistenceInstances: { name: string; destroyed: boolean }[] = [];
+  /**
+   * What this device already has stored for a room, keyed by database name —
+   * the difference between "opened this before" and "never seen it". Stored as
+   * a replay function because this block is hoisted above the `yjs` import.
+   */
+  const cache = new Map<string, (doc: unknown) => void>();
+  const convexQuery = vi.fn();
 
   /** Records every instance, so tests can assert how many sockets were built. */
   class FakeProvider {
@@ -94,11 +107,16 @@ const { FakeProvider, FakeIndexeddbPersistence, persistenceInstances } = vi.hois
     private handlers: (() => void)[] = [];
     private record: { name: string; destroyed: boolean };
 
-    constructor(name: string) {
+    constructor(name: string, doc: { getXmlFragment: unknown }) {
       this.record = { name, destroyed: false };
       persistenceInstances.push(this.record);
-      // Real persistence resolves asynchronously; mirror that.
-      queueMicrotask(() => this.handlers.forEach((handler) => handler()));
+      // Real persistence resolves asynchronously; mirror that. `synced` fires
+      // whether or not there was anything to replay — which is exactly why the
+      // hook cannot treat it as proof that the device knows this room.
+      queueMicrotask(() => {
+        cache.get(name)?.(doc);
+        this.handlers.forEach((handler) => handler());
+      });
     }
 
     on(event: string, handler: () => void) {
@@ -111,11 +129,30 @@ const { FakeProvider, FakeIndexeddbPersistence, persistenceInstances } = vi.hois
     }
   }
 
-  return { FakeProvider, FakeIndexeddbPersistence, persistenceInstances };
+  return {
+    FakeProvider,
+    FakeIndexeddbPersistence,
+    persistenceInstances,
+    cache,
+    convexQuery,
+  };
 });
 
 vi.mock("y-partyserver/provider", () => ({ default: FakeProvider }));
 vi.mock("y-indexeddb", () => ({ IndexeddbPersistence: FakeIndexeddbPersistence }));
+vi.mock("convex/react", () => ({ useConvex: () => ({ query: convexQuery }) }));
+
+/** Pretend this device has an offline cache for `room` holding `update`. */
+function seedCache(name: string, update: Uint8Array) {
+  cache.set(name, (doc) => Y.applyUpdate(doc as Y.Doc, update));
+}
+
+/** A Yjs update carrying some content, as a stand-in for a real document. */
+function contentUpdate(text: string): Uint8Array {
+  const doc = new Y.Doc();
+  doc.getText("body").insert(0, text);
+  return Y.encodeStateAsUpdate(doc);
+}
 
 function memberSession(overrides: Partial<CollabSession> = {}): CollabSession {
   const room = collabRoom("doc", "abc123");
@@ -130,6 +167,10 @@ function memberSession(overrides: Partial<CollabSession> = {}): CollabSession {
 beforeEach(() => {
   FakeProvider.instances.length = 0;
   persistenceInstances.length = 0;
+  cache.clear();
+  convexQuery.mockReset();
+  // Nothing stored server-side unless a test says so.
+  convexQuery.mockResolvedValue(null);
   // The token cache is module state, including an in-flight map. A test that
   // leaves a request pending would otherwise hand that same promise to the
   // next test asking for the same room.
@@ -251,6 +292,8 @@ describe("useCollaborativeDoc", () => {
   });
 
   it("stops loading as soon as the offline cache has something to show", async () => {
+    seedCache("doc-abc123", contentUpdate("cached from a previous visit"));
+
     const { result } = renderHook(() =>
       useCollaborativeDoc({
         session: memberSession({
@@ -261,8 +304,152 @@ describe("useCollaborativeDoc", () => {
     );
 
     await waitFor(() => expect(result.current.isCacheLoaded).toBe(true));
+    expect(result.current.isHydrated).toBe(true);
     expect(result.current.isLoading).toBe(false);
     expect(result.current.isConnected).toBe(false);
+  });
+
+  /**
+   * The distinction the whole reconciliation story rests on. A Y.Doc cannot
+   * say "I don't know what is in this document" — it can only be empty — so
+   * the hook has to carry that fact alongside it, or an editor will happily
+   * let someone author into a document whose contents it has never seen.
+   */
+  describe("knowing whether we actually hold the document", () => {
+    it("is not hydrated by an offline cache that replayed nothing", async () => {
+      const { result } = renderHook(() =>
+        useCollaborativeDoc({
+          session: memberSession({ mint: () => new Promise(() => {}) }),
+        }),
+      );
+
+      await waitFor(() => expect(result.current.isCacheLoaded).toBe(true));
+      // The cache is loaded and the document is empty — but empty here means
+      // "this device has never opened it", not "it has no content".
+      expect(result.current.isHydrated).toBe(false);
+      expect(result.current.isLoading).toBe(true);
+    });
+
+    it("is hydrated by a sync, even one that delivers an empty document", async () => {
+      const { result } = renderHook(() =>
+        useCollaborativeDoc({ session: memberSession() }),
+      );
+
+      await waitFor(() => expect(FakeProvider.instances).toHaveLength(1));
+      expect(result.current.isHydrated).toBe(false);
+
+      FakeProvider.instances[0].connectAndSync();
+
+      // Nothing was added to the document, yet we now know it is empty —
+      // which is what makes it safe to edit.
+      await waitFor(() => expect(result.current.isHydrated).toBe(true));
+      expect(result.current.yDoc.getText("body").length).toBe(0);
+    });
+
+    it("stays hydrated once the connection drops", async () => {
+      const { result } = renderHook(() =>
+        useCollaborativeDoc({ session: memberSession() }),
+      );
+
+      await waitFor(() => expect(FakeProvider.instances).toHaveLength(1));
+      FakeProvider.instances[0].connectAndSync();
+      await waitFor(() => expect(result.current.isHydrated).toBe(true));
+
+      FakeProvider.instances[0].close();
+
+      await waitFor(() => expect(result.current.isConnected).toBe(false));
+      // Losing the socket does not take back what the room already told us.
+      expect(result.current.isHydrated).toBe(true);
+    });
+
+    it("starts over when a different room is opened", async () => {
+      const { result, rerender } = renderHook(
+        ({ id }: { id: string }) => {
+          const room = collabRoom("doc", id);
+          return useCollaborativeDoc({
+            session: {
+              key: room.roomId,
+              room,
+              mint: async () => ({ token: "t", roomId: room.roomId }),
+            },
+          });
+        },
+        { initialProps: { id: "first" } },
+      );
+
+      await waitFor(() => expect(FakeProvider.instances).toHaveLength(1));
+      FakeProvider.instances[0].connectAndSync();
+      await waitFor(() => expect(result.current.isHydrated).toBe(true));
+
+      rerender({ id: "second" });
+
+      // Having synced one document says nothing about the next one.
+      await waitFor(() => expect(result.current.isHydrated).toBe(false));
+    });
+  });
+
+  describe("when the room is unreachable but Convex is not", () => {
+    const snapshotUrl = "https://storage.example/snapshot";
+
+    it("hydrates from the stored snapshot instead of pretending the document is empty", async () => {
+      convexQuery.mockResolvedValue(snapshotUrl);
+      const stored = contentUpdate("what the server last persisted");
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async (url: string) => {
+          expect(url).toBe(snapshotUrl);
+          return { arrayBuffer: async () => stored.buffer.slice(0) } as Response;
+        }),
+      );
+
+      const { result } = renderHook(() =>
+        useCollaborativeDoc({
+          // Minting fails, so the provider gives up and reports offline —
+          // the collaboration server is down, the network is not.
+          session: memberSession({ mint: () => Promise.reject(new Error("no")) }),
+        }),
+      );
+
+      await waitFor(() => expect(result.current.isHydrated).toBe(true));
+      expect(result.current.yDoc.getText("body").toJSON()).toBe(
+        "what the server last persisted",
+      );
+      expect(convexQuery).toHaveBeenCalledWith(expect.anything(), {
+        resourceType: "doc",
+        resourceId: "abc123",
+      });
+      vi.unstubAllGlobals();
+    });
+
+    it("stays unhydrated when there is no snapshot to fall back on", async () => {
+      convexQuery.mockResolvedValue(null);
+
+      const { result } = renderHook(() =>
+        useCollaborativeDoc({
+          session: memberSession({ mint: () => Promise.reject(new Error("no")) }),
+        }),
+      );
+
+      await waitFor(() => expect(result.current.isOffline).toBe(true));
+      await waitFor(() => expect(convexQuery).toHaveBeenCalled());
+      expect(result.current.isHydrated).toBe(false);
+    });
+
+    it("never asks for a guest's snapshot — a guest session carries no room", async () => {
+      const { result } = renderHook(() =>
+        useCollaborativeDoc({
+          session: {
+            key: "guest:share-1:sub:Ada",
+            room: null,
+            mint: () => Promise.reject(new Error("no")),
+          },
+        }),
+      );
+
+      await waitFor(() => expect(result.current.isOffline).toBe(true));
+      expect(convexQuery).not.toHaveBeenCalled();
+      expect(result.current.isHydrated).toBe(false);
+    });
   });
 
   describe("when the server refuses the connection", () => {

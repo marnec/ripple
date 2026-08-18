@@ -34,6 +34,14 @@ const RAPID_DISCONNECT_WINDOW = 15_000;
 
 export interface ConnectionState {
   phase: ConnectionPhase;
+  /**
+   * Whether this room has ever completed a sync. Distinct from `phase`, which
+   * is where we are *now*: once the room has handed us its state, we hold that
+   * state for the rest of the session even if the socket later dies. That is
+   * what makes an empty document readable as "empty" rather than "unknown" —
+   * see `isHydrated` in `useCollaborativeDoc`.
+   */
+  hasSynced: boolean;
   /** How many times we have already torn down and rebuilt the provider. */
   recreationCount: number;
   /** When the socket last opened, so we can measure how long it survived. */
@@ -77,6 +85,7 @@ export interface ConnectionTransition {
 export function initialConnectionState(): ConnectionState {
   return {
     phase: "idle",
+    hasSynced: false,
     recreationCount: 0,
     lastConnectedAt: null,
     shortLivedConnections: [],
@@ -121,6 +130,9 @@ export function reduceConnection(
         state: {
           ...state,
           phase: "connected",
+          // Sticky for the life of this room: a later disconnect does not take
+          // the state we were given back out of memory.
+          hasSynced: true,
           recreationCount: 0,
           shortLivedConnections: [],
         },

@@ -5,6 +5,7 @@ import { useCreateBlockNote } from "@blocknote/react";
 import { BlockNoteView } from "@blocknote/shadcn";
 import { useTheme } from "next-themes";
 import { documentSchema } from "@/pages/App/Document/schema";
+import { NotAvailableOffline } from "@/components/NotAvailableOffline";
 import { useGuestDoc } from "@/hooks/use-collab-session";
 import { DOCUMENT_FRAGMENT } from "@/lib/collab/room";
 import { getUserColor } from "@/lib/user-colors";
@@ -26,7 +27,7 @@ export function GuestDocumentView({
   const { resolvedTheme } = useTheme();
   const editable = accessLevel === "edit";
 
-  const { yDoc, provider, awareness } = useGuestDoc({
+  const { yDoc, provider, awareness, isHydrated, isOffline } = useGuestDoc({
     shareId,
     guestSub,
     guestName,
@@ -48,13 +49,20 @@ export function GuestDocumentView({
     [provider, awareness, guestName, guestSub],
   );
 
+  // A guest's device keeps no offline cache (the link can be revoked), so the
+  // only thing that can hydrate this document is a sync. Until one lands there
+  // is nothing to show and — more to the point — nothing safe to write into.
+  if (isOffline && !isHydrated) {
+    return <NotAvailableOffline resource="document" />;
+  }
+
   return (
     <div className="flex h-full min-w-0 flex-1 flex-col">
       <div className="flex-1 overflow-y-auto">
         <div className="mx-auto max-w-3xl px-4 py-6 sm:px-8">
           <BlockNoteView
             editor={editor}
-            editable={editable}
+            editable={editable && isHydrated}
             theme={resolvedTheme === "dark" ? "dark" : "light"}
           />
         </div>

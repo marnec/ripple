@@ -17,6 +17,7 @@ import {
   SuggestionMenuController,
 } from "@blocknote/react";
 import { BlockNoteView } from "@blocknote/shadcn";
+import { NotAvailableOffline } from "@/components/NotAvailableOffline";
 import { ResourceDeleted } from "@/pages/ResourceDeleted";
 import SomethingWentWrong from "@/pages/SomethingWentWrong";
 import type { QueryParams } from "@convex/types/routes";
@@ -29,7 +30,7 @@ import { Link, useLocation, useParams } from "react-router-dom";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 import { useViewer } from "../UserContext";
-import { useLocalRecents } from "@/hooks/use-local-recents";
+import { localResourceName, useLocalRecents } from "@/hooks/use-local-recents";
 import { useRecordVisit } from "@/hooks/use-record-visit";
 import { en as bnEn } from "@blocknote/core/locales";
 import { useDocumentCollaboration } from "../../../hooks/use-document-collaboration";
@@ -56,7 +57,6 @@ import { useReferencedBlocks } from "../../../hooks/use-referenced-blocks";
 import { useMemberSuggestions } from "../../../hooks/use-member-suggestions";
 import { useEventSuggestions } from "../../../hooks/use-event-suggestions";
 import { useCursorAwareness } from "../../../hooks/use-cursor-awareness";
-import { useSnapshotFallback } from "../../../hooks/use-snapshot-fallback";
 import { useUploadFile } from "../../../hooks/use-upload-file";
 import { getUserColor } from "../../../lib/user-colors";
 import { ActiveUsers } from "./ActiveUsers";
@@ -76,7 +76,6 @@ import {
   CommentsDrawer,
 } from "./CommentsRail";
 import { documentSchema as schema } from "./schema";
-import { SnapshotFallback } from "./SnapshotFallback";
 import { useDocumentSuggestions } from "./useDocumentSuggestions";
 
 export function DocumentEditorContainer() {
@@ -97,6 +96,9 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
   const importInjectedRef = useRef(false);
   const document = useQuery(api.documents.get, { id: documentId });
   useRecordVisit(document?.workspaceId, "document", documentId, document?.name);
+  // Offline the metadata query never resolves; the recents list is the only
+  // place a name for this document survives on the device.
+  const documentName = document?.name ?? localResourceName(documentId) ?? "";
   const [hashSearch, setHashSearch] = useState("");
   const [debouncedHashSearch, setDebouncedHashSearch] = useState("");
 
@@ -161,7 +163,7 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
 
   const fileUpload = useUploadFile(document?.workspaceId);
 
-  const { editor, isLoading, isConnected, isOffline, provider } = useDocumentCollaboration({
+  const { editor, isLoading, isConnected, isOffline, isHydrated, provider } = useDocumentCollaboration({
     documentId,
     userName: viewer?.name ?? "Anonymous",
     userId: viewer?._id ?? "anonymous",
@@ -313,14 +315,6 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
   };
   useReferencedBlockDeleteProtection(editor, referencedBlockIds, onReferencedBlocksDeleted);
 
-  // Cold-start snapshot fallback: offline + no editor from IndexedDB
-  const { isColdStart, snapshotDoc } = useSnapshotFallback({
-    isOffline,
-    hasContent: !!editor,
-    resourceType: "doc",
-    resourceId: documentId,
-  });
-
   // Suggestion menu items (#-trigger) and insert handlers
   const { getHashItems, handleCellRefInsert, handleBlockPickerInsert, handleFramePickerInsert } = useDocumentSuggestions({
     recents,
@@ -337,21 +331,22 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
     currentDocumentId: documentId,
   });
 
-  if (isColdStart && snapshotDoc) {
-    return (
-      <SnapshotFallback
-        snapshotDoc={snapshotDoc}
-        documentName={document?.name}
-        resolvedTheme={resolvedTheme}
-      />
-    );
-  }
-
   if (document === null) {
     return <ResourceDeleted resourceType="document" />;
   }
 
-  if (isLoading || !editor || !document) {
+  // Nothing can reach this document's contents and this device has never held
+  // them. Say so, rather than showing an empty page that looks like an empty
+  // document.
+  if (isOffline && !isHydrated) {
+    return <NotAvailableOffline resource="document" />;
+  }
+
+  // Deliberately NOT gated on `document`, the Convex metadata query. Offline
+  // that query never resolves, and gating the editor on it meant a reload with
+  // a perfectly good local copy rendered a blank page forever. The header
+  // degrades to what we can know offline instead; the contents come from Yjs.
+  if (isLoading || !editor) {
     return <div className="h-full flex-1 min-w-0" />;
   }
 
@@ -359,19 +354,28 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
     <CommentsUIProvider>
     <div className="h-full flex-1 min-w-0 flex flex-col animate-fade-in">
       <div className="flex items-center justify-between px-3 py-1.5 border-b">
+        {/*
+          Every control here needs `document.workspaceId`, which is a Convex
+          read — so offline they simply aren't available and the header shows
+          the name and nothing else. The editor below still works.
+        */}
         <div className="flex h-8 min-w-0 items-center gap-4">
-          <FavoriteButton
-            resourceType="document"
-            resourceId={documentId}
-            workspaceId={document.workspaceId}
-          />
-          <TagPickerButton
-            workspaceId={document.workspaceId}
-            value={document.tags ?? []}
-            onChange={(tags) => void updateTags({ id: documentId, tags })}
-          />
-          <h1 className="hidden sm:block text-lg font-semibold truncate">{document.name}</h1>
-          <TagInlineStrip tags={document.tags ?? []} />
+          {document && (
+            <>
+              <FavoriteButton
+                resourceType="document"
+                resourceId={documentId}
+                workspaceId={document.workspaceId}
+              />
+              <TagPickerButton
+                workspaceId={document.workspaceId}
+                value={document.tags ?? []}
+                onChange={(tags) => void updateTags({ id: documentId, tags })}
+              />
+            </>
+          )}
+          <h1 className="hidden sm:block text-lg font-semibold truncate">{documentName}</h1>
+          <TagInlineStrip tags={document?.tags ?? []} />
         </div>
         <div className="flex h-8 items-center gap-3">
           <ConnectionStatus isConnected={isConnected} />
@@ -388,10 +392,13 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
               }
             />
           )}
-          <BacklinksButton
-            resourceId={documentId}
-            workspaceId={document.workspaceId}
-          />
+          {document && (
+            <BacklinksButton
+              resourceId={documentId}
+              workspaceId={document.workspaceId}
+            />
+          )}
+          {/* Threads live in the Y.Doc, so commenting works offline too. */}
           {commentsEnabled && <CommentsToggleButton />}
           {document && (
             <DocumentActionsMenu
@@ -401,7 +408,7 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
               editor={editor}
             />
           )}
-          {!isMobile && (
+          {document && !isMobile && (
             <Link
               to="settings"
               className="inline-flex items-center justify-center rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
@@ -424,7 +431,7 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
           </Button>
         </HeaderSlot>
       )}
-      <MobileHeaderTitle name={document.name} />
+      <MobileHeaderTitle name={documentName} />
       <div className="flex-1 flex flex-col min-h-0 relative">
         {SHOW_EDITOR_REVEAL_RIPPLE && <EditorRevealRipple />}
         {/*

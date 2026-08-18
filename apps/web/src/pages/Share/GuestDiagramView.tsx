@@ -1,4 +1,5 @@
 import { ExcalidrawEditor } from "@/pages/App/Diagram/ExcalidrawEditor";
+import { NotAvailableOffline } from "@/components/NotAvailableOffline";
 import { useGuestDoc } from "@/hooks/use-collab-session";
 import { getUserColor } from "@/lib/user-colors";
 import { useEffect } from "react";
@@ -19,7 +20,7 @@ export function GuestDiagramView({
   guestName,
   accessLevel,
 }: GuestDiagramViewProps) {
-  const { yDoc, provider, awareness } = useGuestDoc({
+  const { yDoc, provider, awareness, isHydrated, isOffline } = useGuestDoc({
     shareId,
     guestSub,
     guestName,
@@ -36,6 +37,11 @@ export function GuestDiagramView({
     });
   }, [awareness, guestName, guestSub]);
 
+  // See GuestDocumentView: no cache, so only a sync can hydrate a guest.
+  if (isOffline && !isHydrated) {
+    return <NotAvailableOffline resource="diagram" />;
+  }
+
   return (
     <div className="h-full w-full">
       <ExcalidrawEditor
@@ -46,7 +52,7 @@ export function GuestDiagramView({
         onExcalidrawAPI={(_api: ExcalidrawImperativeAPI) => {
           // no-op — guests don't need access to the API beyond the built-in binding
         }}
-        viewModeEnabled={accessLevel !== "edit"}
+        viewModeEnabled={accessLevel !== "edit" || !isHydrated}
       />
     </div>
   );

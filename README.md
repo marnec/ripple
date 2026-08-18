@@ -1,6 +1,20 @@
 NEXT STEPS:
 
-- tighten reconciliation logic with local-first content. for example what happens if I'm offline and I open a doc that I hadn't opened before? does it show empty? does it prevents me from editing? what happens to existing content on reconnection if I wrote on that doc? what wins? research and add tests to cover all possible cases
+- local-first follow-ups (the reconciliation pass is done — see `isHydrated` in
+  `use-collaborative-doc.ts`, `collab/empty-document.ts`, and the case matrix in
+  `lib/collab/empty-document.test.ts`)
+    - [ ] Convex metadata is still unavailable offline: pages render from the
+      Yjs copy with a degraded header (name from `localResourceName`), but
+      tags, favourites, backlinks and settings need a round-trip. A local
+      cache for `documents.get`/`diagrams.get`/`spreadsheets.get` would close it
+    - [ ] the sidebar and every list page still need Convex, so offline the
+      only reachable resources are ones already open or reachable by URL
+    - [ ] `EMPTY_DOCUMENT_UPDATE` only protects documents bootstrapped after it
+      shipped. Documents whose root was authored by a client before it keep the
+      old rival-root exposure if one is ever written to unhydrated — the
+      `isHydrated` gate is what actually prevents that, the seed is the second
+      line. A backfill would have to rewrite each document's root, so there
+      isn't one
 
 - cascade delete collection phase is bounded even for batched deletes and will hit a ceiling for extremely large cascaded entities.
 

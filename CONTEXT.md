@@ -27,6 +27,26 @@ collaborative editor hydrates from on first load (via PartyKit's `onLoad`). The
 artifact [seeding](#) produces.
 _Avoid_: initial state, dump, backup
 
+**Hydrated replica**:
+A client Y.Doc that holds the room's state, because a sync completed, because
+the IndexedDB cache replayed something, or because the
+[cold-start snapshot](#) was merged into it. Its opposite — an **unhydrated**
+replica — is an empty Y.Doc that is empty only because nobody has told it
+anything; Yjs cannot tell the two apart, so `useCollaborativeDoc` carries
+`isHydrated` alongside the document. No editing surface may bind to an
+unhydrated replica: authoring into one creates a structure that competes with
+the real document instead of merging into it.
+_Avoid_: loaded, synced doc, warm doc, has content
+
+**Empty-document root**:
+The canonical `blockGroup` a BlockNote document starts life with, shipped as
+one fixed-client-id Yjs update (`collab/empty-document.ts`) so that every
+client bootstraps *the same* root rather than one of its own. Makes "this
+document is empty" a value that can be stored, cached and merged, instead of
+an absence that each client fills in differently. `EMPTY_SPREADSHEET_UPDATE`
+is the same device for the spreadsheet grid.
+_Avoid_: default content, initial block, placeholder doc
+
 **Timeline geometry**:
 The pure mapping between a task's ISO planned dates and the Gantt's pixel/column
 grid — range padding/fill, drop-date snapping, paging, and the Day/Week/Month

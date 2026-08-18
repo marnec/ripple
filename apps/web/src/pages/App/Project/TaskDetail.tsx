@@ -213,6 +213,7 @@ export function TaskDescriptionSection({
       className={editorClassName}
       hideLabel
       loading={!detail.descriptionReady}
+      unavailableOffline={detail.unavailableOffline}
     />
   );
 

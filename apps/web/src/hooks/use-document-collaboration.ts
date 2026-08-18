@@ -10,6 +10,8 @@ import type { Id } from "@convex/_generated/dataModel";
 import { extractTextFromXml } from "@ripple/shared/blockRef";
 import { getUserColor } from "../lib/user-colors";
 import { DOCUMENT_FRAGMENT } from "../lib/collab/room";
+import { seedEmptyDocument } from "../lib/collab/empty-document";
+import { BOOTSTRAP_ORIGIN } from "../lib/yjs-origins";
 import { documentCommentSchema } from "../pages/App/Document/comment-schema";
 import { useDescriptionSeedGate, type DescriptionSeed } from "./use-description-seed-gate";
 import { useResourceDoc } from "./use-collab-session";
@@ -59,6 +61,12 @@ export interface UseDocumentCollaborationResult<
   provider: CollaborativeDoc["provider"];
   yDoc: CollaborativeDoc["yDoc"];
   /**
+   * Whether this replica holds the document's real state. When false, `editor`
+   * is null and the caller must not offer an editing surface — see
+   * `CollaborativeDoc.isHydrated`.
+   */
+  isHydrated: boolean;
+  /**
    * False only while a task editor is intentionally held back waiting for a
    * GitHub description seed to load. `true` for all other cases (no seed
    * expected, cache present, snapshot loaded, or timed out). Drives the
@@ -89,8 +97,16 @@ export function useDocumentCollaboration<
   seed,
   enableComments = false,
 }: UseDocumentCollaborationOptions<BSchema, ISchema, SSchema>): UseDocumentCollaborationResult<BSchema, ISchema, SSchema> {
-  const { yDoc, provider, awareness, isConnected, isLoading, isOffline, isCacheLoaded } =
-    useResourceDoc({ resourceType, resourceId: documentId, enabled });
+  const {
+    yDoc,
+    provider,
+    awareness,
+    isConnected,
+    isLoading,
+    isOffline,
+    isCacheLoaded,
+    isHydrated,
+  } = useResourceDoc({ resourceType, resourceId: documentId, enabled });
 
   // Derived, not stored: `isCacheLoaded` only flips once per document, and
   // reading the fragment is what "did the cache have anything" means.
@@ -216,6 +232,16 @@ export function useDocumentCollaboration<
     seed,
   });
 
+  // Materialise "empty" once we are entitled to say the document *is* empty.
+  // Both conditions matter: `isHydrated` means we know the contents, and
+  // `descriptionReady` means no server-authored description is still on its
+  // way (a GitHub seed brings a root of its own, and two roots is exactly what
+  // this is here to prevent).
+  useEffect(() => {
+    if (!isHydrated || !descriptionReady) return;
+    seedEmptyDocument(yDoc, BOOTSTRAP_ORIGIN);
+  }, [isHydrated, descriptionReady, yDoc]);
+
   return {
     // Gate editor on content readiness to prevent empty-editor flash:
     // - isConnected: provider synced (authoritative state, even if empty)
@@ -224,13 +250,20 @@ export function useDocumentCollaboration<
     //   already recreated with real provider awareness (no second flash)
     // ...AND descriptionReady, so a task expecting a seed stays gated until the
     // seed loads (or times out). Non-task callers always have descriptionReady.
+    // ...AND isHydrated, which outranks all of it: `isOffline` alone used to
+    // hand back a writable editor bound to a document we had never been told
+    // the contents of, and every keystroke into that document was a rival root
+    // waiting to destroy the real one on reconnect.
     editor:
-      (isConnected || isOffline || (cachedContentReady && !!provider)) && descriptionReady
+      isHydrated &&
+      (isConnected || isOffline || (cachedContentReady && !!provider)) &&
+      descriptionReady
         ? editor
         : null,
     isLoading,
     isConnected,
     isOffline,
+    isHydrated,
     provider,
     yDoc,
     descriptionReady,

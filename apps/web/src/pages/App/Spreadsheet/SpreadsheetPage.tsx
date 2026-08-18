@@ -12,11 +12,12 @@ import { useFormulaPicker } from "@/hooks/use-formula-picker";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useJSpreadsheetInstance } from "@/hooks/use-jspreadsheet-instance";
 import { useSpreadsheetCollaboration } from "@/hooks/use-spreadsheet-collaboration";
-import { useSnapshotHydration } from "@/hooks/use-snapshot-fallback";
 import { useSpreadsheetContextMenu } from "@/hooks/use-spreadsheet-context-menu";
+import { localResourceName } from "@/hooks/use-local-recents";
 import { useRecordVisit } from "@/hooks/use-record-visit";
 import { tagsOptimisticUpdate } from "@/lib/tag-optimistic";
 import { getUserColor } from "@/lib/user-colors";
+import { NotAvailableOffline } from "@/components/NotAvailableOffline";
 import { ResourceDeleted } from "@/pages/ResourceDeleted";
 import SomethingWentWrong from "@/pages/SomethingWentWrong";
 import type { QueryParams } from "@convex/types/routes";
@@ -252,6 +253,9 @@ function SpreadsheetEditor({
     null;
   const spreadsheet = useQuery(api.spreadsheets.get, { id: spreadsheetId });
   useRecordVisit(spreadsheet?.workspaceId, "spreadsheet", spreadsheetId, spreadsheet?.name);
+  // Offline the metadata query never resolves; recents is the only place a
+  // name for this spreadsheet survives on the device.
+  const spreadsheetName = spreadsheet?.name ?? localResourceName(spreadsheetId) ?? "";
   const viewer = useViewer();
   const rawRefs = useQuery(api.spreadsheetCellRefs.listBySpreadsheet, { spreadsheetId });
   // Cell highlights mirror the references drawer: on while it's open.
@@ -285,33 +289,32 @@ function SpreadsheetEditor({
     isConnected,
     isOffline,
     isLoading: collabLoading,
+    isHydrated,
   } = useSpreadsheetCollaboration({
     spreadsheetId: spreadsheetId,
     userName: viewer?.name ?? "Anonymous",
     userId: viewer?._id ?? "unknown",
   });
 
-  // Cold start: offline on a device with no cached copy. The stored snapshot
-  // is merged straight into the live doc, so the grid below renders it exactly
-  // as it renders synced content.
-  useSnapshotHydration({
-    isOffline,
-    hasContent: !collabLoading,
-    resourceType: "spreadsheet",
-    resourceId: spreadsheetId,
-    yDoc,
-  });
-
   const { remoteUsers } = useCursorAwareness(awareness);
 
   const remoteUserClientIds = new Set(remoteUsers.map((u) => u.clientId));
 
-  if (spreadsheet === undefined || viewer === undefined) {
-    return <div className="h-full w-full" />;
-  }
-
   if (spreadsheet === null) {
     return <ResourceDeleted resourceType="spreadsheet" />;
+  }
+
+  // Nothing can reach this spreadsheet's contents and this device has never
+  // held them. An empty grid would invite edits that then have to be
+  // reconciled against cells the user never saw.
+  if (isOffline && !isHydrated) {
+    return <NotAvailableOffline resource="spreadsheet" />;
+  }
+
+  // `spreadsheet` and `viewer` are Convex reads, so offline they never
+  // resolve. Wait for them only while we might still get them.
+  if (!isHydrated && (spreadsheet === undefined || viewer === undefined)) {
+    return <div className="h-full w-full" />;
   }
 
   if (collabLoading) {
@@ -321,19 +324,28 @@ function SpreadsheetEditor({
   return (
     <div className="flex h-full w-full flex-col animate-fade-in">
       <div className="flex items-center justify-between px-3 py-1.5 border-b">
+        {/*
+          Every control here needs `spreadsheet.workspaceId`, a Convex read —
+          so offline they aren't available and the header keeps only the name.
+          The grid below still works from the local copy.
+        */}
         <div className="flex h-8 min-w-0 items-center gap-4">
-          <FavoriteButton
-            resourceType="spreadsheet"
-            resourceId={spreadsheetId}
-            workspaceId={spreadsheet.workspaceId}
-          />
-          <TagPickerButton
-            workspaceId={spreadsheet.workspaceId}
-            value={spreadsheet.tags ?? []}
-            onChange={(tags) => void updateTags({ id: spreadsheetId, tags })}
-          />
-          <h1 className="hidden sm:block text-lg font-semibold truncate">{spreadsheet.name}</h1>
-          <TagInlineStrip tags={spreadsheet.tags ?? []} />
+          {spreadsheet && (
+            <>
+              <FavoriteButton
+                resourceType="spreadsheet"
+                resourceId={spreadsheetId}
+                workspaceId={spreadsheet.workspaceId}
+              />
+              <TagPickerButton
+                workspaceId={spreadsheet.workspaceId}
+                value={spreadsheet.tags ?? []}
+                onChange={(tags) => void updateTags({ id: spreadsheetId, tags })}
+              />
+            </>
+          )}
+          <h1 className="hidden sm:block text-lg font-semibold truncate">{spreadsheetName}</h1>
+          <TagInlineStrip tags={spreadsheet?.tags ?? []} />
         </div>
         <FormulaBar
           binding={binding}
@@ -354,18 +366,22 @@ function SpreadsheetEditor({
               }
             />
           )}
-          <BacklinksButton
-            resourceId={spreadsheetId}
-            workspaceId={spreadsheet.workspaceId}
-            onOpenChange={setShowRefHighlights}
-          />
-          <SpreadsheetActionsMenu
-            spreadsheetId={spreadsheetId}
-            spreadsheetName={spreadsheet.name}
-            isAdmin={isAdmin}
-            binding={binding}
-          />
-          {!isMobile && (
+          {spreadsheet && (
+            <>
+              <BacklinksButton
+                resourceId={spreadsheetId}
+                workspaceId={spreadsheet.workspaceId}
+                onOpenChange={setShowRefHighlights}
+              />
+              <SpreadsheetActionsMenu
+                spreadsheetId={spreadsheetId}
+                spreadsheetName={spreadsheet.name}
+                isAdmin={isAdmin}
+                binding={binding}
+              />
+            </>
+          )}
+          {spreadsheet && !isMobile && (
             <Link
               to="settings"
               className="inline-flex items-center justify-center rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
@@ -388,7 +404,7 @@ function SpreadsheetEditor({
           </Button>
         </HeaderSlot>
       )}
-      <MobileHeaderTitle name={spreadsheet.name} />
+      <MobileHeaderTitle name={spreadsheetName} />
 
       <div className="flex-1 overflow-hidden">
         <JSpreadsheetGrid

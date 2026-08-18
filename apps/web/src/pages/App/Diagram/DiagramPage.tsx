@@ -9,6 +9,7 @@ import { Button } from "@ripple/ui/components/button";
 import { HeaderSlot, MobileHeaderTitle } from "@/contexts/HeaderSlotContext";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { tagsOptimisticUpdate } from "@/lib/tag-optimistic";
+import { NotAvailableOffline } from "@/components/NotAvailableOffline";
 import { ResourceDeleted } from "@/pages/ResourceDeleted";
 import { Link, useLocation, useParams } from "react-router-dom";
 import type { Id } from "@convex/_generated/dataModel";
@@ -28,16 +29,13 @@ import { useFrameDeleteProtection } from "@/hooks/use-frame-delete-protection";
 import { FrameDeleteWarningDialog } from "@/components/FrameDeleteWarningDialog";
 import { useDiagramCollaboration } from "@/hooks/use-diagram-collaboration";
 import { useDiagramCursorAwareness } from "@/hooks/use-diagram-cursor-awareness";
-import { useSnapshotFallback } from "@/hooks/use-snapshot-fallback";
 import { ActiveUsers } from "../Document/ActiveUsers";
 import { ConnectionStatus } from "../Document/ConnectionStatus";
+import { localResourceName } from "@/hooks/use-local-recents";
 import { useRecordVisit } from "@/hooks/use-record-visit";
 import { getExcalidrawCollaboratorColor } from "@/lib/user-colors";
 import { getCameraFromAppState } from "@/lib/canvas-coordinates";
-import { runGuarded } from "@/lib/excalidraw-sync-guard";
-import { Excalidraw } from "@excalidraw/excalidraw";
 import type { Theme } from "@excalidraw/excalidraw/element/types";
-import { yjsToExcalidraw } from "y-excalidraw";
 
 type ImportedScene = {
   elements: readonly unknown[];
@@ -53,6 +51,9 @@ function DiagramPageContent({ diagramId, workspaceId }: { diagramId: Id<"diagram
       ?.importedScene ?? null;
   const diagram = useQuery(api.diagrams.get, { id: diagramId });
   useRecordVisit(workspaceId, "diagram", diagramId, diagram?.name);
+  // Offline the metadata query never resolves; recents is the only place a
+  // name for this diagram survives on the device.
+  const diagramName = diagram?.name ?? localResourceName(diagramId) ?? "";
   const [excalidrawAPI, setExcalidrawAPI] = useState<ExcalidrawImperativeAPI | null>(null);
   // Snapshot of the scene captured when entering presentation mode (null = not presenting).
   const [presentationScene, setPresentationScene] = useState<{
@@ -136,6 +137,7 @@ function DiagramPageContent({ diagramId, workspaceId }: { diagramId: Id<"diagram
     isConnected,
     isOffline,
     isLoading,
+    isHydrated,
   } = useDiagramCollaboration({
     diagramId,
     userName: viewer?.name ?? "Anonymous",
@@ -144,18 +146,6 @@ function DiagramPageContent({ diagramId, workspaceId }: { diagramId: Id<"diagram
 
   // Get remote pointers for jump-to-user and avatar stack
   const { remotePointers } = useDiagramCursorAwareness(awareness);
-
-  // Cold-start snapshot fallback: offline + loading (no IndexedDB data)
-  const { isColdStart, snapshotDoc } = useSnapshotFallback({
-    isOffline,
-    hasContent: !isLoading,
-    resourceType: "diagram",
-    resourceId: diagramId,
-  });
-
-  const snapshotElements = snapshotDoc
-    ? runGuarded("snapshot.decode", () => yjsToExcalidraw(snapshotDoc.getArray("elements")), [])
-    : null;
 
   // Jump to user's cursor position
   const handleJumpToUser = (user: { clientId: number }) => {
@@ -181,36 +171,22 @@ function DiagramPageContent({ diagramId, workspaceId }: { diagramId: Id<"diagram
     });
   };
 
-  if (!viewer || diagram === undefined) {
-    return <div className="h-full w-full" />;
-  }
-
   if (diagram === null) {
     return <ResourceDeleted resourceType="diagram" />;
   }
 
-  // Show snapshot fallback in cold-start offline mode
-  if (isColdStart && snapshotElements) {
-    return (
-      <div className="flex h-full w-full flex-col">
-        <div className="flex items-center justify-between px-3 py-1.5 border-b">
-          <div className="flex h-8 items-center gap-2">
-            <span className="text-sm text-muted-foreground">Viewing saved version (offline)</span>
-          </div>
-          <div className="flex h-8 items-center gap-3">
-            <ConnectionStatus isConnected={false} />
-          </div>
-        </div>
-        <div className="flex-1 overflow-hidden">
-          <Excalidraw
-            initialData={{ elements: snapshotElements }}
-            viewModeEnabled={true}
-            theme={resolvedTheme as Theme}
-            zenModeEnabled={true}
-          />
-        </div>
-      </div>
-    );
+  // Nothing can reach this diagram's contents and this device has never held
+  // them. A blank canvas here would be a lie the user can draw on — and every
+  // stroke would then have to be reconciled against a scene they never saw.
+  if (isOffline && !isHydrated) {
+    return <NotAvailableOffline resource="diagram" />;
+  }
+
+  // `viewer` and `diagram` are Convex reads, so offline they never resolve.
+  // Wait for them only while we might still get them: once the Yjs document is
+  // hydrated we can draw the canvas and let the header degrade.
+  if (!isHydrated && (!viewer || diagram === undefined)) {
+    return <div className="h-full w-full" />;
   }
 
   return (
@@ -228,7 +204,7 @@ function DiagramPageContent({ diagramId, workspaceId }: { diagramId: Id<"diagram
             value={diagram?.tags ?? []}
             onChange={(tags) => void updateTags({ id: diagramId, tags })}
           />
-          <h1 className="hidden sm:block text-lg font-semibold truncate">{diagram?.name}</h1>
+          <h1 className="hidden sm:block text-lg font-semibold truncate">{diagramName}</h1>
           <TagInlineStrip tags={diagram?.tags ?? []} />
         </div>
         <div className="flex h-8 items-center gap-3">
@@ -292,7 +268,7 @@ function DiagramPageContent({ diagramId, workspaceId }: { diagramId: Id<"diagram
           </Button>
         </HeaderSlot>
       )}
-      <MobileHeaderTitle name={diagram?.name} />
+      <MobileHeaderTitle name={diagramName} />
 
       {/* Canvas */}
       <div className="flex-1 overflow-hidden">

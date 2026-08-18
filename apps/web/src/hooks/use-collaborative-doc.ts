@@ -1,12 +1,15 @@
+import { useConvex } from "convex/react";
 import { useEffect, useMemo, useReducer, useRef, useState } from "react";
 import YProvider from "y-partyserver/provider";
 import { IndexeddbPersistence } from "y-indexeddb";
 import { Awareness } from "y-protocols/awareness";
 import * as Y from "yjs";
+import { api } from "@convex/_generated/api";
 import {
   fetchCollaborationToken,
   invalidateCollaborationToken,
 } from "@/lib/collaboration-token-cache";
+import { SNAPSHOT_ORIGIN } from "@/lib/yjs-origins";
 import { startActivityReporting } from "@/lib/awareness-activity";
 import { startAwarenessHeartbeat } from "@/lib/awareness-heartbeat";
 import {
@@ -58,6 +61,24 @@ export interface CollaborativeDoc {
   isOffline: boolean;
   /** True once IndexedDB has replayed this room's offline cache. */
   isCacheLoaded: boolean;
+  /**
+   * Whether this replica holds the room's state — from a completed sync, an
+   * offline cache that actually had something in it, or a stored snapshot.
+   *
+   * This is the difference between "this document is empty" and "I have no
+   * idea what is in this document", which a Y.Doc cannot express on its own:
+   * both are a doc with no content. Authoring into the second one is what
+   * produces a rival root node that destroys the real content on merge, so no
+   * editor may bind for writing until this is true.
+   */
+  isHydrated: boolean;
+}
+
+/** Whether a Y.Doc holds any state at all (from any client, including us). */
+function hasState(yDoc: Y.Doc): boolean {
+  // An empty state vector encodes to a single zero byte; anything longer means
+  // at least one client's clock is represented. Public API, unlike `store`.
+  return Y.encodeStateVector(yDoc).length > 1;
 }
 
 /**
@@ -82,7 +103,22 @@ export function useCollaborativeDoc({
   const policyRef = useRef(state);
   const [provider, setProvider] = useState<YProvider | null>(null);
   const [isCacheLoaded, setIsCacheLoaded] = useState(false);
+  /** The offline cache replayed and it was not empty. */
+  const [cacheHasState, setCacheHasState] = useState(false);
+  /** A stored server snapshot was merged in because nothing else could be. */
+  const [snapshotHydrated, setSnapshotHydrated] = useState(false);
   const [generation, setGeneration] = useState(0);
+  const convex = useConvex();
+
+  // A snapshot restored for one room says nothing about the next one. Reset
+  // while rendering (React's "adjust state during render" idiom) so the first
+  // render of a new room already reads as unhydrated — an effect would leave
+  // one render claiming we hold a document we have not looked at.
+  const [snapshotRoomKey, setSnapshotRoomKey] = useState(session.key);
+  if (snapshotRoomKey !== session.key) {
+    setSnapshotRoomKey(session.key);
+    if (snapshotHydrated) setSnapshotHydrated(false);
+  }
 
   const providerRef = useRef<YProvider | null>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -129,11 +165,18 @@ export function useCollaborativeDoc({
     if (!persistenceKey) return;
 
     const persistence = new IndexeddbPersistence(persistenceKey, yDoc);
-    persistence.on("synced", () => setIsCacheLoaded(true));
+    persistence.on("synced", () => {
+      setIsCacheLoaded(true);
+      // `synced` fires for an empty database too — it means "the replay is
+      // finished", not "there was something to replay". Only a non-empty doc
+      // proves this device has actually seen the room before.
+      setCacheHasState(hasState(yDoc));
+    });
 
     return () => {
       void persistence.destroy();
       setIsCacheLoaded(false);
+      setCacheHasState(false);
     };
   }, [persistenceKey, yDoc]);
 
@@ -331,17 +374,80 @@ export function useCollaborativeDoc({
   }, [provider]);
 
   const status = connectionStatus(state);
+  const isHydrated = state.hasSynced || cacheHasState || snapshotHydrated;
+
+  // Third and last source of state: the snapshot the collaboration server
+  // persists to Convex storage. Reached only when the other two have failed —
+  // the room is unreachable and this device has no cache — which is exactly
+  // the case that used to hand the user an empty, writable document.
+  //
+  // Merging server-authored bytes into the live doc is idempotent: they carry
+  // the room's own client ids and clocks, so when the room does come back
+  // there is nothing to reconcile, and any edit made in the meantime lands
+  // inside the same structure rather than beside a rival copy of it.
+  //
+  // Convex is a separate service from the collaboration server, so this
+  // recovers the common "PartyKit is down / slow, the network is fine" case.
+  // With no network at all the query never resolves and we stay unhydrated,
+  // which is the honest answer.
+  const snapshotAttemptedRef = useRef<string | null>(null);
+  // Primitives, not `room`: the descriptor is rebuilt every render, and a dep
+  // on its identity would run this effect's cleanup — cancelling the fetch —
+  // on every render that happens while it is in flight.
+  const snapshotResourceType = room?.resourceType ?? null;
+  const snapshotResourceId = room?.resourceId ?? null;
+  useEffect(() => {
+    if (!enabled || !snapshotResourceType || !snapshotResourceId) return;
+    if (!status.isOffline || isHydrated) return;
+    if (snapshotAttemptedRef.current === key) return;
+    snapshotAttemptedRef.current = key;
+
+    let cancelled = false;
+    void (async () => {
+      try {
+        const url = await convex.query(api.snapshots.getSnapshotUrl, {
+          resourceType: snapshotResourceType,
+          resourceId: snapshotResourceId,
+        });
+        if (cancelled || !url) return;
+        const buffer = await (await fetch(url)).arrayBuffer();
+        if (cancelled) return;
+        Y.applyUpdate(yDoc, new Uint8Array(buffer), SNAPSHOT_ORIGIN);
+        setSnapshotHydrated(true);
+      } catch (error) {
+        console.error("Failed to load the stored snapshot for this room:", error);
+        // Let a later attempt (a reconnect, a different room) try again.
+        if (!cancelled) snapshotAttemptedRef.current = null;
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    enabled,
+    snapshotResourceType,
+    snapshotResourceId,
+    status.isOffline,
+    isHydrated,
+    key,
+    yDoc,
+    convex,
+  ]);
 
   return {
     yDoc,
     provider,
     awareness: provider?.awareness ?? localAwareness,
     isCacheLoaded,
+    isHydrated,
     ...status,
-    // Loading means "nothing to show yet", not "no socket yet". A replayed
-    // offline cache is something to show, so it ends the wait exactly as a
-    // sync does — which is why every editor used to re-derive this itself.
-    isLoading: status.isLoading && !isCacheLoaded,
+    // Loading means "nothing to show yet", not "no socket yet". Holding the
+    // room's state is something to show, so it ends the wait exactly as a sync
+    // does — which is why every editor used to re-derive this itself. An
+    // offline cache that replayed *nothing* is not something to show, which is
+    // the part this used to get wrong.
+    isLoading: status.isLoading && !isHydrated,
   };
 }
 

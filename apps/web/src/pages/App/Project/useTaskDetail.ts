@@ -69,7 +69,16 @@ export function useTaskDetail({
   const linkedProvider = github.provider;
 
   // Collaborative editor - Yjs handles sync automatically
-  const { editor, isConnected, provider, yDoc, descriptionReady, awaitingSeed } = useDocumentCollaboration({
+  const {
+    editor,
+    isConnected,
+    isOffline,
+    isHydrated,
+    provider,
+    yDoc,
+    descriptionReady,
+    awaitingSeed,
+  } = useDocumentCollaboration({
     documentId: taskId ?? "",
     userName: currentUser?.name ?? "Anonymous",
     userId: currentUser?._id ?? "anonymous",
@@ -152,6 +161,8 @@ export function useTaskDetail({
     descriptionReady,
     awaitingSeed,
     isConnected,
+    // The description has never been on this device and nothing can reach it.
+    unavailableOffline: isOffline && !isHydrated,
     linkedProvider,
     remoteUsers,
     titleValue,
