@@ -3,18 +3,25 @@ NEXT STEPS:
 - local-first follow-ups (the reconciliation pass is done — see `isHydrated` in
   `use-collaborative-doc.ts`, `collab/empty-document.ts`, and the case matrix in
   `lib/collab/empty-document.test.ts`)
-    - [ ] Convex metadata is still unavailable offline: pages render from the
-      Yjs copy with a degraded header (name from `localResourceName`), but
-      tags, favourites, backlinks and settings need a round-trip. A local
-      cache for `documents.get`/`diagrams.get`/`spreadsheets.get` would close it
-    - [ ] the sidebar and every list page still need Convex, so offline the
-      only reachable resources are ones already open or reachable by URL
-    - [ ] `EMPTY_DOCUMENT_UPDATE` only protects documents bootstrapped after it
-      shipped. Documents whose root was authored by a client before it keep the
-      old rival-root exposure if one is ever written to unhydrated — the
-      `isHydrated` gate is what actually prevents that, the seed is the second
-      line. A backfill would have to rewrite each document's root, so there
-      isn't one
+    - [ ] Convex metadata is unavailable offline: pages render from the Yjs
+      copy with a degraded header (name from `localResourceName`), but tags,
+      favourites, backlinks, the actions menu and `@`-mention suggestions need
+      a round-trip. Closing it means a hand-rolled write-through localStorage
+      cache for `documents.get`/`diagrams.get`/`spreadsheets.get` — convex
+      1.43 has no local-persistence option for the web client. Read-only: the
+      `#` picker needs server-side search, and offline mutations would need a
+      write queue, which is a separate (larger) decision
+    - the sidebar and every list page also need Convex, so offline the only
+      reachable resources are ones already open or reachable by URL. Not a
+      task on its own — it follows from the metadata cache above, plus a
+      decision about how stale a cached workspace tree may be
+    - **won't do**: backfill `EMPTY_DOCUMENT_UPDATE` into documents that
+      predate it. Rewriting a document's root server-side changes every item's
+      identity, so any device still holding the old state in IndexedDB would
+      merge old-root + new-root — the exact corruption the seed prevents — and
+      there is no way to purge those caches. The `isHydrated` gate is what
+      protects legacy documents; the seed is the second line, not the
+      load-bearing one
 
 - cascade delete collection phase is bounded even for batched deletes and will hit a ceiling for extremely large cascaded entities.
 

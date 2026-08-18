@@ -63,7 +63,9 @@ export interface CollaborativeDoc {
   isCacheLoaded: boolean;
   /**
    * Whether this replica holds the room's state — from a completed sync, an
-   * offline cache that actually had something in it, or a stored snapshot.
+   * offline cache that actually had something in it, a stored snapshot, or
+   * Convex confirming that nothing has ever been stored for the resource
+   * (which is knowledge about its contents: it has none).
    *
    * This is the difference between "this document is empty" and "I have no
    * idea what is in this document", which a Y.Doc cannot express on its own:
@@ -105,8 +107,12 @@ export function useCollaborativeDoc({
   const [isCacheLoaded, setIsCacheLoaded] = useState(false);
   /** The offline cache replayed and it was not empty. */
   const [cacheHasState, setCacheHasState] = useState(false);
-  /** A stored server snapshot was merged in because nothing else could be. */
-  const [snapshotHydrated, setSnapshotHydrated] = useState(false);
+  /**
+   * Convex told us what is persisted for this room: either it handed over a
+   * snapshot, which we merged, or it confirmed there is none — and a resource
+   * nothing has ever been stored for is one nobody has put content into.
+   */
+  const [storedStateKnown, setStoredStateKnown] = useState(false);
   const [generation, setGeneration] = useState(0);
   const convex = useConvex();
 
@@ -117,7 +123,7 @@ export function useCollaborativeDoc({
   const [snapshotRoomKey, setSnapshotRoomKey] = useState(session.key);
   if (snapshotRoomKey !== session.key) {
     setSnapshotRoomKey(session.key);
-    if (snapshotHydrated) setSnapshotHydrated(false);
+    if (storedStateKnown) setStoredStateKnown(false);
   }
 
   const providerRef = useRef<YProvider | null>(null);
@@ -374,7 +380,7 @@ export function useCollaborativeDoc({
   }, [provider]);
 
   const status = connectionStatus(state);
-  const isHydrated = state.hasSynced || cacheHasState || snapshotHydrated;
+  const isHydrated = state.hasSynced || cacheHasState || storedStateKnown;
 
   // Third and last source of state: the snapshot the collaboration server
   // persists to Convex storage. Reached only when the other two have failed —
@@ -390,6 +396,14 @@ export function useCollaborativeDoc({
   // recovers the common "PartyKit is down / slow, the network is fine" case.
   // With no network at all the query never resolves and we stay unhydrated,
   // which is the honest answer.
+  //
+  // `empty` hydrates us too, and that is the point of asking `getStoredState`
+  // rather than `getSnapshotUrl`: an answer of "nothing has ever been stored
+  // for this resource" is knowledge about its contents, not a failure to
+  // obtain them. Without it a brand-new document reported itself unavailable
+  // offline whenever the room was slow to answer — reachable, empty, and shown
+  // as missing. Convex saying `unavailable` (no access, no such resource, a
+  // broken blob) is not knowledge, and leaves us unhydrated.
   const snapshotAttemptedRef = useRef<string | null>(null);
   // Primitives, not `room`: the descriptor is rebuilt every render, and a dep
   // on its identity would run this effect's cleanup — cancelling the fetch —
@@ -405,17 +419,20 @@ export function useCollaborativeDoc({
     let cancelled = false;
     void (async () => {
       try {
-        const url = await convex.query(api.snapshots.getSnapshotUrl, {
+        const stored = await convex.query(api.snapshots.getStoredState, {
           resourceType: snapshotResourceType,
           resourceId: snapshotResourceId,
         });
-        if (cancelled || !url) return;
-        const buffer = await (await fetch(url)).arrayBuffer();
         if (cancelled) return;
-        Y.applyUpdate(yDoc, new Uint8Array(buffer), SNAPSHOT_ORIGIN);
-        setSnapshotHydrated(true);
+        if (stored.status === "unavailable") return;
+        if (stored.status === "stored") {
+          const buffer = await (await fetch(stored.url)).arrayBuffer();
+          if (cancelled) return;
+          Y.applyUpdate(yDoc, new Uint8Array(buffer), SNAPSHOT_ORIGIN);
+        }
+        setStoredStateKnown(true);
       } catch (error) {
-        console.error("Failed to load the stored snapshot for this room:", error);
+        console.error("Failed to read the stored state for this room:", error);
         // Let a later attempt (a reconnect, a different room) try again.
         if (!cancelled) snapshotAttemptedRef.current = null;
       }

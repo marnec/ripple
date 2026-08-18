@@ -169,8 +169,8 @@ beforeEach(() => {
   persistenceInstances.length = 0;
   cache.clear();
   convexQuery.mockReset();
-  // Nothing stored server-side unless a test says so.
-  convexQuery.mockResolvedValue(null);
+  // Convex can tell us nothing unless a test says otherwise.
+  convexQuery.mockResolvedValue({ status: "unavailable" });
   // The token cache is module state, including an in-flight map. A test that
   // leaves a request pending would otherwise hand that same promise to the
   // next test asking for the same room.
@@ -392,7 +392,7 @@ describe("useCollaborativeDoc", () => {
     const snapshotUrl = "https://storage.example/snapshot";
 
     it("hydrates from the stored snapshot instead of pretending the document is empty", async () => {
-      convexQuery.mockResolvedValue(snapshotUrl);
+      convexQuery.mockResolvedValue({ status: "stored", url: snapshotUrl });
       const stored = contentUpdate("what the server last persisted");
       vi.stubGlobal(
         "fetch",
@@ -421,8 +421,37 @@ describe("useCollaborativeDoc", () => {
       vi.unstubAllGlobals();
     });
 
-    it("stays unhydrated when there is no snapshot to fall back on", async () => {
-      convexQuery.mockResolvedValue(null);
+    /**
+     * "Nothing has ever been stored for this resource" is an answer, not a
+     * failure to get one: no snapshot means nobody has ever put content in,
+     * because every client that opens an empty document writes the canonical
+     * empty root into it. Reading that as unavailable is what made a
+     * brand-new document report itself missing whenever the room was slow.
+     */
+    it("treats a confirmed absence of stored state as knowing the document is empty", async () => {
+      convexQuery.mockResolvedValue({ status: "empty" });
+      const fetchSpy = vi.fn();
+      vi.stubGlobal("fetch", fetchSpy);
+
+      const { result } = renderHook(() =>
+        useCollaborativeDoc({
+          session: memberSession({ mint: () => Promise.reject(new Error("no")) }),
+        }),
+      );
+
+      await waitFor(() => expect(result.current.isHydrated).toBe(true));
+      // There was nothing to download, and we did not try.
+      expect(fetchSpy).not.toHaveBeenCalled();
+      vi.unstubAllGlobals();
+    });
+
+    /**
+     * The reason the client cannot infer "empty" from a bare null. A caller
+     * who has lost access would otherwise bootstrap a document they can never
+     * sync, and merge a competing root into it the day access came back.
+     */
+    it("stays unhydrated when Convex cannot say what is stored", async () => {
+      convexQuery.mockResolvedValue({ status: "unavailable" });
 
       const { result } = renderHook(() =>
         useCollaborativeDoc({

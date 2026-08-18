@@ -117,7 +117,7 @@ beforeEach(() => {
   FakeProvider.instances.length = 0;
   cache.clear();
   convexQuery.mockReset();
-  convexQuery.mockResolvedValue(null);
+  convexQuery.mockResolvedValue({ status: "unavailable" });
   clearCollaborationTokenCache();
 });
 

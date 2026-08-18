@@ -1,4 +1,4 @@
-import { internalQuery, query } from "./_generated/server";
+import { internalQuery, query, type QueryCtx } from "./_generated/server";
 import { internalMutation } from "./functions";
 import { v } from "convex/values";
 import { Id } from "./_generated/dataModel";
@@ -6,6 +6,7 @@ import {
   collabResourceValidator,
   getUser,
   hasResourceAccess,
+  type CollabResource,
 } from "./authHelpers";
 
 /**
@@ -186,19 +187,75 @@ export const getSnapshotUrl = query({
   },
   returns: v.union(v.string(), v.null()),
   handler: async (ctx, { resourceType, resourceId }) => {
-    // Authentication check
-    const userId = await getUser(ctx);
-    if (!userId) return null;
-
-    // Authorization check — same rule as the collaboration token path.
-    const allowed = await hasResourceAccess(ctx, userId, resourceType, resourceId);
-    if (!allowed) return null;
-
-    const resource = await ctx.db.get(snapshotId(resourceId));
-    if (!resource || !resource.yjsSnapshotId) return null;
-
-    // Get the URL for the stored blob
-    const url = await ctx.storage.getUrl(resource.yjsSnapshotId);
-    return url;
+    const stored = await resolveStoredState(ctx, resourceType, resourceId);
+    return stored.status === "stored" ? stored.url : null;
   },
 });
+
+/**
+ * The same question as `getSnapshotUrl`, asked so that the answer distinguishes
+ * "there is nothing stored" from "you may not ask".
+ *
+ * `getSnapshotUrl` collapses both into `null`, which is right for the callers
+ * that only want to download something and can do nothing either way. The
+ * cold-start path needs more: a resource whose snapshot has *never* been
+ * written is one nobody has ever put content into, so the client may treat it
+ * as genuinely empty and let the user work in it offline. Reading that from a
+ * bare null would mean a caller who has lost access bootstraps a document they
+ * cannot sync, and merges a competing root into it later — see
+ * `apps/web/src/lib/collab/empty-document.ts`.
+ *
+ * "Never written" is a safe thing to say precisely because every client that
+ * opens an empty document writes the canonical empty root into it, so a room
+ * anyone has ever synced has a snapshot.
+ */
+export const getStoredState = query({
+  args: {
+    resourceType: collabResourceValidator,
+    resourceId: v.string(),
+  },
+  returns: v.union(
+    v.object({ status: v.literal("stored"), url: v.string() }),
+    v.object({ status: v.literal("empty") }),
+    v.object({ status: v.literal("unavailable") }),
+  ),
+  handler: async (ctx, { resourceType, resourceId }) => {
+    return await resolveStoredState(ctx, resourceType, resourceId);
+  },
+});
+
+/**
+ * What is persisted for a resource, and whether the caller may have it.
+ *
+ * Shared by both public queries so the authorization rule — the collaboration
+ * rule, `hasResourceAccess`, the same one the token path and the room use —
+ * exists once. A second copy is how one of the three doors to a document's
+ * bytes ends up unlocked.
+ */
+async function resolveStoredState(
+  ctx: QueryCtx,
+  resourceType: CollabResource,
+  resourceId: string,
+): Promise<
+  { status: "stored"; url: string } | { status: "empty" } | { status: "unavailable" }
+> {
+  const userId = await getUser(ctx);
+  if (!userId) return { status: "unavailable" };
+
+  const allowed = await hasResourceAccess(ctx, userId, resourceType, resourceId);
+  if (!allowed) return { status: "unavailable" };
+
+  const resource = await ctx.db.get(snapshotId(resourceId));
+  // A resource that is gone is not an empty one: the caller must not conclude
+  // anything about its contents.
+  if (!resource) return { status: "unavailable" };
+
+  if (!resource.yjsSnapshotId) return { status: "empty" };
+
+  const url = await ctx.storage.getUrl(resource.yjsSnapshotId);
+  // A snapshot id pointing at a blob that is not there is a broken snapshot,
+  // not an empty document.
+  if (!url) return { status: "unavailable" };
+
+  return { status: "stored", url };
+}

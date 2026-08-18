@@ -2428,6 +2428,17 @@ export declare const api: {
       },
       string | null
     >;
+    getStoredState: FunctionReference<
+      "query",
+      "public",
+      {
+        resourceId: string;
+        resourceType: "doc" | "diagram" | "task" | "spreadsheet";
+      },
+      | { status: "stored"; url: string }
+      | { status: "empty" }
+      | { status: "unavailable" }
+    >;
   };
   spreadsheetCellRefs: {
     ensureCellRef: FunctionReference<

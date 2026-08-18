@@ -108,3 +108,97 @@ describe("snapshots.getSnapshotUrl access", () => {
     expect(url).toBeNull();
   });
 });
+
+/**
+ * `getStoredState` answers the same question, but separates "there is nothing
+ * stored" from "you may not ask" — a distinction the client acts on, because
+ * the first means the resource is genuinely empty and may be worked on offline.
+ * Collapsing the two would let someone who has lost access author into a
+ * document they can never sync, and merge a competing root into it later.
+ */
+describe("snapshots.getStoredState", () => {
+  it("reports a stored snapshot to a member of the owning workspace", async () => {
+    const t = createTestContext();
+    const { workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
+    const documentId = await setupDocumentWithSnapshot(t, workspaceId);
+
+    const stored = await asUser.query(api.snapshots.getStoredState, {
+      resourceType: "doc",
+      resourceId: documentId,
+    });
+
+    expect(stored.status).toBe("stored");
+    expect(stored).toHaveProperty("url", expect.stringContaining("/api/storage/"));
+  });
+
+  it("reports a document nothing has ever been written to as empty", async () => {
+    const t = createTestContext();
+    const { workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
+    const documentId = await t.run((ctx) =>
+      ctx.db.insert("documents", { workspaceId, name: "Brand new" }),
+    );
+
+    const stored = await asUser.query(api.snapshots.getStoredState, {
+      resourceType: "doc",
+      resourceId: documentId,
+    });
+
+    // Knowledge, not a failure: the client may open this offline.
+    expect(stored).toEqual({ status: "empty" });
+  });
+
+  it("never says 'empty' to someone who may not read the resource", async () => {
+    const t = createTestContext();
+    const { workspaceId } = await setupWorkspaceWithAdmin(t, "Owning Workspace");
+    // No snapshot — so a naive implementation would answer "empty" here.
+    const documentId = await t.run((ctx) =>
+      ctx.db.insert("documents", { workspaceId, name: "Confidential" }),
+    );
+
+    const { asUser: asOutsider } = await setupWorkspaceWithAdmin(t, "Other Workspace");
+
+    const stored = await asOutsider.query(api.snapshots.getStoredState, {
+      resourceType: "doc",
+      resourceId: documentId,
+    });
+
+    expect(stored).toEqual({ status: "unavailable" });
+  });
+
+  it("does not call a resource that no longer exists empty", async () => {
+    const t = createTestContext();
+    const { workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
+    const documentId = await t.run((ctx) =>
+      ctx.db.insert("documents", { workspaceId, name: "Doomed" }),
+    );
+    await t.run((ctx) => ctx.db.delete(documentId));
+
+    const stored = await asUser.query(api.snapshots.getStoredState, {
+      resourceType: "doc",
+      resourceId: documentId,
+    });
+
+    expect(stored).toEqual({ status: "unavailable" });
+  });
+
+  it("agrees with getSnapshotUrl on every outcome", async () => {
+    const t = createTestContext();
+    const { workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
+    const withSnapshot = await setupDocumentWithSnapshot(t, workspaceId);
+    const withoutSnapshot = await t.run((ctx) =>
+      ctx.db.insert("documents", { workspaceId, name: "Brand new" }),
+    );
+
+    for (const resourceId of [withSnapshot, withoutSnapshot]) {
+      const url = await asUser.query(api.snapshots.getSnapshotUrl, {
+        resourceType: "doc",
+        resourceId,
+      });
+      const stored = await asUser.query(api.snapshots.getStoredState, {
+        resourceType: "doc",
+        resourceId,
+      });
+      expect(url).toBe(stored.status === "stored" ? stored.url : null);
+    }
+  });
+});
