@@ -6,6 +6,7 @@
  */
 .document-spotlight-frame {
   position: relative;
+  padding-inline: 46px;
 }
 
 .document-spotlight-frame::after {
