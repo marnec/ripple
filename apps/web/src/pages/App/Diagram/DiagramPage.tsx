@@ -23,6 +23,8 @@ import {
   CollaborativeSurface,
   type HydratedSurface,
 } from "@/components/CollaborativeSurface";
+import { SurfaceHeader } from "@/components/SurfaceHeader";
+import { useResourceDoc } from "@/hooks/use-collab-session";
 import type { Theme } from "@excalidraw/excalidraw/element/types";
 
 type ImportedScene = {
@@ -46,6 +48,8 @@ function DiagramPageContent({
   const viewer = useViewer();
   const location = useLocation();
   const { resolvedTheme } = useTheme();
+  // The room, opened here and handed to the sequence.
+  const doc = useResourceDoc({ resourceType: "diagram", resourceId: diagramId });
   const importedScene =
     (location.state as { importedScene?: ImportedScene } | null)?.importedScene ?? null;
   const liveDiagram = useQuery(api.diagrams.get, { id: diagramId });
@@ -121,47 +125,52 @@ function DiagramPageContent({
   return (
     <CollaborativeSurface<DiagramMeta>
       resourceType="diagram"
-      resourceId={diagramId}
-      workspaceId={workspaceId}
+      doc={doc}
       meta={liveDiagram}
-      onTagsChange={(tags) => void updateTags({ id: diagramId, tags })}
-      settingsTitle="Diagram settings"
-      activeUsers={(awareness) => (
-        <DiagramActiveUsers
-          awareness={awareness}
-          excalidrawAPI={excalidrawAPI}
-          viewer={viewer}
-        />
-      )}
-      tools={
-        // Presenting reads the local scene, so it keeps working with no server.
-        <button
-          type="button"
-          onClick={() => {
-            if (!excalidrawAPI) return;
-            setPresentationScene({
-              elements: excalidrawAPI.getSceneElements(),
-              files: excalidrawAPI.getFiles(),
-            });
-          }}
-          disabled={!excalidrawAPI}
-          className="inline-flex items-center justify-center rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors disabled:opacity-50"
-          title="Present"
-        >
-          <Presentation className="size-4" />
-        </button>
-      }
-      actions={(meta) => (
-        <DiagramActionsMenu
-          diagramId={diagramId}
-          diagramName={meta.name}
-          isAdmin={isAdmin}
-          excalidrawAPI={excalidrawAPI}
-        />
-      )}
     >
       {(surface) => (
         <>
+          <SurfaceHeader
+            surface={surface}
+            resourceType="diagram"
+            resourceId={diagramId}
+            workspaceId={workspaceId}
+            onTagsChange={(tags) => void updateTags({ id: diagramId, tags })}
+            settingsTitle="Diagram settings"
+            activeUsers={(awareness) => (
+              <DiagramActiveUsers
+                awareness={awareness}
+                excalidrawAPI={excalidrawAPI}
+                viewer={viewer}
+              />
+            )}
+            tools={
+              // Presenting reads the local scene, so it keeps working with no server.
+              <button
+                type="button"
+                onClick={() => {
+                  if (!excalidrawAPI) return;
+                  setPresentationScene({
+                    elements: excalidrawAPI.getSceneElements(),
+                    files: excalidrawAPI.getFiles(),
+                  });
+                }}
+                disabled={!excalidrawAPI}
+                className="inline-flex items-center justify-center rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors disabled:opacity-50"
+                title="Present"
+              >
+                <Presentation className="size-4" />
+              </button>
+            }
+            actions={(meta) => (
+              <DiagramActionsMenu
+                diagramId={diagramId}
+                diagramName={meta.name}
+                isAdmin={isAdmin}
+                excalidrawAPI={excalidrawAPI}
+              />
+            )}
+          />
           <DiagramCanvas
             surface={surface}
             viewer={viewer}

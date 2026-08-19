@@ -26,6 +26,8 @@ import {
   CollaborativeSurface,
   type HydratedSurface,
 } from "@/components/CollaborativeSurface";
+import { SurfaceHeader } from "@/components/SurfaceHeader";
+import { useResourceDoc } from "@/hooks/use-collab-session";
 import { SurfaceActiveUsers } from "@/components/SurfaceActiveUsers";
 import type { BlockNoteEditor } from "@blocknote/core";
 
@@ -108,6 +110,10 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
   // creates it.
   const [editor, setEditor] = useState<DocumentEditorInstance>(null);
 
+  // The room, opened here and handed to the sequence. Declared above the
+  // workspace guard because hooks cannot sit after an early return.
+  const doc = useResourceDoc({ resourceType: "doc", resourceId: documentId });
+
   if (!workspaceId) {
     return <SomethingWentWrong />;
   }
@@ -116,33 +122,40 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
     <CommentsUIProvider>
       <CollaborativeSurface<DocumentMeta>
         resourceType="doc"
-        resourceId={documentId}
-        workspaceId={workspaceId}
+        doc={doc}
         meta={liveDocument}
-        onTagsChange={(tags) => void updateTags({ id: documentId, tags })}
-        settingsTitle="Document settings"
-        activeUsers={(awareness) => (
-          <SurfaceActiveUsers awareness={awareness} viewer={viewer} />
-        )}
-        /* Threads live in the Y.Doc, so commenting works offline too. */
-        tools={commentsEnabled ? <CommentsToggleButton /> : undefined}
-        actions={(meta) => (
-          <DocumentActionsMenu
-            documentId={documentId}
-            documentName={meta.name}
-            isAdmin={isAdmin}
-            editor={editor}
-          />
-        )}
       >
         {(surface) => (
-          <DocumentBody
-            surface={surface}
-            documentId={documentId}
-            workspaceId={workspaceId}
-            commentsEnabled={commentsEnabled}
-            onEditorReady={setEditor}
-          />
+          <>
+            <SurfaceHeader
+              surface={surface}
+              resourceType="doc"
+              resourceId={documentId}
+              workspaceId={workspaceId}
+              onTagsChange={(tags) => void updateTags({ id: documentId, tags })}
+              settingsTitle="Document settings"
+              activeUsers={(awareness) => (
+                <SurfaceActiveUsers awareness={awareness} viewer={viewer} />
+              )}
+              /* Threads live in the Y.Doc, so commenting works offline too. */
+              tools={commentsEnabled ? <CommentsToggleButton /> : undefined}
+              actions={(meta) => (
+                <DocumentActionsMenu
+                  documentId={documentId}
+                  documentName={meta.name}
+                  isAdmin={isAdmin}
+                  editor={editor}
+                />
+              )}
+            />
+            <DocumentBody
+              surface={surface}
+              documentId={documentId}
+              workspaceId={workspaceId}
+              commentsEnabled={commentsEnabled}
+              onEditorReady={setEditor}
+            />
+          </>
         )}
       </CollaborativeSurface>
     </CommentsUIProvider>

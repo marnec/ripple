@@ -2,6 +2,8 @@ import { vi, type Mock } from "vitest";
 import { Awareness } from "y-protocols/awareness";
 import * as Y from "yjs";
 import { DOCUMENT_FRAGMENT } from "@ripple/shared/blockRef";
+import type { CollaborativeDoc } from "@/hooks/use-collaborative-doc";
+import type { RoomStore } from "@/lib/collab/room-store";
 
 /**
  * Stand-ins for the three things a collaborative surface reaches for that a
@@ -201,4 +203,43 @@ export function resetCollabFakes() {
   convexQuery.mockReset();
   convexQuery.mockResolvedValue({ status: "unavailable" });
   mint.run = async () => ({ token: "t", roomId: "doc-doc-1" });
+}
+
+
+/** A room store that keeps its values in memory rather than in IndexedDB. */
+export function fakeRoomStore(seed: Record<string, unknown> = {}): RoomStore {
+  const values = new Map<string, unknown>(Object.entries(seed));
+  return {
+    get: <T,>(key: string) => Promise.resolve((values.get(key) ?? null) as T | null),
+    set: (key: string, value: unknown) => {
+      values.set(key, value);
+      return Promise.resolve();
+    },
+  };
+}
+
+/**
+ * A replica in whatever state a test needs, with no provider, no IndexedDB and
+ * no Convex behind it.
+ *
+ * This is what taking the open room as a parameter buys: anything that consumes
+ * a `CollaborativeDoc` can be tested by describing one, rather than by driving
+ * a fake socket until the real hook produces the state in question. Use
+ * `FakeProvider` when the thing under test is `useCollaborativeDoc` itself.
+ */
+export function fakeDoc(overrides: Partial<CollaborativeDoc> = {}): CollaborativeDoc {
+  const yDoc = overrides.yDoc ?? new Y.Doc();
+  return {
+    yDoc,
+    provider: null,
+    awareness: new Awareness(yDoc),
+    isConnected: false,
+    isConnecting: false,
+    isLoading: false,
+    isOffline: false,
+    isCacheLoaded: false,
+    isHydrated: false,
+    roomStore: null,
+    ...overrides,
+  };
 }

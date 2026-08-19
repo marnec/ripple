@@ -3,6 +3,8 @@ import {
   CollaborativeSurface,
   type HydratedSurface,
 } from "@/components/CollaborativeSurface";
+import { SurfaceHeader } from "@/components/SurfaceHeader";
+import { useResourceDoc } from "@/hooks/use-collab-session";
 import { SurfaceActiveUsers } from "@/components/SurfaceActiveUsers";
 import { useCursorAwareness } from "@/hooks/use-cursor-awareness";
 import { useCursorIdentity } from "@/hooks/use-cursor-identity";
@@ -231,6 +233,11 @@ function SpreadsheetEditor({
   const [formulaBarFocused, setFormulaBarFocused] = useState(false);
   const myRole = useQuery(api.workspaceMembers.myRole, { workspaceId });
   const isAdmin = myRole === "admin";
+  // The room, opened here and handed to the sequence.
+  const doc = useResourceDoc({
+    resourceType: "spreadsheet",
+    resourceId: spreadsheetId,
+  });
   const updateTags = useMutation(api.spreadsheets.updateTags).withOptimisticUpdate(
     tagsOptimisticUpdate(api.spreadsheets.get),
   );
@@ -247,45 +254,52 @@ function SpreadsheetEditor({
   return (
     <CollaborativeSurface<SpreadsheetMeta>
       resourceType="spreadsheet"
-      resourceId={spreadsheetId}
-      workspaceId={workspaceId}
+      doc={doc}
       meta={liveSpreadsheet}
-      onTagsChange={(tags) => void updateTags({ id: spreadsheetId, tags })}
-      settingsTitle="Spreadsheet settings"
-      onBacklinksOpenChange={setShowRefHighlights}
-      activeUsers={(awareness) => (
-        <SurfaceActiveUsers awareness={awareness} viewer={viewer} />
-      )}
-      centre={
-        <FormulaBar
-          binding={binding}
-          selection={selection}
-          isEditing={isCellEditing}
-          onPickingChange={setFormulaBarPicking}
-          onFocusChange={setFormulaBarFocused}
-        />
-      }
-      actions={(meta) => (
-        <SpreadsheetActionsMenu
-          spreadsheetId={spreadsheetId}
-          spreadsheetName={meta.name}
-          isAdmin={isAdmin}
-          binding={binding}
-        />
-      )}
     >
       {(surface) => (
-        <SpreadsheetGridPane
-          surface={surface}
-          viewer={viewer}
-          referencedCellRefs={referencedCellRefs}
-          externalRefs={rawRefs ?? []}
-          importedRows={importedRows}
-          preventBlurOnClick={formulaBarPicking}
-          onSelectionChange={setSelection}
-          onEditingChange={setIsCellEditing}
-          onBindingReady={setBinding}
-        />
+        <>
+          <SurfaceHeader
+            surface={surface}
+            resourceType="spreadsheet"
+            resourceId={spreadsheetId}
+            workspaceId={workspaceId}
+            onTagsChange={(tags) => void updateTags({ id: spreadsheetId, tags })}
+            settingsTitle="Spreadsheet settings"
+            onBacklinksOpenChange={setShowRefHighlights}
+            activeUsers={(awareness) => (
+              <SurfaceActiveUsers awareness={awareness} viewer={viewer} />
+            )}
+            centre={
+              <FormulaBar
+                binding={binding}
+                selection={selection}
+                isEditing={isCellEditing}
+                onPickingChange={setFormulaBarPicking}
+                onFocusChange={setFormulaBarFocused}
+              />
+            }
+            actions={(meta) => (
+              <SpreadsheetActionsMenu
+                spreadsheetId={spreadsheetId}
+                spreadsheetName={meta.name}
+                isAdmin={isAdmin}
+                binding={binding}
+              />
+            )}
+          />
+          <SpreadsheetGridPane
+            surface={surface}
+            viewer={viewer}
+            referencedCellRefs={referencedCellRefs}
+            externalRefs={rawRefs ?? []}
+            importedRows={importedRows}
+            preventBlurOnClick={formulaBarPicking}
+            onSelectionChange={setSelection}
+            onEditingChange={setIsCellEditing}
+            onBindingReady={setBinding}
+          />
+        </>
       )}
     </CollaborativeSurface>
   );
