@@ -49,15 +49,26 @@ knows. Reached through `CollaborativeDoc.roomStore`, read through
 _Avoid_: metadata cache, local storage, offline store
 
 **Collaborative surface**:
-A page presenting one collaborative room to a member — a document, diagram or
-spreadsheet — through one **opening sequence**: rule out deletion, refuse an
-[unhydrated replica](#) nothing can reach, hold reserved space while the room is
-still reachable, then hand the hydrated replica to the body. Controls that would
-*change* the resource are offered only while the server is answering; the body
-works from the local copy either way. The body is a child of the sequence rather
-than a caller of it, so there is no way to bind an editing surface to a replica
-whose contents are unknown. A task's description is not one: it has no header
-and no settings route, so it opens its own room.
+One collaborative room — a document, diagram or spreadsheet — presented through
+one **opening sequence**: rule out deletion, refuse an [unhydrated replica](#)
+nothing can reach, hold reserved space while the room is still reachable, then
+hand the hydrated replica to the body. The body is a child of the sequence
+rather than a caller of it, so there is no way to bind an editing surface to a
+replica whose contents are unknown.
+The sequence takes the *open room*, not the credential for opening it: members
+pass `useResourceDoc` and guests `useGuestDoc`, two adapters at the
+`CollabSession` seam. It used to open the room itself and own the member header
+too, and that is what kept guests out — the header needs a workspace and a live
+server, so admitting a guest would have meant admitting a caller it could not
+serve. The header is `SurfaceHeader`, rendered by members as the first child of
+the sequence; the rule it carries is that controls which would *change* the
+resource are offered only while the server is answering, while tools that work
+against the local copy are not gated. A guest gets no `SurfaceHeader` — their
+chrome is the share's own header in `GuestResourceView`, which is also where a
+guest's room is opened and where their deletion story is told (the share goes
+`not_found`, so the sequence's deleted stage never fires for them).
+A task's description is not a surface: it has no header and no settings route,
+so it opens its own room.
 _Avoid_: editor page, doc view, resource page, resource shell
 
 **Sync state**:
@@ -78,7 +89,15 @@ one fixed-client-id Yjs update (`collab/empty-document.ts`) so that every
 client bootstraps *the same* root rather than one of its own. Makes "this
 document is empty" a value that can be stored, cached and merged, instead of
 an absence that each client fills in differently. `EMPTY_SPREADSHEET_UPDATE`
-is the same device for the spreadsheet grid.
+(`collab/empty-grid.ts`) is the same device for the spreadsheet grid.
+Both carry the same precondition, and it is the whole point of them: seed only
+a [hydrated replica](#). On one that has simply not been told anything, the
+seed plants a structure beside the real one. `seedEmptyDocument` and
+`seedEmptyGrid` are the only ways to apply either, so the precondition has one
+place to be stated rather than being implied by whoever decided to mount an
+editor. The grid's used to run from `SpreadsheetYjsBinding`'s constructor on a
+row-count check, which is how guests — who hydrate only on a live sync — seeded
+theirs every time.
 _Avoid_: default content, initial block, placeholder doc
 
 **Timeline geometry**:

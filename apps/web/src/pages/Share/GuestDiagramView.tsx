@@ -1,58 +1,58 @@
 import { ExcalidrawEditor } from "@/pages/App/Diagram/ExcalidrawEditor";
-import { NotAvailableOffline } from "@/components/NotAvailableOffline";
-import { useGuestDoc } from "@/hooks/use-collab-session";
-import { getUserColor } from "@/lib/user-colors";
-import { useEffect } from "react";
+import {
+  CollaborativeSurface,
+  type HydratedSurface,
+  type SurfaceMeta,
+} from "@/components/CollaborativeSurface";
+import type { CollaborativeDoc } from "@/hooks/use-collaborative-doc";
 import type { ShareAccessLevel } from "@ripple/shared/shareTypes";
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 import type * as Y from "yjs";
 
 interface GuestDiagramViewProps {
-  shareId: string;
-  guestSub: string;
-  guestName: string;
+  /** The room, opened by `GuestResourceView` and shared with the header. */
+  doc: CollaborativeDoc;
   accessLevel: ShareAccessLevel;
 }
 
-export function GuestDiagramView({
-  shareId,
-  guestSub,
-  guestName,
+/** A shared diagram, opened for a guest — see `GuestDocumentView`. */
+export function GuestDiagramView({ doc, accessLevel }: GuestDiagramViewProps) {
+  return (
+    <CollaborativeSurface<SurfaceMeta>
+      resourceType="diagram"
+      doc={doc}
+      meta={undefined}
+    >
+      {(surface) => (
+        <GuestDiagramBody surface={surface} accessLevel={accessLevel} />
+      )}
+    </CollaborativeSurface>
+  );
+}
+
+function GuestDiagramBody({
+  surface,
   accessLevel,
-}: GuestDiagramViewProps) {
-  const { yDoc, provider, awareness, isHydrated, isOffline } = useGuestDoc({
-    shareId,
-    guestSub,
-    guestName,
-    resourceType: "diagram",
-  });
-
-  const yElements = yDoc.getArray<Y.Map<any>>("elements");
-  const yAssets = yDoc.getMap("assets");
-
-  useEffect(() => {
-    awareness.setLocalStateField("user", {
-      name: guestName,
-      color: getUserColor(guestSub),
-    });
-  }, [awareness, guestName, guestSub]);
-
-  // See GuestDocumentView: no cache, so only a sync can hydrate a guest.
-  if (isOffline && !isHydrated) {
-    return <NotAvailableOffline resource="diagram" />;
-  }
+}: {
+  surface: HydratedSurface<SurfaceMeta>;
+  accessLevel: ShareAccessLevel;
+}) {
+  const { yDoc, provider, awareness } = surface.doc;
 
   return (
     <div className="h-full w-full">
       <ExcalidrawEditor
-        yElements={yElements}
-        yAssets={yAssets}
-        awareness={provider?.awareness ?? null}
+        yElements={yDoc.getArray<Y.Map<any>>("elements")}
+        yAssets={yDoc.getMap("assets")}
+        // The replica's awareness, which is the provider's once connected and a
+        // local one before that. Reading it off the provider — as this used to
+        // — hands the canvas `null` for as long as the socket is not up.
+        awareness={awareness}
         provider={provider}
         onExcalidrawAPI={(_api: ExcalidrawImperativeAPI) => {
           // no-op — guests don't need access to the API beyond the built-in binding
         }}
-        viewModeEnabled={accessLevel !== "edit" || !isHydrated}
+        viewModeEnabled={accessLevel !== "edit"}
       />
     </div>
   );
