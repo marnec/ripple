@@ -40,6 +40,7 @@ import type { SpreadsheetYjsBinding } from "@/lib/spreadsheet-yjs-binding";
 
 const JSpreadsheetGrid = memo(function JSpreadsheetGrid({
   yDoc,
+  isHydrated,
   awareness,
   remoteUserClientIds,
   referencedCellRefs,
@@ -51,6 +52,7 @@ const JSpreadsheetGrid = memo(function JSpreadsheetGrid({
   onBindingReady,
 }: {
   yDoc: Y.Doc;
+  isHydrated: boolean;
   awareness: Awareness | null;
   remoteUserClientIds: Set<number>;
   referencedCellRefs: { cellRef: string }[];
@@ -94,6 +96,7 @@ const JSpreadsheetGrid = memo(function JSpreadsheetGrid({
   const { worksheetRef, bindingRef } = useJSpreadsheetInstance({
     wrapperRef,
     yDoc,
+    isHydrated,
     awareness,
     onEditionStart,
     onEditionEnd,
@@ -316,7 +319,7 @@ function SpreadsheetGridPane({
   onEditingChange: (editing: boolean) => void;
   onBindingReady: (binding: SpreadsheetYjsBinding | null) => void;
 }) {
-  const { yDoc, awareness } = surface.doc;
+  const { yDoc, awareness, isHydrated } = surface.doc;
   useCursorIdentity(awareness, viewer?.name ?? "Anonymous", viewer?._id ?? "unknown");
 
   const { remoteUsers } = useCursorAwareness(awareness);
@@ -326,6 +329,7 @@ function SpreadsheetGridPane({
     <div className="flex-1 overflow-hidden">
       <JSpreadsheetGrid
         yDoc={yDoc}
+        isHydrated={isHydrated}
         awareness={awareness}
         remoteUserClientIds={remoteUserClientIds}
         referencedCellRefs={referencedCellRefs}

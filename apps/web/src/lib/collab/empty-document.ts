@@ -22,8 +22,8 @@ import { DOCUMENT_FRAGMENT } from "@ripple/shared/blockRef";
  * then land inside one shared structure and merge as siblings, which is the
  * outcome Yjs is good at.
  *
- * `apps/web/src/lib/spreadsheet-yjs-binding.ts` does the same thing for the
- * spreadsheet grid, for the same reason.
+ * `collab/empty-grid.ts` does the same thing for the spreadsheet grid, for the
+ * same reason, and carries the same hydration precondition.
  */
 export const EMPTY_DOCUMENT_UPDATE: Uint8Array = (() => {
   const doc = new Y.Doc();

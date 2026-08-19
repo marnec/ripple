@@ -39,6 +39,7 @@ export function GuestSpreadsheetView({
   useJSpreadsheetInstance({
     wrapperRef,
     yDoc,
+    isHydrated,
     awareness,
     onEditionStart: () => {},
     onEditionEnd: () => {},

@@ -90,7 +90,7 @@ function PickerBody({
   // A dialog, not a collaborative surface: it opens the room to read cells and
   // has no header, so it reaches for the room directly rather than through
   // `CollaborativeSurface`.
-  const { yDoc, awareness, isLoading } = useResourceDoc({
+  const { yDoc, awareness, isHydrated, isLoading } = useResourceDoc({
     resourceType: "spreadsheet",
     resourceId: spreadsheetId,
   });
@@ -167,6 +167,7 @@ function PickerBody({
         ) : (
           <PickerGrid
             yDoc={yDoc}
+            isHydrated={isHydrated}
             awareness={awareness}
             onSelectionChange={(rect) => {
               // Ignore `null` events: jspreadsheet emits them on grid blur
@@ -187,10 +188,12 @@ function PickerBody({
 
 function PickerGrid({
   yDoc,
+  isHydrated,
   awareness,
   onSelectionChange,
 }: {
   yDoc: Parameters<typeof useJSpreadsheetInstance>[0]["yDoc"];
+  isHydrated: boolean;
   awareness: Parameters<typeof useJSpreadsheetInstance>[0]["awareness"];
   onSelectionChange: (rect: Rect | null) => void;
 }) {
@@ -199,6 +202,7 @@ function PickerGrid({
   useJSpreadsheetInstance({
     wrapperRef,
     yDoc,
+    isHydrated,
     awareness,
     editable: false,
     // Picker doesn't engage formula picker / edition tracking. Pass no-ops.

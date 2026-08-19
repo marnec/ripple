@@ -1,4 +1,6 @@
+import { seedEmptyGrid } from "@/lib/collab/empty-grid";
 import { SpreadsheetYjsBinding } from "@/lib/spreadsheet-yjs-binding";
+import { BOOTSTRAP_ORIGIN } from "@/lib/yjs-origins";
 import jspreadsheet from "jspreadsheet-ce";
 import { type RefObject, useEffect, useEffectEvent, useRef } from "react";
 import type { Awareness } from "y-protocols/awareness";
@@ -10,6 +12,12 @@ export type Worksheet = any;
 interface UseJSpreadsheetInstanceOptions {
   wrapperRef: RefObject<HTMLDivElement | null>;
   yDoc: Y.Doc;
+  /**
+   * Whether this replica holds the room's state. The grid's shared empty root
+   * is seeded only once it does — see `collab/empty-grid.ts`. Required rather
+   * than defaulted: a caller that has to name it cannot forget to ask.
+   */
+  isHydrated: boolean;
   awareness: Awareness | null;
   onEditionStart: (td: HTMLTableCellElement, wrapper: HTMLElement) => void;
   onEditionEnd: () => void;
@@ -19,11 +27,12 @@ interface UseJSpreadsheetInstanceOptions {
 
 /**
  * Initializes a jspreadsheet-ce instance with Yjs two-way binding.
- * Manages the full lifecycle: create → bind → destroy.
+ * Manages the full lifecycle: seed → create → bind → destroy.
  */
 export function useJSpreadsheetInstance({
   wrapperRef,
   yDoc,
+  isHydrated,
   awareness,
   onEditionStart,
   onEditionEnd,
@@ -39,6 +48,14 @@ export function useJSpreadsheetInstance({
       onSelectionChange?.(sel);
     },
   );
+
+  // Before anything binds to the replica. Declared ahead of the instance
+  // effect so it runs first: the binding reads the grid out of Yjs in its
+  // constructor, and seeding afterwards would make it rebuild from observers.
+  useEffect(() => {
+    if (!isHydrated) return;
+    seedEmptyGrid(yDoc, BOOTSTRAP_ORIGIN);
+  }, [isHydrated, yDoc]);
 
   useEffect(() => {
     const wrapper = wrapperRef.current;

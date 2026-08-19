@@ -5,10 +5,9 @@ import { SpreadsheetFormulaTracker } from "@/lib/spreadsheet-formula-tracker";
 import { SpreadsheetOverlayManager } from "@/lib/spreadsheet-overlay-manager";
 import { SpreadsheetRemoteCursors } from "@/lib/spreadsheet-remote-cursors";
 import { ensureSpreadsheetStyles } from "@/lib/spreadsheet-table-viewport";
+import { DEFAULT_COLS, DEFAULT_ROWS } from "@/lib/collab/empty-grid";
 import * as Y from "yjs";
 
-const DEFAULT_ROWS = 100;
-const DEFAULT_COLS = 30;
 
 /** Safe `String(v)` for jspreadsheet-supplied cell values, which are typed as
  *  `unknown` in our wrapper but in practice always primitives. Returns "" for
@@ -33,38 +32,6 @@ function stringifyImportedCell(value: unknown): string {
   }
   return "";
 }
-
-/**
- * Idempotent template update for initializing empty spreadsheets. Uses a fixed
- * Yjs client ID so applying it multiple times (or from different clients) is
- * a no-op — prevents Y.Array row accumulation from concurrent init.
- *
- * Seeds `rowOrder` and `colOrder` with deterministic IDs (`r0..rN`, `c0..cN`)
- * so concurrent bootstrap from multiple clients produces identical arrays.
- */
-const EMPTY_SPREADSHEET_UPDATE: Uint8Array = (() => {
-  const doc = new Y.Doc();
-  doc.clientID = 1; // Fixed ID → applying this update is always idempotent
-  const data = doc.getArray<Y.Map<string>>("data");
-  const meta = doc.getMap<unknown>("meta");
-  const rowOrder = doc.getArray<string>("rowOrder");
-  const colOrder = doc.getArray<string>("colOrder");
-  doc.transact(() => {
-    meta.set("colCount", DEFAULT_COLS);
-    for (let r = 0; r < DEFAULT_ROWS; r++) {
-      const rowMap = new Y.Map<string>();
-      for (let c = 0; c < DEFAULT_COLS; c++) {
-        rowMap.set(String(c), "");
-      }
-      data.push([rowMap]);
-    }
-    for (let r = 0; r < DEFAULT_ROWS; r++) rowOrder.push([`r${r}`]);
-    for (let c = 0; c < DEFAULT_COLS; c++) colOrder.push([`c${c}`]);
-  });
-  const update = Y.encodeStateAsUpdate(doc);
-  doc.destroy();
-  return update;
-})();
 
 /**
  * Generate a fresh stable row/col ID for runtime mutations (post-bootstrap).
@@ -163,10 +130,11 @@ export class SpreadsheetYjsBinding {
     this.yRowOrder = yDoc.getArray<string>("rowOrder");
     this.yColOrder = yDoc.getArray<string>("colOrder");
 
-    // Idempotent init — concurrent clients can't duplicate rows.
-    if (this.yData.length === 0) {
-      Y.applyUpdate(yDoc, EMPTY_SPREADSHEET_UPDATE);
-    }
+    // The empty root is *not* seeded here. It is `seedEmptyGrid`'s job, run by
+    // the caller against a replica it knows is hydrated — see
+    // `collab/empty-grid.ts`. A binding built on an empty replica simply shows
+    // an empty grid, which is the honest thing to show when we have not been
+    // told what the spreadsheet contains.
 
     // Compact rows accumulated by the previous (non-idempotent) init bug.
     if (this.yData.length > DEFAULT_ROWS) this.compactRows();
