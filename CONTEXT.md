@@ -48,6 +48,18 @@ knows. Reached through `CollaborativeDoc.roomStore`, read through
 `useRoomCached`; null for a guest, whose device keeps no cache at all.
 _Avoid_: metadata cache, local storage, offline store
 
+**Collaborative surface**:
+A page presenting one collaborative room to a member — a document, diagram or
+spreadsheet — through one **opening sequence**: rule out deletion, refuse an
+[unhydrated replica](#) nothing can reach, hold reserved space while the room is
+still reachable, then hand the hydrated replica to the body. Controls that would
+*change* the resource are offered only while the server is answering; the body
+works from the local copy either way. The body is a child of the sequence rather
+than a caller of it, so there is no way to bind an editing surface to a replica
+whose contents are unknown. A task's description is not one: it has no header
+and no settings route, so it opens its own room.
+_Avoid_: editor page, doc view, resource page, resource shell
+
 **Empty-document root**:
 The canonical `blockGroup` a BlockNote document starts life with, shipped as
 one fixed-client-id Yjs update (`collab/empty-document.ts`) so that every

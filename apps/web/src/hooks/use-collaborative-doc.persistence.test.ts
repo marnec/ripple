@@ -1,11 +1,10 @@
-// A real IndexedDB, not the hand-written fake the sibling test file uses.
+// A real IndexedDB, not the shared fake the sibling test files use.
 import "fake-indexeddb/auto";
 import { renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { Awareness } from "y-protocols/awareness";
-import type * as Y from "yjs";
 import { clearCollaborationTokenCache } from "@/lib/collaboration-token-cache";
 import { collabRoom } from "@/lib/collab/room";
+import { resetCollabFakes } from "@/test/collab-fakes";
 import { useCollaborativeDoc, type CollabSession } from "./use-collaborative-doc";
 
 /**
@@ -14,28 +13,17 @@ import { useCollaborativeDoc, type CollabSession } from "./use-collaborative-doc
  * itself. That is the premise of the whole design, so these tests drive the
  * real persistence rather than a stand-in: if y-indexeddb ever stops creating
  * that store, this file fails instead of the cache quietly doing nothing.
+ *
+ * Only the provider and Convex are faked here — deliberately not `y-indexeddb`.
  */
 
-const { FakeProvider, convexQuery } = vi.hoisted(() => {
-  const convexQuery = vi.fn();
-  class FakeProvider {
-    shouldConnect = true;
-    awareness: Awareness;
-    ws = null;
-    constructor(_host: string, _room: string, doc: Y.Doc) {
-      this.awareness = new Awareness(doc);
-    }
-    on() {}
-    off() {}
-    destroy() {
-      this.awareness.destroy();
-    }
-  }
-  return { FakeProvider, convexQuery };
+vi.mock("y-partyserver/provider", async () => ({
+  default: (await import("@/test/collab-fakes")).FakeProvider,
+}));
+vi.mock("convex/react", async () => {
+  const { convexQuery: query } = await import("@/test/collab-fakes");
+  return { useConvex: () => ({ query }) };
 });
-
-vi.mock("y-partyserver/provider", () => ({ default: FakeProvider }));
-vi.mock("convex/react", () => ({ useConvex: () => ({ query: convexQuery }) }));
 
 function memberSession(resourceId: string): CollabSession {
   const room = collabRoom("doc", resourceId);
@@ -47,8 +35,7 @@ function memberSession(resourceId: string): CollabSession {
 }
 
 beforeEach(() => {
-  convexQuery.mockReset();
-  convexQuery.mockResolvedValue({ status: "unavailable" });
+  resetCollabFakes();
   clearCollaborationTokenCache();
 });
 

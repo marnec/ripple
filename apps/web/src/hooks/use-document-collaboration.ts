@@ -14,7 +14,6 @@ import { seedEmptyDocument } from "../lib/collab/empty-document";
 import { BOOTSTRAP_ORIGIN } from "../lib/yjs-origins";
 import { documentCommentSchema } from "../pages/App/Document/comment-schema";
 import { useDescriptionSeedGate, type DescriptionSeed } from "./use-description-seed-gate";
-import { useResourceDoc } from "./use-collab-session";
 import type { CollaborativeDoc } from "./use-collaborative-doc";
 
 export type { DescriptionSeed } from "./use-description-seed-gate";
@@ -24,12 +23,18 @@ export interface UseDocumentCollaborationOptions<
   ISchema extends InlineContentSchema,
   SSchema extends StyleSchema,
 > {
+  /**
+   * The hydrated replica, from whoever owns the room — `CollaborativeSurface`
+   * for a document, the task detail hook for a description. This hook used to
+   * open the room itself, which meant no caller could have a second use for
+   * the same document without opening it twice.
+   */
+  doc: CollaborativeDoc;
   documentId: string;
   userName: string;
   userId: string;
   schema: BlockNoteSchema<BSchema, ISchema, SSchema>;
   resourceType?: "doc" | "diagram" | "task";
-  enabled?: boolean;
   uploadFile?: (file: File) => Promise<string>;
   /** Optional BlockNote dictionary override (used for placeholder customization). */
   dictionary?: typeof en;
@@ -54,22 +59,12 @@ export interface UseDocumentCollaborationResult<
   ISchema extends InlineContentSchema,
   SSchema extends StyleSchema,
 > {
-  editor: BlockNoteEditor<BSchema, ISchema, SSchema> | null;
-  isLoading: boolean;
-  isConnected: boolean;
-  isOffline: boolean;
-  /** Still trying to reach the room — see `CollaborativeDoc.isConnecting`. */
-  isConnecting: boolean;
-  provider: CollaborativeDoc["provider"];
-  yDoc: CollaborativeDoc["yDoc"];
   /**
-   * Whether this replica holds the document's real state. When false, `editor`
-   * is null and the caller must not offer an editing surface — see
-   * `CollaborativeDoc.isHydrated`.
+   * Null while the description of a task is still expecting a server-authored
+   * seed. Everything else about *whether there is a document to show* is the
+   * replica's business, not this hook's — see `CollaborativeDoc.isHydrated`.
    */
-  isHydrated: boolean;
-  /** This room's local key/value store — see `CollaborativeDoc.roomStore`. */
-  roomStore: CollaborativeDoc["roomStore"];
+  editor: BlockNoteEditor<BSchema, ISchema, SSchema> | null;
   /**
    * False only while a task editor is intentionally held back waiting for a
    * GitHub description seed to load. `true` for all other cases (no seed
@@ -90,29 +85,18 @@ export function useDocumentCollaboration<
   ISchema extends InlineContentSchema,
   SSchema extends StyleSchema,
 >({
+  doc,
   documentId,
   userName,
   userId,
   schema,
   resourceType = "doc",
-  enabled = true,
   uploadFile,
   dictionary,
   seed,
   enableComments = false,
 }: UseDocumentCollaborationOptions<BSchema, ISchema, SSchema>): UseDocumentCollaborationResult<BSchema, ISchema, SSchema> {
-  const {
-    yDoc,
-    provider,
-    awareness,
-    isConnected,
-    isConnecting,
-    isLoading,
-    isOffline,
-    isCacheLoaded,
-    isHydrated,
-    roomStore,
-  } = useResourceDoc({ resourceType, resourceId: documentId, enabled });
+  const { yDoc, provider, awareness, isOffline, isCacheLoaded, isHydrated } = doc;
 
   // Derived, not stored: `isCacheLoaded` only flips once per document, and
   // reading the fragment is what "did the cache have anything" means.
@@ -247,29 +231,11 @@ export function useDocumentCollaboration<
   }, [isHydrated, descriptionReady, yDoc]);
 
   return {
-    // One gate: do we hold the document's state? `isHydrated` is exactly the
-    // question the editor needs answered — a sync, a non-empty cache, or a
-    // stored snapshot — and nothing else about the connection matters.
-    //
-    // It used to additionally require `isConnected || isOffline || provider`,
-    // which meant a document already cached on the device stayed behind a
-    // blank page until the *network* reached a verdict. With the browser still
-    // reporting itself online but nothing answering, that verdict only came
-    // when the token mint gave up, so the page hung and then opened already
-    // marked offline. Connection state belongs in the toolbar, not in whether
-    // there is a document to show.
-    //
-    // `descriptionReady` stays: a task expecting a GitHub seed is waiting on
-    // content that really is still coming.
+    // `isHydrated` — do we hold the document's state? — is the surface's gate,
+    // and it decides whether this hook runs at all. What is left here is the
+    // one wait that is genuinely about content still arriving: a task whose
+    // description a server-authored seed is about to fill.
     editor: isHydrated && descriptionReady ? editor : null,
-    isLoading,
-    isConnected,
-    isConnecting,
-    isOffline,
-    isHydrated,
-    roomStore,
-    provider,
-    yDoc,
     descriptionReady,
     awaitingSeed,
   };

@@ -53,7 +53,7 @@ export function GuestDocumentView({
   // only thing that can hydrate this document is a sync. Until one lands there
   // is nothing to show and — more to the point — nothing safe to write into.
   if (isOffline && !isHydrated) {
-    return <NotAvailableOffline resource="document" />;
+    return <NotAvailableOffline resource="doc" />;
   }
 
   return (

@@ -1,158 +1,31 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { Awareness } from "y-protocols/awareness";
-import * as Y from "yjs";
 import { clearCollaborationTokenCache } from "@/lib/collaboration-token-cache";
 import { collabRoom } from "@/lib/collab/room";
+import {
+  contentUpdate,
+  convexQuery,
+  FakeProvider,
+  persistenceInstances,
+  resetCollabFakes,
+  seedCache,
+} from "@/test/collab-fakes";
 import type { CollabSession } from "./use-collaborative-doc";
 import { useCollaborativeDoc } from "./use-collaborative-doc";
 
-/**
- * Stand-ins for the two things this hook owns that a test environment has no
- * business really doing: a WebSocket provider and an IndexedDB database.
- *
- * `vi.mock` factories are hoisted above the imports, so the fakes have to be
- * declared in a hoisted block to be visible to them.
- */
-const {
-  FakeProvider,
-  FakeIndexeddbPersistence,
-  persistenceInstances,
-  cache,
-  convexQuery,
-} = vi.hoisted(() => {
-  const persistenceInstances: { name: string; destroyed: boolean }[] = [];
-  /**
-   * What this device already has stored for a room, keyed by database name —
-   * the difference between "opened this before" and "never seen it". Stored as
-   * a replay function because this block is hoisted above the `yjs` import.
-   */
-  const cache = new Map<string, (doc: unknown) => void>();
-  const convexQuery = vi.fn();
-
-  /** Records every instance, so tests can assert how many sockets were built. */
-  class FakeProvider {
-    static instances: FakeProvider[] = [];
-
-    shouldConnect = true;
-    destroyed = false;
-    ws: { addEventListener: (t: string, fn: (e: MessageEvent) => void) => void } | null =
-      null;
-    awareness: Awareness;
-    readonly host: string;
-    readonly room: string;
-    readonly options: { params: () => Promise<{ token: string }> };
-
-    private handlers = new Map<string, Set<(...args: never[]) => void>>();
-    private socketListeners: ((e: MessageEvent) => void)[] = [];
-
-    constructor(
-      host: string,
-      room: string,
-      doc: Y.Doc,
-      options: { params: () => Promise<{ token: string }> },
-    ) {
-      this.host = host;
-      this.room = room;
-      this.options = options;
-      this.awareness = new Awareness(doc);
-      FakeProvider.instances.push(this);
-    }
-
-    on(event: string, handler: (...args: never[]) => void) {
-      const set = this.handlers.get(event) ?? new Set();
-      set.add(handler);
-      this.handlers.set(event, set);
-    }
-
-    off(event: string, handler: (...args: never[]) => void) {
-      this.handlers.get(event)?.delete(handler);
-    }
-
-    destroy() {
-      this.destroyed = true;
-      this.awareness.destroy();
-    }
-
-    emit(event: string, ...args: unknown[]) {
-      for (const handler of [...(this.handlers.get(event) ?? [])]) {
-        (handler as (...a: unknown[]) => void)(...args);
-      }
-    }
-
-    /** Open the socket and sync — the happy path. */
-    connectAndSync() {
-      this.open();
-      this.emit("sync", true);
-    }
-
-    open() {
-      this.ws = { addEventListener: (_t, fn) => this.socketListeners.push(fn) };
-      this.emit("status", { status: "connected" });
-    }
-
-    close() {
-      this.emit("status", { status: "disconnected" });
-    }
-
-    /** Deliver a server protocol frame (permission_revoked / auth_error). */
-    send(payload: unknown) {
-      for (const listener of [...this.socketListeners]) {
-        listener({ data: JSON.stringify(payload) } as MessageEvent);
-      }
-    }
-  }
-
-  class FakeIndexeddbPersistence {
-    private handlers: (() => void)[] = [];
-    private record: { name: string; destroyed: boolean };
-
-    constructor(name: string, doc: { getXmlFragment: unknown }) {
-      this.record = { name, destroyed: false };
-      persistenceInstances.push(this.record);
-      // Real persistence resolves asynchronously; mirror that. `synced` fires
-      // whether or not there was anything to replay — which is exactly why the
-      // hook cannot treat it as proof that the device knows this room.
-      queueMicrotask(() => {
-        cache.get(name)?.(doc);
-        this.handlers.forEach((handler) => handler());
-      });
-    }
-
-    on(event: string, handler: () => void) {
-      if (event === "synced") this.handlers.push(handler);
-    }
-
-    destroy() {
-      this.record.destroyed = true;
-      return Promise.resolve();
-    }
-  }
-
-  return {
-    FakeProvider,
-    FakeIndexeddbPersistence,
-    persistenceInstances,
-    cache,
-    convexQuery,
-  };
+// The provider, the IndexedDB database and Convex all come from the shared
+// fakes — see `@/test/collab-fakes`. `vi.mock`'s async factory runs late
+// enough to import a real module, so there is no hoisted block here.
+vi.mock("y-partyserver/provider", async () => ({
+  default: (await import("@/test/collab-fakes")).FakeProvider,
+}));
+vi.mock("y-indexeddb", async () => ({
+  IndexeddbPersistence: (await import("@/test/collab-fakes")).FakeIndexeddbPersistence,
+}));
+vi.mock("convex/react", async () => {
+  const { convexQuery: query } = await import("@/test/collab-fakes");
+  return { useConvex: () => ({ query }) };
 });
-
-vi.mock("y-partyserver/provider", () => ({ default: FakeProvider }));
-vi.mock("y-indexeddb", () => ({ IndexeddbPersistence: FakeIndexeddbPersistence }));
-vi.mock("convex/react", () => ({ useConvex: () => ({ query: convexQuery }) }));
-
-/** Pretend this device has an offline cache for `room` holding `update`. */
-function seedCache(name: string, update: Uint8Array) {
-  cache.set(name, (doc) => Y.applyUpdate(doc as Y.Doc, update));
-}
-
-/** A Yjs update carrying some content, as a stand-in for a real document. */
-function contentUpdate(text: string): Uint8Array {
-  const doc = new Y.Doc();
-  doc.getText("body").insert(0, text);
-  return Y.encodeStateAsUpdate(doc);
-}
 
 function memberSession(overrides: Partial<CollabSession> = {}): CollabSession {
   const room = collabRoom("doc", "abc123");
@@ -165,12 +38,7 @@ function memberSession(overrides: Partial<CollabSession> = {}): CollabSession {
 }
 
 beforeEach(() => {
-  FakeProvider.instances.length = 0;
-  persistenceInstances.length = 0;
-  cache.clear();
-  convexQuery.mockReset();
-  // Convex can tell us nothing unless a test says otherwise.
-  convexQuery.mockResolvedValue({ status: "unavailable" });
+  resetCollabFakes();
   // The token cache is module state, including an in-flight map. A test that
   // leaves a request pending would otherwise hand that same promise to the
   // next test asking for the same room.

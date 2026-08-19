@@ -1,78 +1,38 @@
-import { useEffect, useRef } from "react";
-import type { ExcalidrawBinding } from "y-excalidraw";
 import type * as Y from "yjs";
-import type { Awareness } from "y-protocols/awareness";
-import { getUserColor } from "../lib/user-colors";
-import { useResourceDoc } from "./use-collab-session";
 import type { CollaborativeDoc } from "./use-collaborative-doc";
+import { useCursorIdentity } from "./use-cursor-identity";
 
 export interface UseDiagramCollaborationOptions {
-  diagramId: string;
+  /** The hydrated replica, from the surface that owns it. */
+  doc: CollaborativeDoc;
   userName: string;
   userId: string;
 }
 
 export interface UseDiagramCollaborationResult {
-  yDoc: Y.Doc;
-  provider: CollaborativeDoc["provider"];
-  isConnected: boolean;
-  isOffline: boolean;
-  /** Still trying to reach the room — see `CollaborativeDoc.isConnecting`. */
-  isConnecting: boolean;
-  isLoading: boolean;
-  /** See `CollaborativeDoc.isHydrated` — false means "contents unknown". */
-  isHydrated: boolean;
-  /** This room's local key/value store — see `CollaborativeDoc.roomStore`. */
-  roomStore: CollaborativeDoc["roomStore"];
   yElements: Y.Array<Y.Map<any>>;
   yAssets: Y.Map<any>;
-  awareness: Awareness;
-  bindingRef: React.MutableRefObject<ExcalidrawBinding | null>;
 }
 
 /**
- * Binds a diagram's collaborative document to Excalidraw's shape.
+ * A diagram's collaborative document in the shape y-excalidraw expects, with
+ * this user's cursor identity published on its awareness.
  *
- * The document, the provider, offline persistence and teardown all belong to
- * `useResourceDoc`; what's left here is the Yjs structures y-excalidraw expects
- * and this user's cursor identity.
- *
- * `ExcalidrawBinding` itself is created in the component — it needs the
- * `excalidrawAPI`, which only exists after mount.
+ * It no longer opens a room. `CollaborativeSurface` does that and hands the
+ * hydrated replica down, which is what stops this hook from being a pass-through
+ * that re-declared eleven fields to forward eight of them.
  */
 export function useDiagramCollaboration({
-  diagramId,
+  doc,
   userName,
   userId,
 }: UseDiagramCollaborationOptions): UseDiagramCollaborationResult {
-  const { yDoc, provider, awareness, isConnected, isLoading, isOffline, isHydrated, roomStore, isConnecting } =
-    useResourceDoc({
-      resourceType: "diagram",
-      resourceId: diagramId,
-    });
-
-  const bindingRef = useRef<ExcalidrawBinding | null>(null);
+  const { yDoc, awareness } = doc;
 
   const yElements = yDoc.getArray<Y.Map<any>>("elements");
   const yAssets = yDoc.getMap("assets");
 
-  const userColor = getUserColor(userId);
-  useEffect(() => {
-    awareness.setLocalStateField("user", { name: userName, color: userColor });
-  }, [awareness, userName, userColor]);
+  useCursorIdentity(awareness, userName, userId);
 
-  return {
-    yDoc,
-    provider,
-    isConnected,
-    isConnecting,
-    isOffline,
-    isLoading,
-    isHydrated,
-    roomStore,
-    yElements,
-    yAssets,
-    awareness,
-    bindingRef,
-  };
+  return { yElements, yAssets };
 }

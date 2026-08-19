@@ -1,15 +1,7 @@
 import "@blocknote/core/fonts/inter.css";
 import "@blocknote/shadcn/style.css";
-import { BacklinksButton } from "@/components/BacklinksDrawer";
-import { FavoriteButton } from "@/components/FavoriteButton";
 import { DocumentActionsMenu } from "./DocumentActionsMenu";
-import { Button } from "@ripple/ui/components/button";
-import {
-  TagInlineStrip,
-  TagPickerButton,
-} from "@/components/TagPickerButton";
 import { tagsOptimisticUpdate } from "@/lib/tag-optimistic";
-import { HeaderSlot, MobileHeaderTitle } from "@/contexts/HeaderSlotContext";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useAutoHideScrollbar } from "@/hooks/use-autohide-scrollbar";
 import {
@@ -17,24 +9,25 @@ import {
   SuggestionMenuController,
 } from "@blocknote/react";
 import { BlockNoteView } from "@blocknote/shadcn";
-import { NotAvailableOffline } from "@/components/NotAvailableOffline";
-import { ResourceDeleted } from "@/pages/ResourceDeleted";
 import SomethingWentWrong from "@/pages/SomethingWentWrong";
 import type { QueryParams } from "@convex/types/routes";
 import { useMutation } from "convex/react";
 import { useQuery } from "convex-helpers/react/cache";;
-import { Settings } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useTheme } from "next-themes";
-import { Link, useLocation, useParams } from "react-router-dom";
+import { useLocation, useParams } from "react-router-dom";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 import { useViewer } from "../UserContext";
 import { useLocalRecents } from "@/hooks/use-local-recents";
-import { useRecordVisit } from "@/hooks/use-record-visit";
-import { useRoomCached } from "@/hooks/use-room-cached";
 import { en as bnEn } from "@blocknote/core/locales";
 import { useDocumentCollaboration } from "../../../hooks/use-document-collaboration";
+import {
+  CollaborativeSurface,
+  type HydratedSurface,
+} from "@/components/CollaborativeSurface";
+import { SurfaceActiveUsers } from "@/components/SurfaceActiveUsers";
+import type { BlockNoteEditor } from "@blocknote/core";
 
 // The WebGL "reveal ripple" that fired on clicks outside the editor is disabled
 // — editor-boundary detection is now handled by the caret-guard whitelist + the
@@ -57,14 +50,10 @@ import { useReferencedBlockDeleteProtection } from "../../../hooks/use-reference
 import { useReferencedBlocks } from "../../../hooks/use-referenced-blocks";
 import { useMemberSuggestions } from "../../../hooks/use-member-suggestions";
 import { useEventSuggestions } from "../../../hooks/use-event-suggestions";
-import { useCursorAwareness } from "../../../hooks/use-cursor-awareness";
 import { useUploadFile } from "../../../hooks/use-upload-file";
-import { getUserColor } from "../../../lib/user-colors";
-import { ActiveUsers } from "./ActiveUsers";
 import { BlockPickerDialog } from "./BlockPickerDialog";
 import { CellRefDialog } from "./CellRefDialog";
 import { FramePickerDialog } from "./FramePickerDialog";
-import { ConnectionStatus } from "./ConnectionStatus";
 import { DocumentSpotlightFrame } from "./DocumentSpotlightFrame";
 import { EditorRevealRipple } from "./EditorRevealRipple";
 import { ReferencedBlocksHighlight } from "./ReferencedBlocksHighlight";
@@ -89,45 +78,121 @@ export function DocumentEditorContainer() {
   return <DocumentEditor documentId={documentId} key={documentId} />;
 }
 
+/** What the header renders for a document. */
+interface DocumentMeta {
+  name: string;
+  tags?: string[];
+}
+
+type DocumentEditorInstance = BlockNoteEditor<any, any, any> | null;
+
 export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) {
+  const { workspaceId } = useParams<QueryParams>();
+  const viewer = useViewer();
+  const liveDocument = useQuery(api.documents.get, { id: documentId });
+  const myRole = useQuery(
+    api.workspaceMembers.myRole,
+    workspaceId ? { workspaceId } : "skip",
+  );
+  const isAdmin = myRole === "admin";
+  const updateTags = useMutation(api.documents.updateTags).withOptimisticUpdate(
+    tagsOptimisticUpdate(api.documents.get),
+  );
+
+  // The comments extension only exists for a real viewer, so all comment UI
+  // (toggle, rail, reporter) is gated on this.
+  const commentsEnabled = !!viewer?._id;
+
+  // Lifted out of the body the way the diagram lifts its canvas API: the
+  // actions menu lives in the header, which renders above the editor that
+  // creates it.
+  const [editor, setEditor] = useState<DocumentEditorInstance>(null);
+
+  if (!workspaceId) {
+    return <SomethingWentWrong />;
+  }
+
+  return (
+    <CommentsUIProvider>
+      <CollaborativeSurface<DocumentMeta>
+        resourceType="doc"
+        resourceId={documentId}
+        workspaceId={workspaceId}
+        meta={liveDocument}
+        onTagsChange={(tags) => void updateTags({ id: documentId, tags })}
+        settingsTitle="Document settings"
+        activeUsers={(awareness) => (
+          <SurfaceActiveUsers awareness={awareness} viewer={viewer} />
+        )}
+        /* Threads live in the Y.Doc, so commenting works offline too. */
+        tools={commentsEnabled ? <CommentsToggleButton /> : undefined}
+        actions={(meta) => (
+          <DocumentActionsMenu
+            documentId={documentId}
+            documentName={meta.name}
+            isAdmin={isAdmin}
+            editor={editor}
+          />
+        )}
+      >
+        {(surface) => (
+          <DocumentBody
+            surface={surface}
+            documentId={documentId}
+            workspaceId={workspaceId}
+            commentsEnabled={commentsEnabled}
+            onEditorReady={setEditor}
+          />
+        )}
+      </CollaborativeSurface>
+    </CommentsUIProvider>
+  );
+}
+
+/**
+ * The document itself, bound to a replica that is known to hold it. Mounted by
+ * `CollaborativeSurface` only once that is true.
+ */
+function DocumentBody({
+  surface,
+  documentId,
+  workspaceId,
+  commentsEnabled,
+  onEditorReady,
+}: {
+  surface: HydratedSurface<DocumentMeta>;
+  documentId: Id<"documents">;
+  workspaceId: Id<"workspaces">;
+  commentsEnabled: boolean;
+  onEditorReady: (editor: DocumentEditorInstance) => void;
+}) {
   const { resolvedTheme } = useTheme();
   const isMobile = useIsMobile();
   const location = useLocation();
+  const viewer = useViewer();
   const importedHTML = (location.state as { importedHTML?: string } | null)?.importedHTML;
   const importInjectedRef = useRef(false);
-  const { workspaceId } = useParams<QueryParams>();
-  const viewer = useViewer();
 
   // Keyed off the route, not the document row: `useUploadFile` reads the
-  // workspace from a ref at call time, and taking it from the URL is what lets
-  // the collaboration hook run before the metadata it now supplies the cache for.
+  // workspace from a ref at call time.
   const fileUpload = useUploadFile(workspaceId);
 
-  const { editor, isLoading, isConnected, isConnecting, isOffline, isHydrated, provider, roomStore } =
-    useDocumentCollaboration({
-      documentId,
-      userName: viewer?.name ?? "Anonymous",
-      userId: viewer?._id ?? "anonymous",
-      schema,
-      uploadFile: fileUpload?.uploadFile,
-      dictionary: documentDictionary,
-      // Collaborative comments — gated on a real viewer so threads are never
-      // attributed to the "anonymous" fallback id.
-      enableComments: !!viewer?._id,
-    });
+  const { editor } = useDocumentCollaboration({
+    doc: surface.doc,
+    documentId,
+    userName: viewer?.name ?? "Anonymous",
+    userId: viewer?._id ?? "anonymous",
+    schema,
+    uploadFile: fileUpload?.uploadFile,
+    dictionary: documentDictionary,
+    enableComments: commentsEnabled,
+  });
 
-  // The document's metadata, kept in the room's own store so that offline —
-  // where this query never resolves — the page still knows what it is showing.
-  // `isLive` gates every control that would change the document: a stored copy
-  // is fine to read from, but a tag picker rendered over one is a button that
-  // does nothing. Display uses `document`, mutation uses `isLive`.
-  const { value: document, isLive } = useRoomCached(
-    roomStore,
-    "meta",
-    useQuery(api.documents.get, { id: documentId }),
-  );
-  useRecordVisit(document?.workspaceId, "document", documentId, document?.name);
-  const documentName = document?.name ?? "";
+  // Hand the editor up so the header's actions menu can reach it.
+  useEffect(() => {
+    onEditorReady(editor);
+    return () => onEditorReady(null);
+  }, [editor, onEditorReady]);
 
   const [hashSearch, setHashSearch] = useState("");
   const [debouncedHashSearch, setDebouncedHashSearch] = useState("");
@@ -140,36 +205,20 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
   const hasHashSearch = debouncedHashSearch.trim().length > 0;
   const isHashSearchStale = hashSearch !== debouncedHashSearch;
 
-  const recents = useLocalRecents(hasHashSearch ? undefined : document?.workspaceId, 10);
+  const recents = useLocalRecents(hasHashSearch ? undefined : workspaceId, 10);
   const searchResults = useQuery(
     api.nodes.search,
-    hasHashSearch && document
-      ? {
-          workspaceId: document.workspaceId,
-          searchText: debouncedHashSearch,
-        }
-      : "skip",
+    hasHashSearch ? { workspaceId, searchText: debouncedHashSearch } : "skip",
   );
-  const workspaceMembers = useQuery(
-    api.workspaceMembers.membersByWorkspace,
-    document ? { workspaceId: document.workspaceId } : "skip",
-  );
+  const workspaceMembers = useQuery(api.workspaceMembers.membersByWorkspace, {
+    workspaceId,
+  });
   const ensureCellRef = useMutation(api.spreadsheetCellRefs.ensureCellRef);
   const removeCellRef = useMutation(api.spreadsheetCellRefs.removeCellRef);
   const ensureBlockRef = useMutation(api.documentBlockRefs.ensureBlockRef);
   const removeBlockRef = useMutation(api.documentBlockRefs.removeBlockRef);
   const syncEdges = useMutation(api.edges.syncEdges);
   const syncMentionEdges = useMutation(api.edges.syncMentionEdges);
-  const updateTags = useMutation(api.documents.updateTags).withOptimisticUpdate(
-    tagsOptimisticUpdate(api.documents.get),
-  );
-
-  const myRole = useQuery(
-    api.workspaceMembers.myRole,
-    document ? { workspaceId: document.workspaceId } : "skip",
-  );
-  const isAdmin = myRole === "admin";
-
   const [cellRefDialog, setCellRefDialog] = useState<{
     open: boolean;
     spreadsheetId: Id<"spreadsheets">;
@@ -191,10 +240,6 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
   const reportMention = useMutation(api.documents.reportMention);
 
 
-  // Mirrors `enableComments` above: the comments extension only exists for a
-  // real viewer, so all comment UI (toggle, rail, reporter) is gated on this.
-  const commentsEnabled = !!viewer?._id;
-
   // Editor scroll container: scrollbar appears only while scrolling, then fades.
   const editorScrollRef = useAutoHideScrollbar<HTMLDivElement>();
 
@@ -207,8 +252,6 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
     window.history.replaceState({}, "");
   }, [editor, importedHTML]);
 
-  const { remoteUsers } = useCursorAwareness(provider?.awareness ?? null);
-
   const getMemberItems = useMemberSuggestions({
     members: workspaceMembers,
     editor,
@@ -216,7 +259,7 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
   });
 
   const getEventItems = useEventSuggestions({
-    workspaceId: document?.workspaceId,
+    workspaceId: workspaceId,
     editor,
   });
 
@@ -257,14 +300,12 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
   // Track @mention additions: sync to edges + notify new mentions
   const onMentionsChanged = (current: Set<string>, previous: Set<string>) => {
     // Sync mention edges (persistent graph)
-    if (document) {
-      void syncMentionEdges({
-        sourceType: "document",
-        sourceId: documentId,
-        mentionedUserIds: [...current],
-        workspaceId: document.workspaceId,
-      });
-    }
+    void syncMentionEdges({
+      sourceType: "document",
+      sourceId: documentId,
+      mentionedUserIds: [...current],
+      workspaceId,
+    });
     // Notify newly mentioned users
     const newMentions = [...current].filter((id) => !previous.has(id));
     if (newMentions.length > 0) {
@@ -280,12 +321,11 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
   // mutation diffs user/event edges independently — passing one array
   // leaves the other type untouched.
   const onEventMentionsChanged = (current: Set<string>) => {
-    if (!document) return;
     void syncMentionEdges({
       sourceType: "document",
       sourceId: documentId,
       mentionedEventIds: [...current],
-      workspaceId: document.workspaceId,
+      workspaceId,
     });
   };
   useEditorTracking(editor, extractEventMentions, {
@@ -295,7 +335,6 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
 
   // Sync hard-embed references (diagrams, spreadsheets, documents) to edges table
   const onEmbedsChanged = (current: Set<string>) => {
-    if (!document) return;
     const references = [...current].map((key) => {
       // "type|id" or, for diagram embeds, "diagram|id|frameId" ("" = whole).
       const [targetType, targetId, frameId] = key.split("|");
@@ -309,7 +348,7 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
       sourceType: "document",
       sourceId: documentId,
       references,
-      workspaceId: document.workspaceId,
+      workspaceId,
     });
   };
   useEditorTracking(editor, extractHardEmbeds, {
@@ -347,213 +386,115 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
     currentDocumentId: documentId,
   });
 
-  if (document === null) {
-    return <ResourceDeleted resourceType="document" />;
-  }
-
-  // Nothing can reach this document's contents and this device has never held
-  // them. Say so, rather than showing an empty page that looks like an empty
-  // document.
-  if (isOffline && !isHydrated) {
-    return <NotAvailableOffline resource="document" />;
-  }
-
-  // Deliberately NOT gated on `document`, the Convex metadata query. Offline
-  // that query never resolves, and gating the editor on it meant a reload with
-  // a perfectly good local copy rendered a blank page forever. The header
-  // degrades to what we can know offline instead; the contents come from Yjs.
-  if (isLoading || !editor) {
-    return <div className="h-full flex-1 min-w-0" />;
+  if (!editor) {
+    return <div className="h-full w-full flex-1 min-w-0" />;
   }
 
   return (
-    <CommentsUIProvider>
-    <div className="h-full flex-1 min-w-0 flex flex-col animate-fade-in">
-      <div className="flex items-center justify-between px-3 py-1.5 border-b">
-        {/*
-          Every control here needs `document.workspaceId`, which is a Convex
-          read — so offline they simply aren't available and the header shows
-          the name and nothing else. The editor below still works.
-        */}
-        <div className="flex h-8 min-w-0 items-center gap-4">
-          {isLive && document && (
-            <>
-              <FavoriteButton
-                resourceType="document"
-                resourceId={documentId}
-                workspaceId={document.workspaceId}
-              />
-              <TagPickerButton
-                workspaceId={document.workspaceId}
-                value={document.tags ?? []}
-                onChange={(tags) => void updateTags({ id: documentId, tags })}
-              />
-            </>
-          )}
-          <h1 className="hidden sm:block text-lg font-semibold truncate">{documentName}</h1>
-          <TagInlineStrip tags={document?.tags ?? []} />
-        </div>
-        <div className="flex h-8 items-center gap-3">
-          <ConnectionStatus isConnected={isConnected} isConnecting={isConnecting} />
-          {isConnected && (
-            <ActiveUsers
-              remoteUsers={remoteUsers}
-              currentUser={
-                viewer
-                  ? {
-                    name: viewer.name,
-                    color: getUserColor(viewer._id),
-                  }
-                  : undefined
-              }
-            />
-          )}
-          {isLive && document && (
-            <BacklinksButton
-              resourceId={documentId}
-              workspaceId={document.workspaceId}
-            />
-          )}
-          {/* Threads live in the Y.Doc, so commenting works offline too. */}
-          {commentsEnabled && <CommentsToggleButton />}
-          {isLive && document && (
-            <DocumentActionsMenu
-              documentId={documentId}
-              documentName={document.name}
-              isAdmin={isAdmin}
-              editor={editor}
-            />
-          )}
-          {isLive && document && !isMobile && (
-            <Link
-              to="settings"
-              className="inline-flex items-center justify-center rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
-              title="Document settings"
-            >
-              <Settings className="size-4" />
-            </Link>
-          )}
-        </div>
+    <div className="flex-1 flex flex-col min-h-0 relative">
+      {SHOW_EDITOR_REVEAL_RIPPLE && <EditorRevealRipple />}
+      {/*
+        BlockNoteView is the outer flex container so the comments rail can sit
+        beside the editor while still living inside BlockNoteView's React
+        context (the rail's `useThreads`/`Thread` need both the editor context
+        and the shadcn components context that BlockNoteView provides).
+        `renderEditor={false}` + `<BlockNoteViewEditor />` lets us place the
+        editor in our own scrollable column; `comments={false}` disables the
+        default floating thread UI in favour of the rail — but it also removes
+        the floating composer, so `<FloatingComposerController />` is added
+        back manually or comment creation breaks.
+      */}
+      <BlockNoteView
+        editor={editor}
+        theme={resolvedTheme === "dark" ? "dark" : "light"}
+        renderEditor={false}
+        comments={false}
+        className="flex-1 min-h-0 flex overflow-hidden"
+      >
+      <div
+        ref={editorScrollRef}
+        data-editor-scroll
+        className="flex-1 min-w-0 scrollbar-autohide pt-4"
+        onMouseDown={(e) => {
+          // Clicking the empty editor padding (side margins / below the last
+          // block) should drop the caret at the end of the document rather
+          // than reset it to the first block. BlockNote's `editor.focus()`
+          // alone lands at the top, so we position the caret explicitly first.
+          //
+          // Whitelist the padding rather than blacklisting BlockNote UI: now
+          // that BlockNoteView is the outer container, every click is inside
+          // its `.bn-root`, and the editor's floating UI (toolbar, composer,
+          // menus) bubbles here through the React tree. So only act when the
+          // target is the scroll container itself or the spotlight-frame
+          // wrapper — never the editor content or any BlockNote control.
+          const target = e.target as HTMLElement;
+          const isPadding =
+            target.dataset.editorScroll !== undefined ||
+            target.classList.contains("document-spotlight-frame");
+          if (!isPadding) return;
+          e.preventDefault();
+          const blocks = editor.document;
+          const lastBlock = blocks[blocks.length - 1];
+          if (lastBlock) {
+            editor.setTextCursorPosition(lastBlock, "end");
+          }
+          editor.focus();
+        }}
+      >
+      <DocumentSpotlightFrame>
+        <ReferencedBlocksHighlight blockIds={referencedBlockIds} />
+        <BlockNoteViewEditor />
+        {cellRefDialog && (
+          <CellRefDialog
+            open={cellRefDialog.open}
+            onOpenChange={(open) => {
+              if (!open) setCellRefDialog(null);
+            }}
+            spreadsheetId={cellRefDialog.spreadsheetId}
+            spreadsheetName={cellRefDialog.spreadsheetName}
+            onInsert={(cellRef) => {
+              if (!cellRefDialog) return;
+              handleCellRefInsert(cellRef, cellRefDialog);
+            }}
+          />
+        )}
+        {blockPickerDialog && (
+          <BlockPickerDialog
+            open={blockPickerDialog.open}
+            onOpenChange={(open) => {
+              if (!open) setBlockPickerDialog(null);
+            }}
+            documentId={blockPickerDialog.documentId}
+            documentName={blockPickerDialog.documentName}
+            onInsert={(blockId) => {
+              if (!blockPickerDialog) return;
+              handleBlockPickerInsert(blockId, blockPickerDialog);
+            }}
+          />
+        )}
+        {framePickerDialog && (
+          <FramePickerDialog
+            open={framePickerDialog.open}
+            onOpenChange={(open) => {
+              if (!open) setFramePickerDialog(null);
+            }}
+            diagramId={framePickerDialog.diagramId}
+            diagramName={framePickerDialog.diagramName}
+            onInsert={(frameId) => {
+              if (!framePickerDialog) return;
+              handleFramePickerInsert(frameId, framePickerDialog);
+            }}
+          />
+        )}
+      </DocumentSpotlightFrame>
       </div>
-      {isLive && isMobile && (
-        <HeaderSlot>
-          <Button
-            variant="ghost"
-            size="icon"
-            render={<Link to="settings" />}
-            aria-label="Document settings"
-          >
-            <Settings className="size-4" />
-          </Button>
-        </HeaderSlot>
-      )}
-      <MobileHeaderTitle name={documentName} />
-      <div className="flex-1 flex flex-col min-h-0 relative">
-        {SHOW_EDITOR_REVEAL_RIPPLE && <EditorRevealRipple />}
-        {/*
-          BlockNoteView is the outer flex container so the comments rail can sit
-          beside the editor while still living inside BlockNoteView's React
-          context (the rail's `useThreads`/`Thread` need both the editor context
-          and the shadcn components context that BlockNoteView provides).
-          `renderEditor={false}` + `<BlockNoteViewEditor />` lets us place the
-          editor in our own scrollable column; `comments={false}` disables the
-          default floating thread UI in favour of the rail — but it also removes
-          the floating composer, so `<FloatingComposerController />` is added
-          back manually or comment creation breaks.
-        */}
-        <BlockNoteView
-          editor={editor}
-          theme={resolvedTheme === "dark" ? "dark" : "light"}
-          renderEditor={false}
-          comments={false}
-          className="flex-1 min-h-0 flex overflow-hidden"
-        >
-        <div
-          ref={editorScrollRef}
-          data-editor-scroll
-          className="flex-1 min-w-0 scrollbar-autohide pt-4"
-          onMouseDown={(e) => {
-            // Clicking the empty editor padding (side margins / below the last
-            // block) should drop the caret at the end of the document rather
-            // than reset it to the first block. BlockNote's `editor.focus()`
-            // alone lands at the top, so we position the caret explicitly first.
-            //
-            // Whitelist the padding rather than blacklisting BlockNote UI: now
-            // that BlockNoteView is the outer container, every click is inside
-            // its `.bn-root`, and the editor's floating UI (toolbar, composer,
-            // menus) bubbles here through the React tree. So only act when the
-            // target is the scroll container itself or the spotlight-frame
-            // wrapper — never the editor content or any BlockNote control.
-            const target = e.target as HTMLElement;
-            const isPadding =
-              target.dataset.editorScroll !== undefined ||
-              target.classList.contains("document-spotlight-frame");
-            if (!isPadding) return;
-            e.preventDefault();
-            const blocks = editor.document;
-            const lastBlock = blocks[blocks.length - 1];
-            if (lastBlock) {
-              editor.setTextCursorPosition(lastBlock, "end");
-            }
-            editor.focus();
-          }}
-        >
-        <DocumentSpotlightFrame>
-          <ReferencedBlocksHighlight blockIds={referencedBlockIds} />
-          <BlockNoteViewEditor />
-          {cellRefDialog && (
-            <CellRefDialog
-              open={cellRefDialog.open}
-              onOpenChange={(open) => {
-                if (!open) setCellRefDialog(null);
-              }}
-              spreadsheetId={cellRefDialog.spreadsheetId}
-              spreadsheetName={cellRefDialog.spreadsheetName}
-              onInsert={(cellRef) => {
-                if (!cellRefDialog) return;
-                handleCellRefInsert(cellRef, cellRefDialog);
-              }}
-            />
-          )}
-          {blockPickerDialog && (
-            <BlockPickerDialog
-              open={blockPickerDialog.open}
-              onOpenChange={(open) => {
-                if (!open) setBlockPickerDialog(null);
-              }}
-              documentId={blockPickerDialog.documentId}
-              documentName={blockPickerDialog.documentName}
-              onInsert={(blockId) => {
-                if (!blockPickerDialog) return;
-                handleBlockPickerInsert(blockId, blockPickerDialog);
-              }}
-            />
-          )}
-          {framePickerDialog && (
-            <FramePickerDialog
-              open={framePickerDialog.open}
-              onOpenChange={(open) => {
-                if (!open) setFramePickerDialog(null);
-              }}
-              diagramId={framePickerDialog.diagramId}
-              diagramName={framePickerDialog.diagramName}
-              onInsert={(frameId) => {
-                if (!framePickerDialog) return;
-                handleFramePickerInsert(frameId, framePickerDialog);
-              }}
-            />
-          )}
-        </DocumentSpotlightFrame>
-        </div>
-        {commentsEnabled && !isMobile && <CommentsDockedRail editor={editor} />}
-        <SuggestionMenuController triggerCharacter={"#"} getItems={getHashItems} />
-        <SuggestionMenuController triggerCharacter={"@"} getItems={getAtMentionItems} />
-        {commentsEnabled && <CommentCountReporter />}
-        {commentsEnabled && <CommentPendingWatcher editor={editor} />}
-        {commentsEnabled && isMobile && <CommentsDrawer editor={editor} />}
-        </BlockNoteView>
-      </div>
+      {commentsEnabled && !isMobile && <CommentsDockedRail editor={editor} />}
+      <SuggestionMenuController triggerCharacter={"#"} getItems={getHashItems} />
+      <SuggestionMenuController triggerCharacter={"@"} getItems={getAtMentionItems} />
+      {commentsEnabled && <CommentCountReporter />}
+      {commentsEnabled && <CommentPendingWatcher editor={editor} />}
+      {commentsEnabled && isMobile && <CommentsDrawer editor={editor} />}
+      </BlockNoteView>
     </div>
-    </CommentsUIProvider>
   );
 }

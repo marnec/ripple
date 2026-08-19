@@ -229,7 +229,7 @@ export function TaskDescriptionEditor({
     if (unavailableOffline) {
       return (
         <div className={className}>
-          <NotAvailableOffline resource="description" compact />
+          <NotAvailableOffline resource="task" compact />
         </div>
       );
     }

@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import { useMutation } from "convex/react";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
-import type { useDocumentCollaboration } from "../../../hooks/use-document-collaboration";
+import type { CollaborativeDoc } from "../../../hooks/use-collaborative-doc";
 import type { BlockNoteEditor } from "@blocknote/core";
 import { extractEventMentions } from "../../../hooks/use-editor-tracking";
 import { SEED_ORIGIN } from "@/lib/yjs-origins";
@@ -10,9 +10,9 @@ import { SEED_ORIGIN } from "@/lib/yjs-origins";
 // The trackers only read `editor.document` / `editor.onChange`, so the editor
 // is accepted schema-erased (the concrete schema editor is invariant and won't
 // assign to the collaboration hook's default-param return type). yDoc keeps its
-// exact type from the collaboration hook (no runtime import).
+// exact type from the replica that owns it (no runtime import).
 type CollabEditor = BlockNoteEditor<any, any, any> | null;
-type CollabYDoc = ReturnType<typeof useDocumentCollaboration>["yDoc"];
+type CollabYDoc = CollaborativeDoc["yDoc"];
 
 // Delay before edit-detection arms, so BlockNote's mount-time default-paragraph
 // insert and any post-seed normalization (both local Yjs transactions) don't

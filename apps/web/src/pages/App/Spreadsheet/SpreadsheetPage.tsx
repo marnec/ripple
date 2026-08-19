@@ -1,24 +1,15 @@
 
-import { BacklinksButton } from "@/components/BacklinksDrawer";
-import { FavoriteButton } from "@/components/FavoriteButton";
 import {
-  TagInlineStrip,
-  TagPickerButton,
-} from "@/components/TagPickerButton";
-import { Button } from "@ripple/ui/components/button";
-import { HeaderSlot, MobileHeaderTitle } from "@/contexts/HeaderSlotContext";
+  CollaborativeSurface,
+  type HydratedSurface,
+} from "@/components/CollaborativeSurface";
+import { SurfaceActiveUsers } from "@/components/SurfaceActiveUsers";
 import { useCursorAwareness } from "@/hooks/use-cursor-awareness";
+import { useCursorIdentity } from "@/hooks/use-cursor-identity";
 import { useFormulaPicker } from "@/hooks/use-formula-picker";
-import { useIsMobile } from "@/hooks/use-mobile";
 import { useJSpreadsheetInstance } from "@/hooks/use-jspreadsheet-instance";
-import { useSpreadsheetCollaboration } from "@/hooks/use-spreadsheet-collaboration";
 import { useSpreadsheetContextMenu } from "@/hooks/use-spreadsheet-context-menu";
-import { useRecordVisit } from "@/hooks/use-record-visit";
-import { useRoomCached } from "@/hooks/use-room-cached";
 import { tagsOptimisticUpdate } from "@/lib/tag-optimistic";
-import { getUserColor } from "@/lib/user-colors";
-import { NotAvailableOffline } from "@/components/NotAvailableOffline";
-import { ResourceDeleted } from "@/pages/ResourceDeleted";
 import SomethingWentWrong from "@/pages/SomethingWentWrong";
 import type { QueryParams } from "@convex/types/routes";
 import { useMutation } from "convex/react";
@@ -27,16 +18,14 @@ import { useViewer } from "../UserContext";
 import "jspreadsheet-ce/dist/jspreadsheet.css";
 import "jspreadsheet-ce/dist/jspreadsheet.themes.css";
 import "jsuites/dist/jsuites.css";
-import { Circle, Settings, WifiOff } from "lucide-react";
 import { useSelectionFormulaHighlights } from "@/hooks/use-selection-formula-highlights";
 import { SpreadsheetActionsMenu } from "./SpreadsheetActionsMenu";
 import { memo, useEffect, useRef, useState } from "react";
-import { Link, useLocation, useParams } from "react-router-dom";
+import { useLocation, useParams } from "react-router-dom";
 import type { Awareness } from "y-protocols/awareness";
 import type * as Y from "yjs";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
-import { ActiveUsers } from "../Document/ActiveUsers";
 import {
   FormulaPickerDropdown,
 } from "./FormulaPickerDropdown";
@@ -44,36 +33,6 @@ import { FormulaBar } from "./FormulaBar";
 import { ConfirmRefShiftDialog } from "./ConfirmRefShiftDialog";
 import { SpreadsheetContextMenu } from "./SpreadsheetContextMenu";
 import type { SpreadsheetYjsBinding } from "@/lib/spreadsheet-yjs-binding";
-
-// ---------------------------------------------------------------------------
-// Connection Status Badge
-// ---------------------------------------------------------------------------
-
-function ConnectionStatus({
-  isConnected,
-  isOffline,
-}: {
-  isConnected: boolean;
-  isOffline: boolean;
-}) {
-  if (isOffline) {
-    return (
-      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-        <WifiOff className="h-3 w-3" />
-        Offline
-      </div>
-    );
-  }
-
-  return (
-    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-      <Circle
-        className={`h-2 w-2 fill-current ${isConnected ? "text-green-500" : "text-yellow-500"}`}
-      />
-      {isConnected ? "Connected" : "Connecting..."}
-    </div>
-  );
-}
 
 // ---------------------------------------------------------------------------
 // Grid Component
@@ -241,16 +200,22 @@ const JSpreadsheetGrid = memo(function JSpreadsheetGrid({
 // Page Components
 // ---------------------------------------------------------------------------
 
+/** What the header renders for a spreadsheet. */
+interface SpreadsheetMeta {
+  name: string;
+  tags?: string[];
+}
+
 function SpreadsheetEditor({
   spreadsheetId,
+  workspaceId,
 }: {
   spreadsheetId: Id<"spreadsheets">;
+  workspaceId: Id<"workspaces">;
 }) {
-  const isMobile = useIsMobile();
   const location = useLocation();
   const importedRows =
-    (location.state as { importedRows?: unknown[][] } | null)?.importedRows ??
-    null;
+    (location.state as { importedRows?: unknown[][] } | null)?.importedRows ?? null;
   const liveSpreadsheet = useQuery(api.spreadsheets.get, { id: spreadsheetId });
   const viewer = useViewer();
   const rawRefs = useQuery(api.spreadsheetCellRefs.listBySpreadsheet, { spreadsheetId });
@@ -261,11 +226,7 @@ function SpreadsheetEditor({
   const [binding, setBinding] = useState<SpreadsheetYjsBinding | null>(null);
   const [formulaBarPicking, setFormulaBarPicking] = useState(false);
   const [formulaBarFocused, setFormulaBarFocused] = useState(false);
-  const myRole = useQuery(
-    api.workspaceMembers.myRole,
-    // The live row, not the cached one: this is another server read.
-    liveSpreadsheet ? { workspaceId: liveSpreadsheet.workspaceId } : "skip",
-  );
+  const myRole = useQuery(api.workspaceMembers.myRole, { workspaceId });
   const isAdmin = myRole === "admin";
   const updateTags = useMutation(api.spreadsheets.updateTags).withOptimisticUpdate(
     tagsOptimisticUpdate(api.spreadsheets.get),
@@ -280,83 +241,19 @@ function SpreadsheetEditor({
     suppressed: formulaBarFocused || isCellEditing,
   });
 
-  const {
-    yDoc,
-    awareness,
-    isConnected,
-    isOffline,
-    isLoading: collabLoading,
-    isHydrated,
-    roomStore,
-  } = useSpreadsheetCollaboration({
-    spreadsheetId: spreadsheetId,
-    userName: viewer?.name ?? "Anonymous",
-    userId: viewer?._id ?? "unknown",
-  });
-
-  // Metadata kept in the room's own store, so offline — where this query never
-  // resolves — the page still knows what it is showing.
-  // `isLive` gates every control that would change the spreadsheet — see the
-  // same split in DocumentEditor.
-  const { value: spreadsheet, isLive } = useRoomCached(
-    roomStore,
-    "meta",
-    liveSpreadsheet,
-  );
-  useRecordVisit(spreadsheet?.workspaceId, "spreadsheet", spreadsheetId, spreadsheet?.name);
-  const spreadsheetName = spreadsheet?.name ?? "";
-
-  const { remoteUsers } = useCursorAwareness(awareness);
-
-  const remoteUserClientIds = new Set(remoteUsers.map((u) => u.clientId));
-
-  if (spreadsheet === null) {
-    return <ResourceDeleted resourceType="spreadsheet" />;
-  }
-
-  // Nothing can reach this spreadsheet's contents and this device has never
-  // held them. An empty grid would invite edits that then have to be
-  // reconciled against cells the user never saw.
-  if (isOffline && !isHydrated) {
-    return <NotAvailableOffline resource="spreadsheet" />;
-  }
-
-  // `spreadsheet` and `viewer` are Convex reads, so offline they never
-  // resolve. Wait for them only while we might still get them.
-  if (!isHydrated && (spreadsheet === undefined || viewer === undefined)) {
-    return <div className="h-full w-full" />;
-  }
-
-  if (collabLoading) {
-    return <div className="h-full w-full" />;
-  }
-
   return (
-    <div className="flex h-full w-full flex-col animate-fade-in">
-      <div className="flex items-center justify-between px-3 py-1.5 border-b">
-        {/*
-          Every control here needs `spreadsheet.workspaceId`, a Convex read —
-          so offline they aren't available and the header keeps only the name.
-          The grid below still works from the local copy.
-        */}
-        <div className="flex h-8 min-w-0 items-center gap-4">
-          {isLive && spreadsheet && (
-            <>
-              <FavoriteButton
-                resourceType="spreadsheet"
-                resourceId={spreadsheetId}
-                workspaceId={spreadsheet.workspaceId}
-              />
-              <TagPickerButton
-                workspaceId={spreadsheet.workspaceId}
-                value={spreadsheet.tags ?? []}
-                onChange={(tags) => void updateTags({ id: spreadsheetId, tags })}
-              />
-            </>
-          )}
-          <h1 className="hidden sm:block text-lg font-semibold truncate">{spreadsheetName}</h1>
-          <TagInlineStrip tags={spreadsheet?.tags ?? []} />
-        </div>
+    <CollaborativeSurface<SpreadsheetMeta>
+      resourceType="spreadsheet"
+      resourceId={spreadsheetId}
+      workspaceId={workspaceId}
+      meta={liveSpreadsheet}
+      onTagsChange={(tags) => void updateTags({ id: spreadsheetId, tags })}
+      settingsTitle="Spreadsheet settings"
+      onBacklinksOpenChange={setShowRefHighlights}
+      activeUsers={(awareness) => (
+        <SurfaceActiveUsers awareness={awareness} viewer={viewer} />
+      )}
+      centre={
         <FormulaBar
           binding={binding}
           selection={selection}
@@ -364,63 +261,20 @@ function SpreadsheetEditor({
           onPickingChange={setFormulaBarPicking}
           onFocusChange={setFormulaBarFocused}
         />
-        <div className="flex h-8 items-center gap-3">
-          <ConnectionStatus isConnected={isConnected} isOffline={isOffline} />
-          {isConnected && (
-            <ActiveUsers
-              remoteUsers={remoteUsers}
-              currentUser={
-                viewer
-                  ? { name: viewer.name, color: getUserColor(viewer._id) }
-                  : undefined
-              }
-            />
-          )}
-          {isLive && spreadsheet && (
-            <>
-              <BacklinksButton
-                resourceId={spreadsheetId}
-                workspaceId={spreadsheet.workspaceId}
-                onOpenChange={setShowRefHighlights}
-              />
-              <SpreadsheetActionsMenu
-                spreadsheetId={spreadsheetId}
-                spreadsheetName={spreadsheet.name}
-                isAdmin={isAdmin}
-                binding={binding}
-              />
-            </>
-          )}
-          {isLive && spreadsheet && !isMobile && (
-            <Link
-              to="settings"
-              className="inline-flex items-center justify-center rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
-              title="Spreadsheet settings"
-            >
-              <Settings className="size-4" />
-            </Link>
-          )}
-        </div>
-      </div>
-      {isLive && isMobile && (
-        <HeaderSlot>
-          <Button
-            variant="ghost"
-            size="icon"
-            render={<Link to="settings" />}
-            aria-label="Spreadsheet settings"
-          >
-            <Settings className="size-4" />
-          </Button>
-        </HeaderSlot>
+      }
+      actions={(meta) => (
+        <SpreadsheetActionsMenu
+          spreadsheetId={spreadsheetId}
+          spreadsheetName={meta.name}
+          isAdmin={isAdmin}
+          binding={binding}
+        />
       )}
-      <MobileHeaderTitle name={spreadsheetName} />
-
-      <div className="flex-1 overflow-hidden">
-        <JSpreadsheetGrid
-          yDoc={yDoc}
-          awareness={awareness}
-          remoteUserClientIds={remoteUserClientIds}
+    >
+      {(surface) => (
+        <SpreadsheetGridPane
+          surface={surface}
+          viewer={viewer}
           referencedCellRefs={referencedCellRefs}
           externalRefs={rawRefs ?? []}
           importedRows={importedRows}
@@ -429,15 +283,73 @@ function SpreadsheetEditor({
           onEditingChange={setIsCellEditing}
           onBindingReady={setBinding}
         />
-      </div>
+      )}
+    </CollaborativeSurface>
+  );
+}
+
+/**
+ * The grid, bound to a replica that is known to hold the spreadsheet.
+ *
+ * Derives presence of its own rather than taking it from the header: the grid
+ * needs the active client ids to drop stale cursors, and one awareness listener
+ * per need keeps that where it is used.
+ */
+function SpreadsheetGridPane({
+  surface,
+  viewer,
+  referencedCellRefs,
+  externalRefs,
+  importedRows,
+  preventBlurOnClick,
+  onSelectionChange,
+  onEditingChange,
+  onBindingReady,
+}: {
+  surface: HydratedSurface<SpreadsheetMeta>;
+  viewer: { _id: Id<"users">; name?: string } | null | undefined;
+  referencedCellRefs: { cellRef: string }[];
+  externalRefs: ReadonlyArray<{ cellRef: string; orphan?: boolean }>;
+  importedRows: unknown[][] | null;
+  preventBlurOnClick: boolean;
+  onSelectionChange: (sel: { row: number; col: number } | null) => void;
+  onEditingChange: (editing: boolean) => void;
+  onBindingReady: (binding: SpreadsheetYjsBinding | null) => void;
+}) {
+  const { yDoc, awareness } = surface.doc;
+  useCursorIdentity(awareness, viewer?.name ?? "Anonymous", viewer?._id ?? "unknown");
+
+  const { remoteUsers } = useCursorAwareness(awareness);
+  const remoteUserClientIds = new Set(remoteUsers.map((u) => u.clientId));
+
+  return (
+    <div className="flex-1 overflow-hidden">
+      <JSpreadsheetGrid
+        yDoc={yDoc}
+        awareness={awareness}
+        remoteUserClientIds={remoteUserClientIds}
+        referencedCellRefs={referencedCellRefs}
+        externalRefs={externalRefs}
+        importedRows={importedRows}
+        preventBlurOnClick={preventBlurOnClick}
+        onSelectionChange={onSelectionChange}
+        onEditingChange={onEditingChange}
+        onBindingReady={onBindingReady}
+      />
     </div>
   );
 }
 
 export function SpreadsheetPage() {
-  const { spreadsheetId } = useParams<QueryParams>();
+  const { spreadsheetId, workspaceId } = useParams<QueryParams>();
 
-  if (!spreadsheetId) return <SomethingWentWrong />;
+  if (!spreadsheetId || !workspaceId) return <SomethingWentWrong />;
 
-  return <SpreadsheetEditor key={spreadsheetId} spreadsheetId={spreadsheetId} />;
+  return (
+    <SpreadsheetEditor
+      key={spreadsheetId}
+      spreadsheetId={spreadsheetId}
+      workspaceId={workspaceId}
+    />
+  );
 }

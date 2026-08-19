@@ -7,7 +7,8 @@ import {
   DialogTitle,
 } from "@ripple/ui/components/dialog";
 import { useJSpreadsheetInstance } from "@/hooks/use-jspreadsheet-instance";
-import { useSpreadsheetCollaboration } from "@/hooks/use-spreadsheet-collaboration";
+import { useResourceDoc } from "@/hooks/use-collab-session";
+import { useCursorIdentity } from "@/hooks/use-cursor-identity";
 import { useViewer } from "../UserContext";
 import { exceedsMaxCells, toCellName } from "@ripple/shared/cellRef";
 import type { Id } from "@convex/_generated/dataModel";
@@ -86,15 +87,14 @@ function PickerBody({
   const [selection, setSelection] = useState<Rect | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const {
-    yDoc,
-    awareness,
-    isLoading,
-  } = useSpreadsheetCollaboration({
-    spreadsheetId,
-    userName: viewer?.name ?? "Anonymous",
-    userId: viewer?._id ?? "anonymous",
+  // A dialog, not a collaborative surface: it opens the room to read cells and
+  // has no header, so it reaches for the room directly rather than through
+  // `CollaborativeSurface`.
+  const { yDoc, awareness, isLoading } = useResourceDoc({
+    resourceType: "spreadsheet",
+    resourceId: spreadsheetId,
   });
+  useCursorIdentity(awareness, viewer?.name ?? "Anonymous", viewer?._id ?? "anonymous");
 
   const a1 = selection ? rectToA1(selection) : null;
   const sizeError = a1 && exceedsMaxCells(a1)

@@ -10,6 +10,7 @@ import { taskDescriptionSchema } from "./taskDescriptionSchema";
 import { createTaskPatch, taskDetailLoadState } from "./taskDetailModel";
 import { en as bnEn } from "@blocknote/core/locales";
 import { useDocumentCollaboration } from "../../../hooks/use-document-collaboration";
+import { useResourceDoc } from "../../../hooks/use-collab-session";
 import { useTaskGithubLink } from "./useTaskGithubLink";
 import { useTaskEditTracking } from "./useTaskEditTracking";
 
@@ -68,23 +69,24 @@ export function useTaskDetail({
   // exported below — same name, very different things.
   const linkedProvider = github.provider;
 
+  // The description's room. Opened here rather than by `CollaborativeSurface`:
+  // a description is a panel inside a task, not a surface of its own — no
+  // header, no settings route, and its gate is inline and compact.
+  const doc = useResourceDoc({
+    resourceType: "task",
+    resourceId: taskId ?? "",
+    enabled: !!taskId && collaborationEnabled,
+  });
+  const { isConnected, isOffline, isHydrated, provider, yDoc } = doc;
+
   // Collaborative editor - Yjs handles sync automatically
-  const {
-    editor,
-    isConnected,
-    isOffline,
-    isHydrated,
-    provider,
-    yDoc,
-    descriptionReady,
-    awaitingSeed,
-  } = useDocumentCollaboration({
+  const { editor, descriptionReady, awaitingSeed } = useDocumentCollaboration({
+    doc,
     documentId: taskId ?? "",
     userName: currentUser?.name ?? "Anonymous",
     userId: currentUser?._id ?? "anonymous",
     schema: taskDescriptionSchema,
     resourceType: "task",
-    enabled: !!taskId && collaborationEnabled,
     uploadFile: fileUpload?.uploadFile,
     dictionary: taskDescriptionDictionary,
     seed: {

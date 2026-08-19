@@ -1,17 +1,7 @@
-import { BacklinksButton } from "@/components/BacklinksDrawer";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
-import { FavoriteButton } from "@/components/FavoriteButton";
-import {
-  TagInlineStrip,
-  TagPickerButton,
-} from "@/components/TagPickerButton";
 import { Button } from "@ripple/ui/components/button";
-import { HeaderSlot, MobileHeaderTitle } from "@/contexts/HeaderSlotContext";
-import { useIsMobile } from "@/hooks/use-mobile";
 import { tagsOptimisticUpdate } from "@/lib/tag-optimistic";
-import { NotAvailableOffline } from "@/components/NotAvailableOffline";
-import { ResourceDeleted } from "@/pages/ResourceDeleted";
-import { Link, useLocation, useParams } from "react-router-dom";
+import { useLocation, useParams } from "react-router-dom";
 import type { Id } from "@convex/_generated/dataModel";
 import { ExcalidrawEditor } from "./ExcalidrawEditor";
 import { useMutation } from "convex/react";
@@ -22,19 +12,17 @@ import { useState } from "react";
 import type { ExcalidrawImperativeAPI, BinaryFiles } from "@excalidraw/excalidraw/types";
 import type { ExcalidrawElement } from "@excalidraw/excalidraw/element/types";
 import { useTheme } from "next-themes";
-import { Presentation, Settings } from "lucide-react";
+import { Presentation } from "lucide-react";
 import { DiagramActionsMenu } from "./DiagramActionsMenu";
+import { DiagramActiveUsers } from "./DiagramActiveUsers";
 import { PresentationOverlay } from "./PresentationOverlay";
 import { useFrameDeleteProtection } from "@/hooks/use-frame-delete-protection";
 import { FrameDeleteWarningDialog } from "@/components/FrameDeleteWarningDialog";
 import { useDiagramCollaboration } from "@/hooks/use-diagram-collaboration";
-import { useDiagramCursorAwareness } from "@/hooks/use-diagram-cursor-awareness";
-import { ActiveUsers } from "../Document/ActiveUsers";
-import { ConnectionStatus } from "../Document/ConnectionStatus";
-import { useRecordVisit } from "@/hooks/use-record-visit";
-import { useRoomCached } from "@/hooks/use-room-cached";
-import { getExcalidrawCollaboratorColor } from "@/lib/user-colors";
-import { getCameraFromAppState } from "@/lib/canvas-coordinates";
+import {
+  CollaborativeSurface,
+  type HydratedSurface,
+} from "@/components/CollaborativeSurface";
 import type { Theme } from "@excalidraw/excalidraw/element/types";
 
 type ImportedScene = {
@@ -42,13 +30,24 @@ type ImportedScene = {
   files: Record<string, unknown>;
 };
 
-function DiagramPageContent({ diagramId, workspaceId }: { diagramId: Id<"diagrams">; workspaceId: Id<"workspaces"> }) {
-  const isMobile = useIsMobile();
+/** What the header renders for a diagram. */
+interface DiagramMeta {
+  name: string;
+  tags?: string[];
+}
+
+function DiagramPageContent({
+  diagramId,
+  workspaceId,
+}: {
+  diagramId: Id<"diagrams">;
+  workspaceId: Id<"workspaces">;
+}) {
   const viewer = useViewer();
   const location = useLocation();
+  const { resolvedTheme } = useTheme();
   const importedScene =
-    (location.state as { importedScene?: ImportedScene } | null)
-      ?.importedScene ?? null;
+    (location.state as { importedScene?: ImportedScene } | null)?.importedScene ?? null;
   const liveDiagram = useQuery(api.diagrams.get, { id: diagramId });
   const [excalidrawAPI, setExcalidrawAPI] = useState<ExcalidrawImperativeAPI | null>(null);
   // Snapshot of the scene captured when entering presentation mode (null = not presenting).
@@ -56,11 +55,11 @@ function DiagramPageContent({ diagramId, workspaceId }: { diagramId: Id<"diagram
     elements: readonly ExcalidrawElement[];
     files: BinaryFiles;
   } | null>(null);
-  // Set by the editor when the Yjs binding starts throwing. Editing keeps
-  // working; this only tells the user their changes aren't being shared.
-  const [syncDegraded, setSyncDegraded] = useState(false);
   const myRole = useQuery(api.workspaceMembers.myRole, { workspaceId });
   const isAdmin = myRole === "admin";
+  const updateTags = useMutation(api.diagrams.updateTags).withOptimisticUpdate(
+    tagsOptimisticUpdate(api.diagrams.get),
+  );
 
   // Per-frame embeds of this diagram: drives the "delete an embedded frame"
   // warning. Each row is one (source, frame) place that embeds a specific frame.
@@ -86,9 +85,7 @@ function DiagramPageContent({ diagramId, workspaceId }: { diagramId: Id<"diagram
     onIntercept: (frameIds, selectedIds) => {
       const firstFrame = excalidrawAPI
         ?.getSceneElements()
-        .find((el) => el.id === frameIds[0]) as
-        | { name?: string | null }
-        | undefined;
+        .find((el) => el.id === frameIds[0]) as { name?: string | null } | undefined;
       setFrameDeleteTarget({
         frameIds,
         selectedIds,
@@ -120,235 +117,149 @@ function DiagramPageContent({ diagramId, workspaceId }: { diagramId: Id<"diagram
     });
     setFrameDeleteTarget(null);
   };
-  const updateTags = useMutation(api.diagrams.updateTags).withOptimisticUpdate(
-    tagsOptimisticUpdate(api.diagrams.get),
-  );
-  const { resolvedTheme } = useTheme();
-  const isDarkTheme = resolvedTheme === "dark";
 
-  // Set up Yjs collaboration
-  const {
-    yElements,
-    yAssets,
-    awareness,
-    provider,
-    isConnected,
-    isConnecting,
-    isOffline,
-    isLoading,
-    isHydrated,
-    roomStore,
-  } = useDiagramCollaboration({
-    diagramId,
+  return (
+    <CollaborativeSurface<DiagramMeta>
+      resourceType="diagram"
+      resourceId={diagramId}
+      workspaceId={workspaceId}
+      meta={liveDiagram}
+      onTagsChange={(tags) => void updateTags({ id: diagramId, tags })}
+      settingsTitle="Diagram settings"
+      activeUsers={(awareness) => (
+        <DiagramActiveUsers
+          awareness={awareness}
+          excalidrawAPI={excalidrawAPI}
+          viewer={viewer}
+        />
+      )}
+      tools={
+        // Presenting reads the local scene, so it keeps working with no server.
+        <button
+          type="button"
+          onClick={() => {
+            if (!excalidrawAPI) return;
+            setPresentationScene({
+              elements: excalidrawAPI.getSceneElements(),
+              files: excalidrawAPI.getFiles(),
+            });
+          }}
+          disabled={!excalidrawAPI}
+          className="inline-flex items-center justify-center rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors disabled:opacity-50"
+          title="Present"
+        >
+          <Presentation className="size-4" />
+        </button>
+      }
+      actions={(meta) => (
+        <DiagramActionsMenu
+          diagramId={diagramId}
+          diagramName={meta.name}
+          isAdmin={isAdmin}
+          excalidrawAPI={excalidrawAPI}
+        />
+      )}
+    >
+      {(surface) => (
+        <>
+          <DiagramCanvas
+            surface={surface}
+            viewer={viewer}
+            importedScene={importedScene}
+            onExcalidrawAPI={setExcalidrawAPI}
+          />
+
+          {presentationScene && (
+            <PresentationOverlay
+              elements={presentationScene.elements}
+              files={presentationScene.files}
+              theme={resolvedTheme as Theme}
+              onClose={() => setPresentationScene(null)}
+            />
+          )}
+
+          <FrameDeleteWarningDialog
+            open={frameDeleteTarget !== null}
+            onOpenChange={(open) => {
+              if (!open) setFrameDeleteTarget(null);
+            }}
+            onConfirm={confirmFrameDelete}
+            frameName={frameDeleteTarget?.frameName}
+            references={
+              frameDeleteTarget
+                ? (frameEmbeds ?? []).filter((r) =>
+                    frameDeleteTarget.frameIds.includes(r.frameId),
+                  )
+                : []
+            }
+          />
+        </>
+      )}
+    </CollaborativeSurface>
+  );
+}
+
+/**
+ * The canvas itself, bound to a replica that is known to hold the diagram.
+ * Mounted by `CollaborativeSurface` only once that is true.
+ */
+function DiagramCanvas({
+  surface,
+  viewer,
+  importedScene,
+  onExcalidrawAPI,
+}: {
+  surface: HydratedSurface<DiagramMeta>;
+  viewer: { _id?: string; name?: string } | null | undefined;
+  importedScene: ImportedScene | null;
+  onExcalidrawAPI: (api: ExcalidrawImperativeAPI) => void;
+}) {
+  const { yElements, yAssets } = useDiagramCollaboration({
+    doc: surface.doc,
     userName: viewer?.name ?? "Anonymous",
     userId: viewer?._id ?? "anonymous",
   });
 
-  // Metadata kept in the room's own store, so offline — where this query never
-  // resolves — the page still knows what it is showing.
-  // `isLive` gates every control that would change the diagram — see the same
-  // split in DocumentEditor.
-  const { value: diagram, isLive } = useRoomCached(roomStore, "meta", liveDiagram);
-  useRecordVisit(workspaceId, "diagram", diagramId, diagram?.name);
-  const diagramName = diagram?.name ?? "";
-
-  // Get remote pointers for jump-to-user and avatar stack
-  const { remotePointers } = useDiagramCursorAwareness(awareness);
-
-  // Jump to user's cursor position
-  const handleJumpToUser = (user: { clientId: number }) => {
-    if (!excalidrawAPI) return;
-
-    const remotePointer = remotePointers.find((p) => p.clientId === user.clientId);
-    if (!remotePointer?.pointer) return;
-
-    const appState = excalidrawAPI.getAppState();
-    const camera = getCameraFromAppState(appState);
-    const viewportCenterX = window.innerWidth / 2;
-    const viewportCenterY = window.innerHeight / 2;
-
-    // Calculate new scroll position to center on pointer
-    const newScrollX = viewportCenterX / camera.z - remotePointer.pointer.x;
-    const newScrollY = viewportCenterY / camera.z - remotePointer.pointer.y;
-
-    excalidrawAPI.updateScene({
-      appState: {
-        scrollX: newScrollX,
-        scrollY: newScrollY,
-      },
-    });
-  };
-
-  if (diagram === null) {
-    return <ResourceDeleted resourceType="diagram" />;
-  }
-
-  // Nothing can reach this diagram's contents and this device has never held
-  // them. A blank canvas here would be a lie the user can draw on — and every
-  // stroke would then have to be reconciled against a scene they never saw.
-  if (isOffline && !isHydrated) {
-    return <NotAvailableOffline resource="diagram" />;
-  }
-
-  // `viewer` and `diagram` are Convex reads, so offline they never resolve.
-  // Wait for them only while we might still get them: once the Yjs document is
-  // hydrated we can draw the canvas and let the header degrade.
-  if (!isHydrated && (!viewer || diagram === undefined)) {
-    return <div className="h-full w-full" />;
-  }
-
   return (
-    <div className="flex h-full w-full flex-col animate-fade-in">
-      {/* Header bar */}
-      <div className="flex items-center justify-between px-3 py-1.5 border-b">
-        <div className="flex h-8 min-w-0 items-center gap-4">
-          {isLive && (
-            <>
-              <FavoriteButton
-                resourceType="diagram"
-                resourceId={diagramId}
-                workspaceId={workspaceId}
-              />
-              <TagPickerButton
-                workspaceId={workspaceId}
-                value={diagram?.tags ?? []}
-                onChange={(tags) => void updateTags({ id: diagramId, tags })}
-              />
-            </>
-          )}
-          <h1 className="hidden sm:block text-lg font-semibold truncate">{diagramName}</h1>
-          <TagInlineStrip tags={diagram?.tags ?? []} />
-        </div>
-        <div className="flex h-8 items-center gap-3">
-          <ConnectionStatus
-            isConnected={isConnected}
-            isConnecting={isConnecting}
-            hasSyncError={syncDegraded}
-          />
-          {isConnected && (
-            <ActiveUsers
-              remoteUsers={remotePointers.map((p) => ({
-                ...p,
-                cursor: p.pointer ? { anchor: 0, head: 0 } : null,
-              }))}
-              currentUser={viewer && awareness ? { name: viewer.name, color: getExcalidrawCollaboratorColor(awareness.clientID, isDarkTheme) } : undefined}
-              onUserClick={handleJumpToUser}
-            />
-          )}
-          {isLive && <BacklinksButton resourceId={diagramId} workspaceId={workspaceId} />}
-          {diagram && (
-            <button
-              type="button"
-              onClick={() => {
-                if (!excalidrawAPI) return;
-                setPresentationScene({
-                  elements: excalidrawAPI.getSceneElements(),
-                  files: excalidrawAPI.getFiles(),
-                });
-              }}
-              disabled={!excalidrawAPI}
-              className="inline-flex items-center justify-center rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors disabled:opacity-50"
-              title="Present"
-            >
-              <Presentation className="size-4" />
-            </button>
-          )}
-          {isLive && diagram && (
-            <DiagramActionsMenu
-              diagramId={diagramId}
-              diagramName={diagram.name}
-              isAdmin={isAdmin}
-              excalidrawAPI={excalidrawAPI}
-            />
-          )}
-          {!isMobile && (
-            <Link
-              to="settings"
-              className="inline-flex items-center justify-center rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
-              title="Diagram settings"
-            >
-              <Settings className="size-4" />
-            </Link>
-          )}
-        </div>
-      </div>
-      {isMobile && (
-        <HeaderSlot>
-          <Button
-            variant="ghost"
-            size="icon"
-            render={<Link to="settings" />}
-            aria-label="Diagram settings"
-          >
-            <Settings className="size-4" />
-          </Button>
-        </HeaderSlot>
-      )}
-      <MobileHeaderTitle name={diagramName} />
-
-      {/* Canvas */}
-      <div className="flex-1 overflow-hidden">
-        {/* Last resort: anything the sync guard doesn't contain takes down the
-            canvas only, and remounts it from the (intact) Yjs document instead
-            of forcing a full page reload. */}
-        <ErrorBoundary
-          fallback={({ reset }) => (
-            <div className="flex h-full flex-col items-center justify-center gap-3 p-4 text-center">
-              <p className="text-sm text-muted-foreground">
-                The canvas stopped unexpectedly. Your diagram is saved.
-              </p>
-              <Button variant="outline" size="sm" onClick={reset}>
-                Reload canvas
-              </Button>
-            </div>
-          )}
-        >
-          {!isLoading && (
-            <ExcalidrawEditor
-              yElements={yElements}
-              yAssets={yAssets}
-              awareness={awareness}
-              provider={provider}
-              onExcalidrawAPI={setExcalidrawAPI}
-              importedScene={importedScene}
-              onSyncDegradedChange={setSyncDegraded}
-            />
-          )}
-        </ErrorBoundary>
-      </div>
-
-      {presentationScene && (
-        <PresentationOverlay
-          elements={presentationScene.elements}
-          files={presentationScene.files}
-          theme={resolvedTheme as Theme}
-          onClose={() => setPresentationScene(null)}
+    <div className="flex-1 overflow-hidden">
+      {/* Last resort: anything the sync guard doesn't contain takes down the
+          canvas only, and remounts it from the (intact) Yjs document instead
+          of forcing a full page reload. */}
+      <ErrorBoundary
+        fallback={({ reset }) => (
+          <div className="flex h-full flex-col items-center justify-center gap-3 p-4 text-center">
+            <p className="text-sm text-muted-foreground">
+              The canvas stopped unexpectedly. Your diagram is saved.
+            </p>
+            <Button variant="outline" size="sm" onClick={reset}>
+              Reload canvas
+            </Button>
+          </div>
+        )}
+      >
+        <ExcalidrawEditor
+          yElements={yElements}
+          yAssets={yAssets}
+          awareness={surface.doc.awareness}
+          provider={surface.doc.provider}
+          onExcalidrawAPI={onExcalidrawAPI}
+          importedScene={importedScene}
+          onSyncDegradedChange={surface.reportSyncDegraded}
         />
-      )}
-
-      <FrameDeleteWarningDialog
-        open={frameDeleteTarget !== null}
-        onOpenChange={(open) => {
-          if (!open) setFrameDeleteTarget(null);
-        }}
-        onConfirm={confirmFrameDelete}
-        frameName={frameDeleteTarget?.frameName}
-        references={
-          frameDeleteTarget
-            ? (frameEmbeds ?? []).filter((r) =>
-                frameDeleteTarget.frameIds.includes(r.frameId),
-              )
-            : []
-        }
-      />
+      </ErrorBoundary>
     </div>
   );
 }
 
 export function DiagramPage() {
-  const { diagramId, workspaceId } = useParams<{ diagramId: Id<"diagrams">; workspaceId: Id<"workspaces"> }>();
+  const { diagramId, workspaceId } = useParams<{
+    diagramId: Id<"diagrams">;
+    workspaceId: Id<"workspaces">;
+  }>();
   if (!diagramId || !workspaceId) {
     return null;
   }
-  return <DiagramPageContent diagramId={diagramId} workspaceId={workspaceId} key={diagramId} />;
+  return (
+    <DiagramPageContent diagramId={diagramId} workspaceId={workspaceId} key={diagramId} />
+  );
 }

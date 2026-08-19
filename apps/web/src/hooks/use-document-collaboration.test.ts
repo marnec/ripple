@@ -1,10 +1,10 @@
 import { renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { Awareness } from "y-protocols/awareness";
-import * as Y from "yjs";
 import { BlockNoteSchema, defaultBlockSpecs } from "@blocknote/core";
 import { DOCUMENT_FRAGMENT } from "@ripple/shared/blockRef";
 import { clearCollaborationTokenCache } from "@/lib/collaboration-token-cache";
+import { cacheDocument, FakeProvider, mint, resetCollabFakes } from "@/test/collab-fakes";
+import { useResourceDoc } from "./use-collab-session";
 import { useDocumentCollaboration, type DescriptionSeed } from "./use-document-collaboration";
 
 /**
@@ -16,69 +16,20 @@ import { useDocumentCollaboration, type DescriptionSeed } from "./use-document-c
  * what that typing would cost.
  */
 
-const { FakeProvider, cache, convexQuery, mint } = vi.hoisted(() => {
-  const cache = new Map<string, (doc: unknown) => void>();
-  const convexQuery = vi.fn();
-  /** How the collaboration token behaves. Tests can make it never arrive. */
-  const mint = { run: async () => ({ token: "t", roomId: "doc-doc-1" }) };
-
-  class FakeProvider {
-    static instances: FakeProvider[] = [];
-    shouldConnect = true;
-    destroyed = false;
-    ws = null;
-    awareness: Awareness;
-    private handlers = new Map<string, Set<(...args: never[]) => void>>();
-
-    constructor(_host: string, _room: string, doc: Y.Doc) {
-      this.awareness = new Awareness(doc);
-      FakeProvider.instances.push(this);
-    }
-    on(event: string, handler: (...args: never[]) => void) {
-      const set = this.handlers.get(event) ?? new Set();
-      set.add(handler);
-      this.handlers.set(event, set);
-    }
-    off(event: string, handler: (...args: never[]) => void) {
-      this.handlers.get(event)?.delete(handler);
-    }
-    destroy() {
-      this.destroyed = true;
-      this.awareness.destroy();
-    }
-    sync() {
-      for (const handler of [...(this.handlers.get("sync") ?? [])]) {
-        (handler as (synced: boolean) => void)(true);
-      }
-    }
-  }
-
-  return { FakeProvider, cache, convexQuery, mint };
+vi.mock("y-partyserver/provider", async () => ({
+  default: (await import("@/test/collab-fakes")).FakeProvider,
+}));
+vi.mock("y-indexeddb", async () => ({
+  IndexeddbPersistence: (await import("@/test/collab-fakes")).FakeIndexeddbPersistence,
+}));
+vi.mock("convex/react", async () => {
+  const { convexQuery: query, mint: token } = await import("@/test/collab-fakes");
+  return {
+    useConvex: () => ({ query }),
+    useConvexAuth: () => ({ isAuthenticated: true, isLoading: false }),
+    useAction: () => () => token.run(),
+  };
 });
-
-vi.mock("y-partyserver/provider", () => ({ default: FakeProvider }));
-vi.mock("y-indexeddb", () => ({
-  IndexeddbPersistence: class {
-    private handlers: (() => void)[] = [];
-    constructor(name: string, doc: unknown) {
-      queueMicrotask(() => {
-        cache.get(name)?.(doc);
-        this.handlers.forEach((handler) => handler());
-      });
-    }
-    on(event: string, handler: () => void) {
-      if (event === "synced") this.handlers.push(handler);
-    }
-    destroy() {
-      return Promise.resolve();
-    }
-  },
-}));
-vi.mock("convex/react", () => ({
-  useConvex: () => ({ query: convexQuery }),
-  useConvexAuth: () => ({ isAuthenticated: true, isLoading: false }),
-  useAction: () => () => mint.run(),
-}));
 
 const schema = BlockNoteSchema.create({ blockSpecs: defaultBlockSpecs });
 
@@ -87,40 +38,30 @@ function render(options: {
   resourceType?: "doc" | "task";
   seed?: DescriptionSeed;
 } = {}) {
-  return renderHook(() =>
-    useDocumentCollaboration({
-      documentId: options.documentId ?? "doc-1",
-      userName: "Ada",
-      userId: "user-1",
-      schema,
+  // The room is opened by the caller now — `CollaborativeSurface` in the app,
+  // this helper in the tests — and handed in.
+  return renderHook(() => {
+    const doc = useResourceDoc({
       resourceType: options.resourceType ?? "doc",
-      seed: options.seed,
-    }),
-  );
-}
-
-/** A cached copy of the document, as a previous visit would have left it. */
-function cacheDocument(roomId: string, text: string) {
-  const doc = new Y.Doc();
-  const fragment = doc.getXmlFragment(DOCUMENT_FRAGMENT);
-  const group = new Y.XmlElement("blockGroup");
-  const container = new Y.XmlElement("blockContainer");
-  container.setAttribute("id", "cached");
-  const paragraph = new Y.XmlElement("paragraph");
-  paragraph.insert(0, [new Y.XmlText(text)]);
-  container.insert(0, [paragraph]);
-  group.insert(0, [container]);
-  fragment.insert(0, [group]);
-  const update = Y.encodeStateAsUpdate(doc);
-  cache.set(roomId, (target) => Y.applyUpdate(target as Y.Doc, update));
+      resourceId: options.documentId ?? "doc-1",
+    });
+    return {
+      ...useDocumentCollaboration({
+        doc,
+        documentId: options.documentId ?? "doc-1",
+        userName: "Ada",
+        userId: "user-1",
+        schema,
+        resourceType: options.resourceType ?? "doc",
+        seed: options.seed,
+      }),
+      doc,
+    };
+  });
 }
 
 beforeEach(() => {
-  FakeProvider.instances.length = 0;
-  cache.clear();
-  convexQuery.mockReset();
-  convexQuery.mockResolvedValue({ status: "unavailable" });
-  mint.run = async () => ({ token: "t", roomId: "doc-doc-1" });
+  resetCollabFakes();
   clearCollaborationTokenCache();
 });
 
@@ -134,14 +75,14 @@ describe("useDocumentCollaboration", () => {
     FakeProvider.instances[0].sync();
 
     await waitFor(() => expect(result.current.editor).not.toBeNull());
-    expect(result.current.isHydrated).toBe(true);
+    expect(result.current.doc.isHydrated).toBe(true);
   });
 
   it("hands over an editor from the offline cache, without waiting for a socket", async () => {
     cacheDocument("doc-doc-1", "written on a previous visit");
     const { result } = render();
 
-    await waitFor(() => expect(result.current.isHydrated).toBe(true));
+    await waitFor(() => expect(result.current.doc.isHydrated).toBe(true));
     // The provider is built but has not synced; the cache alone is enough.
     await waitFor(() => expect(result.current.editor).not.toBeNull());
   });
@@ -161,13 +102,13 @@ describe("useDocumentCollaboration", () => {
 
     const { result } = render();
 
-    await waitFor(() => expect(result.current.isHydrated).toBe(true));
+    await waitFor(() => expect(result.current.doc.isHydrated).toBe(true));
     expect(result.current.editor).not.toBeNull();
     // Still trying — not connected, and not yet given up. That is what the
     // toolbar shows while the document is already readable.
-    expect(result.current.isConnected).toBe(false);
-    expect(result.current.isConnecting).toBe(true);
-    expect(result.current.isOffline).toBe(false);
+    expect(result.current.doc.isConnected).toBe(false);
+    expect(result.current.doc.isConnecting).toBe(true);
+    expect(result.current.doc.isOffline).toBe(false);
   });
 
   it("settles from connecting to offline without taking the document away", async () => {
@@ -176,12 +117,12 @@ describe("useDocumentCollaboration", () => {
 
     const { result } = render();
     await waitFor(() => expect(result.current.editor).not.toBeNull());
-    expect(result.current.isConnecting).toBe(true);
+    expect(result.current.doc.isConnecting).toBe(true);
 
     window.dispatchEvent(new Event("offline"));
 
-    await waitFor(() => expect(result.current.isOffline).toBe(true));
-    expect(result.current.isConnecting).toBe(false);
+    await waitFor(() => expect(result.current.doc.isOffline).toBe(true));
+    expect(result.current.doc.isConnecting).toBe(false);
     // The verdict changes the indicator, never the content.
     expect(result.current.editor).not.toBeNull();
   });
@@ -199,8 +140,8 @@ describe("useDocumentCollaboration", () => {
     // The room never answers and the connection gives up.
     window.dispatchEvent(new Event("offline"));
 
-    await waitFor(() => expect(result.current.isOffline).toBe(true));
-    expect(result.current.isHydrated).toBe(false);
+    await waitFor(() => expect(result.current.doc.isOffline).toBe(true));
+    expect(result.current.doc.isHydrated).toBe(false);
     expect(result.current.editor).toBeNull();
   });
 
@@ -209,11 +150,11 @@ describe("useDocumentCollaboration", () => {
       const { result } = render();
       await waitFor(() => expect(FakeProvider.instances).toHaveLength(1));
 
-      expect(result.current.yDoc.getXmlFragment(DOCUMENT_FRAGMENT).length).toBe(0);
+      expect(result.current.doc.yDoc.getXmlFragment(DOCUMENT_FRAGMENT).length).toBe(0);
       FakeProvider.instances[0].sync();
 
       await waitFor(() =>
-        expect(result.current.yDoc.getXmlFragment(DOCUMENT_FRAGMENT).length).toBe(1),
+        expect(result.current.doc.yDoc.getXmlFragment(DOCUMENT_FRAGMENT).length).toBe(1),
       );
     });
 
@@ -221,19 +162,19 @@ describe("useDocumentCollaboration", () => {
       const { result } = render();
       await waitFor(() => expect(FakeProvider.instances).toHaveLength(1));
       window.dispatchEvent(new Event("offline"));
-      await waitFor(() => expect(result.current.isOffline).toBe(true));
+      await waitFor(() => expect(result.current.doc.isOffline).toBe(true));
 
       // Seeding here would be inventing a root beside whatever the real
       // document already has.
-      expect(result.current.yDoc.getXmlFragment(DOCUMENT_FRAGMENT).length).toBe(0);
+      expect(result.current.doc.yDoc.getXmlFragment(DOCUMENT_FRAGMENT).length).toBe(0);
     });
 
     it("leaves a cached document's own root alone", async () => {
       cacheDocument("doc-doc-1", "already has a root");
       const { result } = render();
 
-      await waitFor(() => expect(result.current.isHydrated).toBe(true));
-      const fragment = result.current.yDoc.getXmlFragment(DOCUMENT_FRAGMENT);
+      await waitFor(() => expect(result.current.doc.isHydrated).toBe(true));
+      const fragment = result.current.doc.yDoc.getXmlFragment(DOCUMENT_FRAGMENT);
       expect(fragment.length).toBe(1);
       expect(fragment.toJSON()).toContain("already has a root");
     });
@@ -259,10 +200,10 @@ describe("useDocumentCollaboration", () => {
 
       await waitFor(() => expect(FakeProvider.instances).toHaveLength(1));
       FakeProvider.instances[0].sync();
-      await waitFor(() => expect(result.current.isHydrated).toBe(true));
+      await waitFor(() => expect(result.current.doc.isHydrated).toBe(true));
 
       expect(result.current.descriptionReady).toBe(false);
-      expect(result.current.yDoc.getXmlFragment(DOCUMENT_FRAGMENT).length).toBe(0);
+      expect(result.current.doc.yDoc.getXmlFragment(DOCUMENT_FRAGMENT).length).toBe(0);
       expect(result.current.editor).toBeNull();
     });
 
@@ -283,7 +224,7 @@ describe("useDocumentCollaboration", () => {
       FakeProvider.instances[0].sync();
 
       await waitFor(() =>
-        expect(result.current.yDoc.getXmlFragment(DOCUMENT_FRAGMENT).length).toBe(1),
+        expect(result.current.doc.yDoc.getXmlFragment(DOCUMENT_FRAGMENT).length).toBe(1),
       );
       expect(result.current.editor).not.toBeNull();
     });

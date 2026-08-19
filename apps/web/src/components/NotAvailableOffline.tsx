@@ -1,13 +1,21 @@
 import { CloudOff } from "lucide-react";
+import type { CollabResourceType } from "@/lib/collab/room";
 
-const RESOURCE_LABEL = {
-  document: "document",
+/**
+ * How each collaborative resource is named to a user.
+ *
+ * The collaboration layer addresses a task's Yjs room as `task`, but what is
+ * unavailable to the user is its *description* — the task itself is a row they
+ * can still see. Owning that translation here is what lets every caller speak
+ * one vocabulary (`CollabResourceType`) instead of translating into a second
+ * one at the call site.
+ */
+const RESOURCE_LABEL: Record<CollabResourceType, string> = {
+  doc: "document",
   diagram: "diagram",
   spreadsheet: "spreadsheet",
-  description: "description",
-} as const;
-
-export type OfflineResource = keyof typeof RESOURCE_LABEL;
+  task: "description",
+};
 
 /**
  * What a collaborative surface shows when this device has never held the
@@ -22,7 +30,7 @@ export function NotAvailableOffline({
   resource,
   compact = false,
 }: {
-  resource: OfflineResource;
+  resource: CollabResourceType;
   /** Inline variant, for a panel rather than a page (the task sheet). */
   compact?: boolean;
 }) {

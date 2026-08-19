@@ -1,22 +1,5 @@
 NEXT STEPS:
 
-- local-first: done for collaborative content and per-resource metadata.
-  `isHydrated` in `use-collaborative-doc.ts` (no editor binds to a replica whose
-  contents we were never told), `collab/empty-document.ts` (shared empty root),
-  the **room store** in `collab/room-store.ts` + `use-room-cached.ts` (metadata
-  cached in the room's own IndexedDB database, `isLive` gating every control
-  that would mutate). Case matrix in `lib/collab/empty-document.test.ts`.
-    - [ ] the sidebar and every list page still need Convex, so offline the only
-      reachable resources are ones already open or reachable by URL. The room
-      store can't help — it is per-room and these lists aren't. Needs a
-      workspace-scoped cache plus a decision on how stale a cached tree may be.
-      Convex still ships no local persistence for web (checked 1.44, Aug 2026);
-      PowerSync's experimental Convex support moves authorization into Sync
-      Streams, which conflicts with this app's two-access-rules design
-    - [ ] offline mutations are not queued for resources loaded cold offline —
-      controls are hidden rather than offered and silently dropped. A write
-      queue is the separate, larger project if that isn't good enough
-
 - cascade delete collection phase is bounded even for batched deletes and will hit a ceiling for extremely large cascaded entities.
 
 - recurrent events in calendar
@@ -74,9 +57,30 @@ keyboard accessiblity
 - identity model refactor
     - [ ] split `users` (auth-only) from a new `profiles` table that can host synthetic / bot identities (integration bots, system actors); `creatorId`/`assigneeId`/`userId` refs point at `profiles`. Lets integrations create non-auth identities without polluting the auth surface.
 
+
+- local-first: done for collaborative content and per-resource metadata.
+  `isHydrated` in `use-collaborative-doc.ts` (no editor binds to a replica whose
+  contents we were never told), `collab/empty-document.ts` (shared empty root),
+  the **room store** in `collab/room-store.ts` + `use-room-cached.ts` (metadata
+  cached in the room's own IndexedDB database, `isLive` gating every control
+  that would mutate). Case matrix in `lib/collab/empty-document.test.ts`.
+    - [ ] the sidebar and every list page still need Convex, so offline the only
+      reachable resources are ones already open or reachable by URL. The room
+      store can't help — it is per-room and these lists aren't. Needs a
+      workspace-scoped cache plus a decision on how stale a cached tree may be.
+      Convex still ships no local persistence for web (checked 1.44, Aug 2026);
+      PowerSync's experimental Convex support moves authorization into Sync
+      Streams, which conflicts with this app's two-access-rules design
+    - [ ] offline mutations are not queued for resources loaded cold offline —
+      controls are hidden rather than offered and silently dropped. A write
+      queue is the separate, larger project if that isn't good enough
+
+
 - evaluate cross-workspace aggregates to re-introduce admin overview
 
 - external ticketing system??: 
     - connected to project
     - connected somehow to tasks
     - external ticketer can be given access to specific resources in workspaces through links (attach to ticket??)
+
+
