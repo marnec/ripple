@@ -266,7 +266,10 @@ describe("useCollaborativeDoc", () => {
         "fetch",
         vi.fn(async (url: string) => {
           expect(url).toBe(snapshotUrl);
-          return { arrayBuffer: async () => stored.buffer.slice(0) } as Response;
+          // `ok` is not decoration: a real Response always carries it, and the
+          // read rejects a non-OK body rather than handing an error page to
+          // `Y.applyUpdate`.
+          return { ok: true, arrayBuffer: async () => stored.buffer.slice(0) } as Response;
         }),
       );
 

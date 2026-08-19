@@ -21,6 +21,7 @@ import {
 } from "@/lib/collab/connection-policy";
 import type { CollabRoom } from "@/lib/collab/room";
 import { createRoomStore, type RoomStore } from "@/lib/collab/room-store";
+import { isKnowledge, readStoredState } from "@/lib/collab/stored-state";
 import { guardAuthFailure } from "@/lib/yjs-auth-guard";
 
 /** How long a provider may take to sync before we show the offline state. */
@@ -437,24 +438,24 @@ export function useCollaborativeDoc({
 
     let cancelled = false;
     void (async () => {
-      try {
-        const stored = await convex.query(api.snapshots.getStoredState, {
-          resourceType: snapshotResourceType,
-          resourceId: snapshotResourceId,
-        });
-        if (cancelled) return;
-        if (stored.status === "unavailable") return;
-        if (stored.status === "stored") {
-          const buffer = await (await fetch(stored.url)).arrayBuffer();
-          if (cancelled) return;
-          Y.applyUpdate(yDoc, new Uint8Array(buffer), SNAPSHOT_ORIGIN);
-        }
-        setStoredStateKnown(true);
-      } catch (error) {
-        console.error("Failed to read the stored state for this room:", error);
+      const stored = await readStoredState(
+        (args) => convex.query(api.snapshots.getStoredState, args),
+        { resourceType: snapshotResourceType, resourceId: snapshotResourceId },
+      );
+      if (cancelled) return;
+
+      if (stored.status === "failed") {
+        console.error("Failed to read the stored state for this room:", stored.error);
         // Let a later attempt (a reconnect, a different room) try again.
-        if (!cancelled) snapshotAttemptedRef.current = null;
+        // `unavailable` deliberately does not do this: it is an answer.
+        snapshotAttemptedRef.current = null;
+        return;
       }
+      if (!isKnowledge(stored)) return;
+      if (stored.status === "content") {
+        Y.applyUpdate(yDoc, stored.update, SNAPSHOT_ORIGIN);
+      }
+      setStoredStateKnown(true);
     })();
 
     return () => {
