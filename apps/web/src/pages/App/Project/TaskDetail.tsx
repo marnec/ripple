@@ -227,7 +227,7 @@ export function TaskDescriptionSection({
             awaitingSeed={detail.awaitingSeed}
             provider={detail.linkedProvider}
             editor={detail.editor}
-            isConnected={detail.isConnected}
+            sync={detail.sync}
             remoteUsers={detail.remoteUsers}
             currentUser={detail.currentUser}
           />

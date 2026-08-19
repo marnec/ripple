@@ -3,6 +3,7 @@ import {
   connectionStatus,
   initialConnectionState,
   reduceConnection,
+  syncState,
   type ConnectionEvent,
   type ConnectionState,
 } from "./connection-policy";
@@ -274,5 +275,42 @@ describe("connection status", () => {
       isConnecting: true,
       isOffline: false,
     });
+  });
+});
+
+describe("sync state", () => {
+  const status = (phase: "connected" | "connecting" | "offline") => ({
+    isConnected: phase === "connected",
+    isConnecting: phase === "connecting",
+    isOffline: phase === "offline",
+  });
+
+  it("names each of the policy's three outcomes", () => {
+    expect(syncState(status("connected"))).toBe("connected");
+    expect(syncState(status("connecting"))).toBe("connecting");
+    expect(syncState(status("offline"))).toBe("offline");
+  });
+
+  it("outranks a live socket when the sync layer is degraded", () => {
+    // A connected socket carrying nothing is the more misleading of the two:
+    // the user would read the green dot as "my edits are shared".
+    expect(syncState(status("connected"), { degraded: true })).toBe("error");
+    expect(syncState(status("offline"), { degraded: true })).toBe("error");
+  });
+
+  it("says connecting, not offline, before anything has been attempted", () => {
+    // The regression this whole type exists to prevent: a caller that could
+    // only supply `isConnected` rendered a hard offline verdict here.
+    expect(syncState(connectionStatus(initialConnectionState()))).toBe(
+      "connecting",
+    );
+  });
+
+  it("says offline once the policy has given up", () => {
+    const state = reduceConnection(initialConnectionState(), {
+      type: "browser-offline",
+      at: 1_000,
+    }).state;
+    expect(syncState(connectionStatus(state))).toBe("offline");
   });
 });

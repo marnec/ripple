@@ -16,7 +16,8 @@ import { useRecordVisit } from "@/hooks/use-record-visit";
 import { useResourceDoc } from "@/hooks/use-collab-session";
 import { useRoomCached } from "@/hooks/use-room-cached";
 import type { CollaborativeDoc } from "@/hooks/use-collaborative-doc";
-import { ConnectionStatus } from "@/pages/App/Document/ConnectionStatus";
+import { syncState } from "@/lib/collab/connection-policy";
+import { SyncIndicator } from "@/components/SyncIndicator";
 import { ResourceDeleted } from "@/pages/ResourceDeleted";
 
 /**
@@ -184,11 +185,7 @@ export function CollaborativeSurface<TMeta extends SurfaceMeta>({
         </div>
         {centre}
         <div className="flex h-8 items-center gap-3">
-          <ConnectionStatus
-            isConnected={doc.isConnected}
-            isConnecting={doc.isConnecting}
-            hasSyncError={syncDegraded}
-          />
+          <SyncIndicator state={syncState(doc, { degraded: syncDegraded })} />
           {doc.isConnected && activeUsers?.(doc.awareness)}
           {isLive && meta && (
             <BacklinksButton

@@ -253,3 +253,38 @@ function recreate(
     ],
   };
 }
+
+/**
+ * What a surface tells the user about its room, as one value.
+ *
+ * `ConnectionStatus` above is the *policy's* output — three independent
+ * booleans, because the reducer's phases and the sync layer's health are
+ * separate questions. This is the *indicator's* input, and it is deliberately
+ * a single closed set: an indicator that took the booleans made every caller
+ * re-derive which combinations exist, and a caller that supplied only
+ * `isConnected` silently rendered a hard offline verdict while an attempt was
+ * still in flight.
+ */
+export type SyncState =
+  /** Synced with the room; edits are being shared. */
+  | "connected"
+  /** An attempt is in flight. Not a verdict — do not say "offline" yet. */
+  | "connecting"
+  /** Nothing can reach the room. Editing continues against the local copy. */
+  | "offline"
+  /**
+   * The socket may well be up, but the sync layer is erroring: edits apply
+   * locally and are not reliably shared. Outranks `connected`, because a live
+   * socket carrying nothing is the more misleading of the two.
+   */
+  | "error";
+
+export function syncState(
+  status: ConnectionStatus,
+  { degraded = false }: { degraded?: boolean } = {},
+): SyncState {
+  if (degraded) return "error";
+  if (status.isConnected) return "connected";
+  if (status.isConnecting) return "connecting";
+  return "offline";
+}

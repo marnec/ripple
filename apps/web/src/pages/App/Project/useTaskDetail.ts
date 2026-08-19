@@ -11,6 +11,7 @@ import { createTaskPatch, taskDetailLoadState } from "./taskDetailModel";
 import { en as bnEn } from "@blocknote/core/locales";
 import { useDocumentCollaboration } from "../../../hooks/use-document-collaboration";
 import { useResourceDoc } from "../../../hooks/use-collab-session";
+import { syncState } from "@/lib/collab/connection-policy";
 import { useTaskGithubLink } from "./useTaskGithubLink";
 import { useTaskEditTracking } from "./useTaskEditTracking";
 
@@ -77,7 +78,7 @@ export function useTaskDetail({
     resourceId: taskId ?? "",
     enabled: !!taskId && collaborationEnabled,
   });
-  const { isConnected, isOffline, isHydrated, provider, yDoc } = doc;
+  const { isOffline, isHydrated, provider, yDoc } = doc;
 
   // Collaborative editor - Yjs handles sync automatically
   const { editor, descriptionReady, awaitingSeed } = useDocumentCollaboration({
@@ -162,7 +163,10 @@ export function useTaskDetail({
     editor,
     descriptionReady,
     awaitingSeed,
-    isConnected,
+    // The whole sync state, not just `isConnected`: the toolbar used to be
+    // handed one boolean and so showed a hard offline verdict while a
+    // connection attempt was still in flight.
+    sync: syncState(doc),
     // The description has never been on this device and nothing can reach it.
     unavailableOffline: isOffline && !isHydrated,
     linkedProvider,

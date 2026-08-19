@@ -1,6 +1,7 @@
 import { getUserColor } from "@/lib/user-colors";
 import { ActiveUsers } from "@/pages/App/Document/ActiveUsers";
-import { ConnectionStatus } from "@/pages/App/Document/ConnectionStatus";
+import { SyncIndicator } from "@/components/SyncIndicator";
+import type { SyncState } from "@/lib/collab/connection-policy";
 import type { RemoteUser } from "@/hooks/use-cursor-awareness";
 import type { Id } from "@convex/_generated/dataModel";
 import { SeedingDescriptionNotice } from "./SeedingDescriptionNotice";
@@ -18,7 +19,7 @@ type Props = {
    * `editor.document` / `editor.blocksToMarkdownLossy`.
    */
   editor: unknown;
-  isConnected: boolean;
+  sync: SyncState;
   remoteUsers: RemoteUser[];
   currentUser: { _id: Id<"users">; name?: string } | null | undefined;
 };
@@ -35,7 +36,7 @@ export function TaskDescriptionToolbar({
   awaitingSeed,
   provider,
   editor,
-  isConnected,
+  sync,
   remoteUsers,
   currentUser,
 }: Props) {
@@ -45,8 +46,8 @@ export function TaskDescriptionToolbar({
       {editor != null && (
         <TaskDescriptionSyncButton taskId={taskId} editor={editor} />
       )}
-      <ConnectionStatus isConnected={isConnected} />
-      {isConnected && (
+      <SyncIndicator state={sync} />
+      {sync === "connected" && (
         <ActiveUsers
           remoteUsers={remoteUsers}
           currentUser={

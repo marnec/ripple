@@ -46,13 +46,9 @@ vi.mock("@/pages/ResourceDeleted", () => ({
     <div data-testid="deleted">{resourceType}</div>
   ),
 }));
-vi.mock("@/pages/App/Document/ConnectionStatus", () => ({
-  ConnectionStatus: ({ isConnected, isConnecting }: Record<string, boolean | undefined>) => (
-    <div
-      data-testid="status"
-      data-connected={String(!!isConnected)}
-      data-connecting={String(!!isConnecting)}
-    />
+vi.mock("@/components/SyncIndicator", () => ({
+  SyncIndicator: ({ state }: { state: string }) => (
+    <div data-testid="status" data-state={state} />
   ),
 }));
 
@@ -202,7 +198,6 @@ describe("CollaborativeSurface", () => {
 
     await waitFor(() => expect(screen.getByTestId("status")).toBeInTheDocument());
     const status = screen.getByTestId("status");
-    expect(status).toHaveAttribute("data-connected", "false");
-    expect(status).toHaveAttribute("data-connecting", "true");
+    expect(status).toHaveAttribute("data-state", "connecting");
   });
 });

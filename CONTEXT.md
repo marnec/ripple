@@ -60,6 +60,18 @@ whose contents are unknown. A task's description is not one: it has no header
 and no settings route, so it opens its own room.
 _Avoid_: editor page, doc view, resource page, resource shell
 
+**Sync state**:
+What a surface tells the user about its room, as one value out of a closed set —
+`connected`, `connecting`, `offline`, `error` — derived by `syncState` from the
+connection policy's output plus whether the sync layer is degraded. It is one
+value rather than a set of booleans because `connecting` is not a verdict: a
+caller that could only supply "connected" showed a hard offline icon while an
+attempt was still in flight, which is what the task description did. `error`
+outranks `connected`, since a live socket carrying nothing is the more
+misleading of the two. Distinct from a [hydrated replica](#), which is about
+whether there is anything to *show*, not about the socket.
+_Avoid_: connection status, online state, connected flag
+
 **Empty-document root**:
 The canonical `blockGroup` a BlockNote document starts life with, shipped as
 one fixed-client-id Yjs update (`collab/empty-document.ts`) so that every
