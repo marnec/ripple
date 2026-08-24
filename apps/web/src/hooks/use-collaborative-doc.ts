@@ -137,6 +137,22 @@ export function useCollaborativeDoc({
 
   const providerRef = useRef<YProvider | null>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /**
+   * The connection effect's `report`, so the browser-connectivity effect can
+   * reach it instead of owning a second copy.
+   *
+   * `report` closes over the per-attempt `cancelled` and `settled` flags, so it
+   * cannot be hoisted out of that effect without turning both into refs. The
+   * connectivity listeners outlive any one provider, so they cannot hold a copy
+   * either — and when they did, that copy was a second interpreter: it carried
+   * out two of the four effect kinds, discarded `reconnect-after`'s delay, and
+   * could not set `settled`, so a provider it tore down went on reporting its
+   * own death.
+   *
+   * Null whenever no connection attempt is live, which is exactly when a
+   * connectivity event has nothing to act on.
+   */
+  const reportRef = useRef<((event: ConnectionEvent) => void) | null>(null);
   // The session object is rebuilt on every render by its caller; the connection
   // effect must key on `session.key`, not on that identity, or it would tear
   // the socket down every render.
@@ -249,6 +265,11 @@ export function useCollaborativeDoc({
       runEffects(effects, target);
     };
 
+    // Reachable from the connectivity effect from here on. Set synchronously,
+    // before `connect()` goes async, so an `online` event arriving while the
+    // first token is still being minted is not dropped.
+    reportRef.current = report;
+
     const connect = async () => {
       if (!navigator.onLine) {
         report({ type: "browser-offline", at: Date.now() });
@@ -343,6 +364,7 @@ export function useCollaborativeDoc({
 
     return () => {
       cancelled = true;
+      reportRef.current = null;
       if (timeoutRef.current) {
         clearTimeout(timeoutRef.current);
         timeoutRef.current = null;
@@ -358,27 +380,17 @@ export function useCollaborativeDoc({
   }, [key, enabled, yDoc, generation]);
 
   // Browser connectivity is independent of the socket: DevTools offline mode
-  // and airplane mode change it without ever closing the WebSocket.
+  // and airplane mode change it without ever closing the WebSocket. That is why
+  // these listeners are not keyed on the provider — but reporting is still the
+  // connection effect's job, so they hand the event over rather than deciding
+  // anything themselves. See `reportRef`.
   useEffect(() => {
     if (!enabled) return;
 
-    const report = (event: ConnectionEvent) => {
-      const { state: next, effects } = reduceConnection(policyRef.current, event);
-      policyRef.current = next;
-      dispatch(event);
-      // The stale provider's socket is dead but the browser never closed it.
-      if (effects.some((e) => e.type === "teardown")) {
-        detach(providerRef.current);
-        providerRef.current = null;
-        setProvider(null);
-      }
-      if (effects.some((e) => e.type === "reconnect-after")) {
-        setGeneration((n) => n + 1);
-      }
-    };
-
-    const goOffline = () => report({ type: "browser-offline", at: Date.now() });
-    const goOnline = () => report({ type: "browser-online", at: Date.now() });
+    const goOffline = () =>
+      reportRef.current?.({ type: "browser-offline", at: Date.now() });
+    const goOnline = () =>
+      reportRef.current?.({ type: "browser-online", at: Date.now() });
 
     window.addEventListener("offline", goOffline);
     window.addEventListener("online", goOnline);

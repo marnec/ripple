@@ -1,4 +1,4 @@
-import { act, renderHook, waitFor } from "@testing-library/react";
+import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { clearCollaborationTokenCache } from "@/lib/collaboration-token-cache";
 import { collabRoom } from "@/lib/collab/room";
@@ -46,6 +46,11 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  // Auto-cleanup only registers under vitest `globals`, which this project does
+  // not enable. Without this every hook an earlier test rendered stays mounted,
+  // and each one keeps a live `window` connectivity listener — so one
+  // `online` event reaches all of them and rebuilds every provider in the file.
+  cleanup();
   vi.restoreAllMocks();
 });
 
@@ -433,6 +438,145 @@ describe("useCollaborativeDoc", () => {
       act(() => latest?.connectAndSync());
       expect(result.current.isConnected).toBe(true);
       expect(result.current.isOffline).toBe(false);
+    });
+  });
+  /**
+   * Browser connectivity, which reaches the policy through a different effect
+   * than every other event — and used to reach a different interpreter too.
+   *
+   * That copy carried out `teardown` and `reconnect-after` and ignored the
+   * other two kinds, dropped the reconnect delay, and could not set the
+   * `settled` flag that stops a torn-down provider from reporting its own
+   * death. None of it had a test: no test in this repo had ever dispatched a
+   * window `online` event.
+   */
+  describe("when the browser's connectivity changes", () => {
+    function setOnline(online: boolean) {
+      Object.defineProperty(window.navigator, "onLine", {
+        value: online,
+        configurable: true,
+      });
+    }
+
+    beforeEach(() => setOnline(true));
+    afterEach(() => setOnline(true));
+
+    it("reports offline without tearing the provider down", async () => {
+      const { result } = renderHook(() => useCollaborativeDoc({ session: memberSession() }));
+
+      await waitFor(() => expect(FakeProvider.instances).toHaveLength(1));
+      const provider = FakeProvider.instances[0];
+      act(() => provider.connectAndSync());
+      await waitFor(() => expect(result.current.isConnected).toBe(true));
+
+      act(() => {
+        setOnline(false);
+        window.dispatchEvent(new Event("offline"));
+      });
+
+      await waitFor(() => expect(result.current.isOffline).toBe(true));
+      // `browser-offline` produces no effects at all — the socket may well
+      // still be open, and the policy is only recording what the browser said.
+      expect(provider.destroyed).toBe(false);
+      expect(FakeProvider.instances).toHaveLength(1);
+    });
+
+    it("tears the stale provider down and builds a new one when connectivity returns", async () => {
+      vi.useFakeTimers();
+      try {
+        const { result } = renderHook(() =>
+          useCollaborativeDoc({ session: memberSession() }),
+        );
+
+        await act(async () => {});
+        expect(FakeProvider.instances).toHaveLength(1);
+        const stale = FakeProvider.instances[0];
+        act(() => stale.connectAndSync());
+        expect(result.current.isConnected).toBe(true);
+
+        act(() => {
+          setOnline(false);
+          window.dispatchEvent(new Event("offline"));
+        });
+        expect(result.current.isOffline).toBe(true);
+
+        act(() => {
+          setOnline(true);
+          window.dispatchEvent(new Event("online"));
+        });
+
+        // The browser never closed the socket, so nothing else would have.
+        expect(stale.destroyed).toBe(true);
+
+        // `reconnect-after` runs through the interpreter's timer now, rather
+        // than bumping the generation synchronously — delayMs is 0, so one
+        // macrotask.
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(0);
+        });
+
+        expect(FakeProvider.instances).toHaveLength(2);
+        expect(FakeProvider.instances[1].destroyed).toBe(false);
+
+        act(() => FakeProvider.instances[1].connectAndSync());
+        expect(result.current.isConnected).toBe(true);
+        expect(result.current.isOffline).toBe(false);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("stops a provider it tore down from reporting its own death", async () => {
+      vi.useFakeTimers();
+      try {
+        const { result } = renderHook(() =>
+          useCollaborativeDoc({ session: memberSession() }),
+        );
+
+        await act(async () => {});
+        const stale = FakeProvider.instances[0];
+        act(() => stale.connectAndSync());
+
+        act(() => {
+          setOnline(true);
+          window.dispatchEvent(new Event("online"));
+        });
+
+        // The teardown marks the attempt settled, so this late frame from the
+        // destroyed provider is ignored. Without that flag it was reported,
+        // and a `status-disconnected` arriving here counts toward the storm
+        // detection that decides a room is refusing us.
+        act(() => stale.close());
+
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(0);
+        });
+
+        expect(FakeProvider.instances).toHaveLength(2);
+        act(() => FakeProvider.instances[1].connectAndSync());
+        expect(result.current.isConnected).toBe(true);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("ignores connectivity events once the room is disabled", async () => {
+      const { rerender } = renderHook(
+        ({ enabled }) => useCollaborativeDoc({ session: memberSession(), enabled }),
+        { initialProps: { enabled: true } },
+      );
+
+      await waitFor(() => expect(FakeProvider.instances).toHaveLength(1));
+      rerender({ enabled: false });
+
+      act(() => {
+        setOnline(true);
+        window.dispatchEvent(new Event("online"));
+      });
+      await act(async () => {});
+
+      // No live attempt means nothing to report to, and nothing to rebuild.
+      expect(FakeProvider.instances).toHaveLength(1);
     });
   });
 });
