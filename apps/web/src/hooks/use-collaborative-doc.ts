@@ -1,5 +1,5 @@
 import { useConvex } from "convex/react";
-import { useEffect, useMemo, useReducer, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import YProvider from "y-partyserver/provider";
 import { IndexeddbPersistence } from "y-indexeddb";
 import { Awareness } from "y-protocols/awareness";
@@ -18,6 +18,7 @@ import {
   reduceConnection,
   type ConnectionEffect,
   type ConnectionEvent,
+  type ConnectionState,
 } from "@/lib/collab/connection-policy";
 import type { CollabRoom } from "@/lib/collab/room";
 import { createRoomStore, type RoomStore } from "@/lib/collab/room-store";
@@ -106,12 +107,31 @@ export function useCollaborativeDoc({
   session: CollabSession;
   enabled?: boolean;
 }): CollaborativeDoc {
-  const [state, dispatch] = useReducer(applyEvent, undefined, initialConnectionState);
+  const [state, setState] = useState(initialConnectionState);
   // React owns `state` for rendering; this mirror is the policy's own view of
   // itself, so a burst of events in one tick (a socket that opens and syncs
   // synchronously) each sees the previous one's result rather than the state
   // as of the last render. Only ever touched from callbacks, never in render.
   const policyRef = useRef(state);
+
+  /**
+   * The one way this hook's connection state changes.
+   *
+   * Both writes, together, in one place: `policyRef` is what the next event
+   * reduces from and `state` is what the surface renders, so a caller that did
+   * one without the other would leave the two describing different rooms. This
+   * replaced a `useReducer` whose reducer re-ran `reduceConnection` on the same
+   * event a second time, purely to produce a state the caller had already
+   * computed — and threw that run's effects away.
+   *
+   * Built once and never rebuilt, so effects can depend on it without re-running:
+   * it closes over nothing but `policyRef` and a `useState` setter, both of
+   * which are stable for the life of the hook.
+   */
+  const [publish] = useState(() => (next: ConnectionState) => {
+    policyRef.current = next;
+    setState(next);
+  });
   const [provider, setProvider] = useState<YProvider | null>(null);
   const [isCacheLoaded, setIsCacheLoaded] = useState(false);
   /** The offline cache replayed and it was not empty. */
@@ -185,9 +205,11 @@ export function useCollaborativeDoc({
   // verdict and never connect. Declared before the connection effect so it
   // runs first on a key change.
   useEffect(() => {
-    policyRef.current = initialConnectionState();
-    dispatch({ type: "reset", at: Date.now() });
-  }, [key]);
+    // The policy exports this state as a value, so there is nothing to reduce:
+    // `reset` is the one transition whose result does not depend on what came
+    // before it.
+    publish(initialConnectionState());
+  }, [key, publish]);
 
   // Offline cache. Deliberately independent of the provider: content from a
   // previous visit should appear without waiting on a socket.
@@ -260,8 +282,7 @@ export function useCollaborativeDoc({
     const report = (event: ConnectionEvent, target: YProvider | null = null) => {
       if (cancelled) return;
       const { state: next, effects } = reduceConnection(policyRef.current, event);
-      policyRef.current = next;
-      dispatch(event);
+      publish(next);
       runEffects(effects, target);
     };
 
@@ -376,8 +397,8 @@ export function useCollaborativeDoc({
     // `generation` is the reconnect trigger: bumping it rebuilds the provider.
     // Note what is NOT here — the connection status. Keying this effect on
     // whether we are connected is what made the guest hook destroy and rebuild
-    // its provider on every status flip.
-  }, [key, enabled, yDoc, generation]);
+    // its provider on every status flip. `publish` never changes identity.
+  }, [key, enabled, yDoc, generation, publish]);
 
   // Browser connectivity is independent of the socket: DevTools offline mode
   // and airplane mode change it without ever closing the WebSocket. That is why
@@ -500,9 +521,6 @@ export function useCollaborativeDoc({
   };
 }
 
-function applyEvent(state: Parameters<typeof reduceConnection>[0], event: ConnectionEvent) {
-  return reduceConnection(state, event).state;
-}
 
 /**
  * Stop a provider without leaving a ghost behind: clear awareness first so

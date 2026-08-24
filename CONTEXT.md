@@ -71,6 +71,24 @@ A task's description is not a surface: it has no header and no settings route,
 so it opens its own room.
 _Avoid_: editor page, doc view, resource page, resource shell
 
+**Connection policy**:
+How a collaborative room decides whether to keep trying, as a pure reducer
+(`collab/connection-policy.ts`): `reduceConnection(state, event)` returns the
+next state *and* a list of **connection effects** — clear the connect timeout,
+invalidate the token, tear the provider down, reconnect after N ms. Backoff,
+retry budget and storm detection live there; timers, sockets and React do not,
+so its interface is the test surface (plain vitest, no jsdom).
+`useCollaborativeDoc` is the imperative shell, and the invariant that matters is
+that there is exactly **one** of it: one `runEffects` that carries out all four
+kinds, and one `publish` through which every state change passes. Both had two
+copies. The browser-connectivity effect owned a second interpreter handling two
+kinds — it could not set the `settled` flag that stops a torn-down provider
+reporting its own death — and a `useReducer` re-ran the reducer on each event to
+recompute a state the caller already had, discarding that run's effects. Events
+from outside the connection effect reach the one interpreter through `reportRef`
+rather than by growing a copy.
+_Avoid_: reconnect logic, connection manager, retry handler, socket state
+
 **Sync state**:
 What a surface tells the user about its room, as one value out of a closed set —
 `connected`, `connecting`, `offline`, `error` — derived by `syncState` from the
