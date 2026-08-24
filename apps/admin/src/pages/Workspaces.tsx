@@ -29,7 +29,14 @@ import { fmtDate, fmtNum } from "@/lib/format";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 import { useMutation, useQuery } from "convex/react";
-import { ArrowLeftIcon, ChevronRightIcon, CrownIcon, PlusIcon, UserPlusIcon } from "lucide-react";
+import {
+  ArrowLeftIcon,
+  ChevronRightIcon,
+  CrownIcon,
+  HistoryIcon,
+  PlusIcon,
+  UserPlusIcon,
+} from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -263,6 +270,12 @@ export function WorkspaceDetailPage({ workspaceId }: { workspaceId: Id<"workspac
           <div className="mt-1 font-mono text-[11px] text-muted-foreground/70">{ws._id}</div>
         </div>
         <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            onClick={() => navigate(`/workspaces/${ws._id}/activity`)}
+          >
+            <HistoryIcon /> Activity
+          </Button>
           <Button variant="outline" onClick={() => setInviting(true)}>
             <UserPlusIcon /> Invite member
           </Button>

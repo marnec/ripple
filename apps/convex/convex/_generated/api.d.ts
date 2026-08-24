@@ -24,6 +24,39 @@ export declare const api: {
     access: {
       amIAdmin: FunctionReference<"query", "public", {}, boolean>;
     };
+    activity: {
+      list: FunctionReference<
+        "query",
+        "public",
+        {
+          limit?: number;
+          resourceTypes?: Array<string>;
+          workspaceId: Id<"workspaces">;
+        },
+        {
+          entries: Array<{
+            _id: string;
+            action: string;
+            actorEmail?: string;
+            actorId?: string;
+            actorImage?: string;
+            actorIsUser: boolean;
+            actorName: string;
+            cascadeSummary?: string;
+            newValue?: string;
+            oldValue?: string;
+            resourceId?: string;
+            resourceName?: string;
+            resourceType?: string;
+            severity: "info" | "warning" | "error" | "critical";
+            source?: string;
+            timestamp: number;
+          }>;
+          hasMore: boolean;
+          workspaceName: string | null;
+        }
+      >;
+    };
     invites: {
       create: FunctionReference<
         "mutation",

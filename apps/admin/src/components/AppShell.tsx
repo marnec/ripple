@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 import { InvitesPage } from "@/pages/Invites";
 import { JobsPage } from "@/pages/Jobs";
 import { UserDetailPage, UsersPage } from "@/pages/Users";
+import { WorkspaceActivityPage } from "@/pages/WorkspaceActivity";
 import { WorkspaceDetailPage, WorkspacesPage } from "@/pages/Workspaces";
 import { useAuthActions } from "@convex-dev/auth/react";
 import { api } from "@convex/_generated/api";
@@ -73,7 +74,7 @@ export function AppShell() {
 }
 
 function Routed({ segments }: { segments: string[] }) {
-  const [top, id] = segments;
+  const [top, id, sub] = segments;
   switch (top) {
     // `undefined` is the bare "#/" that AppShell is about to rewrite to HOME;
     // rendering the same page for both means no blank frame and no remount.
@@ -81,10 +82,11 @@ function Routed({ segments }: { segments: string[] }) {
     case "users":
       return id ? <UserDetailPage userId={id as Id<"users">} /> : <UsersPage />;
     case "workspaces":
-      return id ? (
-        <WorkspaceDetailPage workspaceId={id as Id<"workspaces">} />
+      if (!id) return <WorkspacesPage />;
+      return sub === "activity" ? (
+        <WorkspaceActivityPage workspaceId={id as Id<"workspaces">} />
       ) : (
-        <WorkspacesPage />
+        <WorkspaceDetailPage workspaceId={id as Id<"workspaces">} />
       );
     case "invites":
       return <InvitesPage />;
