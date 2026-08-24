@@ -2,6 +2,9 @@ NEXT STEPS:
 
 - cascade delete collection phase is bounded even for batched deletes and will hit a ceiling for extremely large cascaded entities.
 
+- first to join a call, btn should show "create"
+- option to snapshot diagram reference in doc like for tables
+
 - recurrent events in calendar
 
 - add a dependency view to tasks
