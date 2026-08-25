@@ -1860,21 +1860,6 @@ export declare const api: {
         userIds: Array<string>;
       }>
     >;
-    listForMessages: FunctionReference<
-      "query",
-      "public",
-      { messageIds: Array<Id<"messages">> },
-      Record<
-        string,
-        Array<{
-          count: number;
-          currentUserReacted: boolean;
-          emoji: string;
-          emojiNative: string;
-          userIds: Array<string>;
-        }>
-      >
-    >;
     toggle: FunctionReference<
       "mutation",
       "public",
@@ -1920,6 +1905,13 @@ export declare const api: {
             { image?: string; name: string | null }
           >;
           plainText: string;
+          reactions: Array<{
+            count: number;
+            currentUserReacted: boolean;
+            emoji: string;
+            emojiNative: string;
+            userIds: Array<string>;
+          }>;
           replyTo: null | {
             author: string;
             deleted: boolean;
@@ -1982,6 +1974,13 @@ export declare const api: {
             { image?: string; name: string | null }
           >;
           plainText: string;
+          reactions: Array<{
+            count: number;
+            currentUserReacted: boolean;
+            emoji: string;
+            emojiNative: string;
+            userIds: Array<string>;
+          }>;
           replyTo: null | {
             author: string;
             deleted: boolean;
@@ -2034,6 +2033,13 @@ export declare const api: {
         >;
         mentionedUsers: Record<string, { image?: string; name: string | null }>;
         plainText: string;
+        reactions: Array<{
+          count: number;
+          currentUserReacted: boolean;
+          emoji: string;
+          emojiNative: string;
+          userIds: Array<string>;
+        }>;
         replyTo: null | {
           author: string;
           deleted: boolean;

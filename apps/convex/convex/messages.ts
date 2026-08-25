@@ -9,13 +9,14 @@ import { getUserDisplayName } from "@ripple/shared/displayName";
 import { isMessageEditable } from "@ripple/shared/constants";
 import { DatabaseReader } from "./_generated/server";
 import { requireChannelAccess, filterChannelRecipients } from "./authHelpers";
+import { groupReactions, reactionGroupValidator } from "./messageReactions";
 import { notify } from "./utils/notify";
 import { normalizeIds } from "./utils/ids";
 
 /**
  * Ceiling on the caller-supplied row counts of `search` and
  * `getMessageContext`. `messages.body` is BlockNote JSON — the largest hot
- * column in the schema — and every returned row then goes through six
+ * column in the schema — and every returned row then goes through seven
  * enrichment passes, so an unclamped arg turned a deep-link query into a
  * whole-channel read. Deep-links ask for 10 and search for 20; 50 leaves room
  * without leaving the arg open.
@@ -68,6 +69,7 @@ const enrichedMessageValidator = v.object({
   mentionedProjects: mentionedProjectsValidator,
   mentionedResources: mentionedResourcesValidator,
   mentionedEvents: mentionedEventsValidator,
+  reactions: v.array(reactionGroupValidator),
 });
 
 /**
@@ -474,21 +476,67 @@ async function enrichWithReplyTo<
  * Shared by `list`, `search`, and `getMessageContext` so the chat read path has
  * one enrichment definition rather than three drifting copies.
  */
+/**
+ * Reactions travel with the message, like every other per-message relation
+ * here. They used to be a second client query keyed by the ids `messages.list`
+ * had just returned — args that change on every new message, so Convex
+ * resubscribed and handed the client `undefined` for a round trip, collapsing
+ * every reaction chip in the channel on every send. `currentUserReacted` is the
+ * only per-viewer part, and the callers have already resolved the viewer to
+ * check channel access.
+ *
+ * One `by_message` read per message, the same count the batch query did — the
+ * reads moved, they did not grow. Unlike that query this one is bounded: it
+ * runs inside `messages.list`, so an unbounded `.collect()` here would be
+ * `MESSAGE_READ_MAX` unbounded collects per subscription, which is the shape
+ * `no-collect-in-query` exists to stop. `REACTION_READ_MAX` rows per message
+ * caps the whole pass at 50 x 200.
+ *
+ * Past that cap a message's counts undercount. Slack keeps `count` exact and
+ * truncates only the user list, but it can afford to because the count is a
+ * stored aggregate; deriving it here means the rows are the count. 200 distinct
+ * reaction rows on one message is far outside what a workspace chat produces,
+ * and the alternative is a query that throws at 32k documents and takes the
+ * channel down with it.
+ */
+const REACTION_READ_MAX = 200;
+
+async function enrichWithReactions<T extends { _id: Id<"messages"> }>(
+  ctx: { db: DatabaseReader },
+  messages: T[],
+  currentUserId: Id<"users">,
+) {
+  const perMessage = await Promise.all(
+    messages.map((m) =>
+      ctx.db
+        .query("messageReactions")
+        .withIndex("by_message", (q) => q.eq("messageId", m._id))
+        .take(REACTION_READ_MAX),
+    ),
+  );
+  return messages.map((m, i) => ({
+    ...m,
+    reactions: groupReactions(perMessage[i], currentUserId),
+  }));
+}
+
 async function enrichMessages<
-  T extends { body: string; channelId: Id<"channels">; replyToId?: Id<"messages"> },
+  T extends { _id: Id<"messages">; body: string; channelId: Id<"channels">; replyToId?: Id<"messages"> },
 >(
   ctx: { db: DatabaseReader },
   messages: T[],
   userMap: Map<string, Doc<"users"> | null>,
   workspaceId: Id<"workspaces">,
+  currentUserId: Id<"users">,
 ) {
   const withReplyTo = await enrichWithReplyTo(ctx, messages, userMap);
   const withUsers = await enrichWithMentionedUsers(ctx, withReplyTo, userMap);
-  const [tasks, projects, resources, events] = await Promise.all([
+  const [tasks, projects, resources, events, reactions] = await Promise.all([
     enrichWithMentionedTasks(ctx, withUsers, workspaceId),
     enrichWithMentionedProjects(ctx, withUsers, workspaceId),
     enrichWithMentionedResources(ctx, withUsers, workspaceId),
     enrichWithMentionedEvents(ctx, withUsers, workspaceId),
+    enrichWithReactions(ctx, withUsers, currentUserId),
   ]);
   return withUsers.map((m, i) => ({
     ...m,
@@ -496,6 +544,7 @@ async function enrichMessages<
     mentionedProjects: projects[i].mentionedProjects,
     mentionedResources: resources[i].mentionedResources,
     mentionedEvents: events[i].mentionedEvents,
+    reactions: reactions[i].reactions,
   }));
 }
 
@@ -509,7 +558,7 @@ export const list = query({
     pageStatus: v.optional(v.union(v.literal("SplitRecommended"), v.literal("SplitRequired"), v.null())),
   }),
   handler: async (ctx, { channelId, paginationOpts }) => {
-    const { channel } = await requireChannelAccess(ctx, channelId);
+    const { channel, userId } = await requireChannelAccess(ctx, channelId);
 
     // Grab the most recent messages
     const messagesPage = await ctx.db
@@ -529,7 +578,7 @@ export const list = query({
       return { ...message, author: getUserDisplayName(user), authorImage: user?.image };
     });
 
-    const page = await enrichMessages(ctx, messagesWithAuthor, userMap, channel.workspaceId);
+    const page = await enrichMessages(ctx, messagesWithAuthor, userMap, channel.workspaceId, userId);
 
     return {
       ...messagesPage,
@@ -735,7 +784,7 @@ export const search = query({
   },
   returns: v.array(enrichedMessageValidator),
   handler: async (ctx, { channelId, searchTerm, limit = 20 }) => {
-    const { channel } = await requireChannelAccess(ctx, channelId);
+    const { channel, userId } = await requireChannelAccess(ctx, channelId);
 
     // Clamped like every other bounded read in this backend (workspaceTimeline,
     // nodes.suggest, tasks.suggest, calendarEvents' mention autocomplete): the
@@ -762,7 +811,7 @@ export const search = query({
       return { ...message, author: getUserDisplayName(user), authorImage: user?.image };
     });
 
-    return enrichMessages(ctx, searchResultsWithAuthor, userMap, channel.workspaceId);
+    return enrichMessages(ctx, searchResultsWithAuthor, userMap, channel.workspaceId, userId);
   },
 });
 
@@ -780,7 +829,7 @@ export const getMessageContext = query({
     const targetMessage = await ctx.db.get(messageId);
     if (!targetMessage) throw new ConvexError(`Message not found`);
 
-    const { channel } = await requireChannelAccess(ctx, targetMessage.channelId);
+    const { channel, userId } = await requireChannelAccess(ctx, targetMessage.channelId);
 
     // See `search` above. This one takes `size` TWICE (before and after), so an
     // unclamped arg bought 2x its value in rows plus enrichment on each.
@@ -817,7 +866,7 @@ export const getMessageContext = query({
       return { ...message, author: getUserDisplayName(user), authorImage: user?.image };
     });
 
-    const page = await enrichMessages(ctx, messagesWithAuthor, userMap, channel.workspaceId);
+    const page = await enrichMessages(ctx, messagesWithAuthor, userMap, channel.workspaceId, userId);
 
     return {
       messages: page,

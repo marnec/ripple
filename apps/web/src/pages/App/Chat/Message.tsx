@@ -22,7 +22,6 @@ import { useChatContext } from "./ChatContext";
 import { MentionedUsersContext, MentionedTasksContext, MentionedProjectsContext, MentionedResourcesContext, MentionedEventsContext } from "./MentionedUsersContext";
 import { MessageReactions } from "./MessageReactions";
 import { MessageRenderer } from "./MessageRenderer";
-import { useReactions } from "./ReactionsContext";
 import { hasImageBlocks } from "./messageUtils";
 import type { GroupPosition, MessageGroupInfo } from "./messageGrouping";
 import { MessageQuotePreview } from "./MessageQuotePreview";
@@ -123,8 +122,8 @@ export function Message({ message, groupInfo = DEFAULT_GROUP_INFO, index = 0 }: 
     document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
   };
 
-  const reactions = useReactions(message._id);
-  const hasReactions = !!reactions?.length;
+  const reactions = message.reactions;
+  const hasReactions = reactions.length > 0;
 
   const blocks = JSON.parse(body);
   const messageHasImages = hasImageBlocks(blocks);
@@ -225,7 +224,7 @@ export function Message({ message, groupInfo = DEFAULT_GROUP_INFO, index = 0 }: 
                         <MessageRenderer blocks={blocks} onImageClick={handleImageClick} onDiagramOpen={handleDiagramOpen} />
                       </div>
                       <div className="flex items-end gap-3 px-2 py-1">
-                        <MessageReactions messageId={message._id} />
+                        <MessageReactions messageId={message._id} reactions={reactions} />
                         <span className={cn("ml-auto shrink-0 text-[10px] leading-none select-none", userIsAuthor ? "text-message-own-foreground/50" : "text-muted-foreground/60")}>{formattedTime}</span>
                       </div>
                     </>
@@ -233,7 +232,7 @@ export function Message({ message, groupInfo = DEFAULT_GROUP_INFO, index = 0 }: 
                     <>
                       <MessageRenderer blocks={blocks} onImageClick={handleImageClick} onDiagramOpen={handleDiagramOpen} />
                       <div className="flex items-end gap-3 pt-1 pb-1.5">
-                        <MessageReactions messageId={message._id} />
+                        <MessageReactions messageId={message._id} reactions={reactions} />
                         <span className={cn("ml-auto shrink-0 text-[10px] leading-none select-none", userIsAuthor ? "text-message-own-foreground/50" : "text-muted-foreground/60")}>{formattedTime}</span>
                       </div>
                     </>

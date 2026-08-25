@@ -466,3 +466,182 @@ describe("messages.search", () => {
     expect(results).toHaveLength(3);
   });
 });
+
+/**
+ * Reactions are part of the message payload, not a second query keyed by the
+ * ids `list` just returned. That second query's args changed every time a
+ * message arrived, so it resubscribed and the client held `undefined` for a
+ * round trip — every reaction chip in the channel unmounted and remounted on
+ * every send. These pin the join to the message so it cannot drift back out.
+ */
+describe("messages reactions enrichment", () => {
+  /** The single message in `channelId`, whichever query put it there. */
+  async function onlyMessageId(t: ReturnType<typeof createTestContext>, channelId: Id<"channels">) {
+    const msgs = await t.run((ctx) =>
+      ctx.db.query("messages").withIndex("by_channel", (q) => q.eq("channelId", channelId)).collect(),
+    );
+    return msgs[0]._id;
+  }
+
+  /** A second signed-in workspace member, with their id — `setupOtherMember` returns only the identity. */
+  async function setupSecondMember(
+    t: ReturnType<typeof createTestContext>,
+    workspaceId: Id<"workspaces">,
+  ) {
+    const { userId, asUser } = await setupAuthenticatedUser(t, {
+      name: "Second",
+      email: "second@test.com",
+    });
+    await t.run((ctx) =>
+      ctx.db.insert("workspaceMembers", { userId, workspaceId, role: WorkspaceRole.MEMBER }),
+    );
+    return { userId, asUser };
+  }
+
+  it("returns a message's reactions on the message itself", async () => {
+    const t = createTestContext();
+    const { workspaceId, userId, asUser } = await setupWorkspaceWithAdmin(t);
+    const channelId = await setupChannel(t, { workspaceId, userId });
+    await sendMessage(asUser, channelId, "React to me");
+    const messageId = await onlyMessageId(t, channelId);
+
+    await asUser.mutation(api.messageReactions.toggle, {
+      messageId,
+      emoji: "1f44d",
+      emojiNative: "👍",
+    });
+
+    const result = await asUser.query(api.messages.list, {
+      channelId,
+      paginationOpts: { cursor: null, numItems: 10 },
+    });
+
+    expect(result.page[0].reactions).toEqual([
+      {
+        emoji: "1f44d",
+        emojiNative: "👍",
+        count: 1,
+        userIds: [userId],
+        currentUserReacted: true,
+      },
+    ]);
+  });
+
+  it("gives a message with no reactions an empty array, never undefined", async () => {
+    const t = createTestContext();
+    const { workspaceId, userId, asUser } = await setupWorkspaceWithAdmin(t);
+    const channelId = await setupChannel(t, { workspaceId, userId });
+    await sendMessage(asUser, channelId, "Plain");
+
+    const result = await asUser.query(api.messages.list, {
+      channelId,
+      paginationOpts: { cursor: null, numItems: 10 },
+    });
+
+    expect(result.page[0].reactions).toEqual([]);
+  });
+
+  it("resolves currentUserReacted per viewer", async () => {
+    const t = createTestContext();
+    const { workspaceId, userId, asUser } = await setupWorkspaceWithAdmin(t);
+    const channelId = await setupChannel(t, { workspaceId, userId });
+    await sendMessage(asUser, channelId, "Whose reaction?");
+    const messageId = await onlyMessageId(t, channelId);
+
+    await asUser.mutation(api.messageReactions.toggle, {
+      messageId,
+      emoji: "1f44d",
+      emojiNative: "👍",
+    });
+
+    const { asUser: asSecond } = await setupSecondMember(t, workspaceId);
+    const forAuthor = await asUser.query(api.messages.list, {
+      channelId,
+      paginationOpts: { cursor: null, numItems: 10 },
+    });
+    const forOther = await asSecond.query(api.messages.list, {
+      channelId,
+      paginationOpts: { cursor: null, numItems: 10 },
+    });
+
+    expect(forAuthor.page[0].reactions[0].currentUserReacted).toBe(true);
+    // Same row, same count — only the viewer-specific flag differs.
+    expect(forOther.page[0].reactions[0].currentUserReacted).toBe(false);
+    expect(forOther.page[0].reactions[0].count).toBe(1);
+    expect(forOther.page[0].reactions[0].userIds).toEqual([userId]);
+  });
+
+  it("groups by emoji and orders groups by first reaction", async () => {
+    const t = createTestContext();
+    const { workspaceId, userId, asUser } = await setupWorkspaceWithAdmin(t);
+    const channelId = await setupChannel(t, { workspaceId, userId });
+    await sendMessage(asUser, channelId, "Two emoji");
+    const messageId = await onlyMessageId(t, channelId);
+    const { userId: secondId, asUser: asSecond } = await setupSecondMember(t, workspaceId);
+
+    // 👍 first, then ❤️, then a second 👍 — the late join must not reorder the
+    // groups, or the chips shuffle under a reader every time someone reacts.
+    await asUser.mutation(api.messageReactions.toggle, {
+      messageId, emoji: "1f44d", emojiNative: "👍",
+    });
+    vi.advanceTimersByTime(10);
+    await asUser.mutation(api.messageReactions.toggle, {
+      messageId, emoji: "2764-fe0f", emojiNative: "❤️",
+    });
+    vi.advanceTimersByTime(10);
+    await asSecond.mutation(api.messageReactions.toggle, {
+      messageId, emoji: "1f44d", emojiNative: "👍",
+    });
+
+    const result = await asUser.query(api.messages.list, {
+      channelId,
+      paginationOpts: { cursor: null, numItems: 10 },
+    });
+
+    const reactions = result.page[0].reactions;
+    expect(reactions.map((r) => r.emoji)).toEqual(["1f44d", "2764-fe0f"]);
+    expect(reactions[0].count).toBe(2);
+    expect(reactions[0].userIds).toEqual([userId, secondId]);
+    expect(reactions[1].count).toBe(1);
+  });
+
+  it("drops a group once its last reaction is toggled off", async () => {
+    const t = createTestContext();
+    const { workspaceId, userId, asUser } = await setupWorkspaceWithAdmin(t);
+    const channelId = await setupChannel(t, { workspaceId, userId });
+    await sendMessage(asUser, channelId, "On then off");
+    const messageId = await onlyMessageId(t, channelId);
+
+    const args = { messageId, emoji: "1f44d", emojiNative: "👍" };
+    await asUser.mutation(api.messageReactions.toggle, args);
+    await asUser.mutation(api.messageReactions.toggle, args);
+
+    const result = await asUser.query(api.messages.list, {
+      channelId,
+      paginationOpts: { cursor: null, numItems: 10 },
+    });
+
+    expect(result.page[0].reactions).toEqual([]);
+  });
+
+  it("carries reactions through search and getMessageContext too", async () => {
+    const t = createTestContext();
+    const { workspaceId, userId, asUser } = await setupWorkspaceWithAdmin(t);
+    const channelId = await setupChannel(t, { workspaceId, userId });
+    await sendMessage(asUser, channelId, "findme");
+    const messageId = await onlyMessageId(t, channelId);
+
+    await asUser.mutation(api.messageReactions.toggle, {
+      messageId, emoji: "1f525", emojiNative: "🔥",
+    });
+
+    const found = await asUser.query(api.messages.search, { channelId, searchTerm: "findme" });
+    expect(found[0].reactions[0].emoji).toBe("1f525");
+
+    const context = await asUser.query(api.messages.getMessageContext, { messageId });
+    const target = context.messages[context.targetIndex];
+    expect(target.reactions[0].emoji).toBe("1f525");
+    expect(target.reactions[0].currentUserReacted).toBe(true);
+    expect(target.reactions[0].userIds).toEqual([userId]);
+  });
+});

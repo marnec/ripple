@@ -24,7 +24,6 @@ const LazyMessageComposer = React.lazy(() =>
 import { SearchDialog } from "./SearchDialog";
 import { ChatContext, type EditingMessage, type ReplyingToMessage } from "./ChatContext";
 import { computeGroupPositions } from "./messageGrouping";
-import { ReactionsContext } from "./ReactionsContext";
 import { UserContext } from "@/pages/App/UserContext";
 import { useRecordVisit } from "@/hooks/use-record-visit";
 
@@ -60,17 +59,8 @@ export function Chat({ channelId, variant = "full" }: { channelId: Id<"channels"
   } = usePaginatedQuery(api.messages.list, { channelId }, { initialNumItems: 25 });
 
   const user = useContext(UserContext);
-  const messageIds = (messages ?? []).map((m) => m._id);
-  const reactionsMap = useQuery(
-    api.messageReactions.listForMessages,
-    messageIds.length > 0 ? { messageIds } : "skip",
-  );
-  // Gate messages behind reactions on initial load to prevent layout shift.
-  // Once reactions have loaded once, never hide messages again (load-more must not blank the list).
-  const [hasLoadedReactions, setHasLoadedReactions] = useState(reactionsMap !== undefined);
-  if (!hasLoadedReactions && reactionsMap !== undefined) {
-    setHasLoadedReactions(true);
-  }
+  // Reactions arrive on each message out of `messages.list`; there is no second
+  // query to wait on, so nothing here has to gate the list to avoid a shift.
   const groupInfos = computeGroupPositions(messages ?? [], user?._id);
 
   const sendMessage = useMutation(api.messages.send);
@@ -221,11 +211,10 @@ export function Chat({ channelId, variant = "full" }: { channelId: Id<"channels"
           {variant === "full" && <MobileHeaderTitle name={channel?.name} />}
 
           <div className="min-h-0 flex-1">
-            <ReactionsContext.Provider value={reactionsMap ?? {}}>
-            <MessageList messages={messages} onLoadMore={handleLoadMore} isLoading={isLoading} userSentMessageRef={userSentMessageRef} messagesReady={hasLoadedReactions && (messages ?? []).length > 0}>
+            <MessageList messages={messages} onLoadMore={handleLoadMore} isLoading={isLoading} userSentMessageRef={userSentMessageRef} messagesReady={(messages ?? []).length > 0}>
               {/* {!messages && <LoadingSpinner className="h-12 w-12 self-center" />} */}
 
-              {(messageIds.length === 0 || hasLoadedReactions) && (messages || []).map((message, index) => (
+              {(messages || []).map((message, index) => (
                 <Fragment key={message.isomorphicId}>
                   {!!index && wereSentInDifferentDays(message, messages[index - 1]) && (
                     <div className="flex items-center gap-3 my-2">
@@ -254,7 +243,6 @@ export function Chat({ channelId, variant = "full" }: { channelId: Id<"channels"
                 </Button>
               )}
             </MessageList>
-            </ReactionsContext.Provider>
           </div>
 
           <Suspense fallback={<div className="shrink-0 h-24 border-t" />}>

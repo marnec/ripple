@@ -5,7 +5,6 @@ import { Message } from "./Message";
 import { Button } from "@ripple/ui/components/button";
 import { ArrowLeftIcon, XIcon } from "lucide-react";
 import { ScrollArea } from "../../../components/ui/scroll-area";
-import { ReactionsContext } from "./ReactionsContext";
 
 interface MessageContextProps {
   messageId: Id<"messages">;
@@ -20,12 +19,6 @@ export function MessageContext({ messageId, channelId: _channelId, onClose, onBa
   const messages = contextData?.messages;
   const targetIndex = contextData?.targetIndex;
 
-  const contextMessageIds = (messages ?? []).map((m) => m._id);
-  const reactionsMap = useQuery(
-    api.messageReactions.listForMessages,
-    contextMessageIds.length > 0 ? { messageIds: contextMessageIds } : "skip",
-  );
-
   if (!contextData) {
     return (
       <div className="flex items-center justify-center h-32">
@@ -35,7 +28,6 @@ export function MessageContext({ messageId, channelId: _channelId, onClose, onBa
   }
 
   return (
-    <ReactionsContext.Provider value={reactionsMap ?? {}}>
     <div className="flex flex-col h-full min-h-0">
       {/* Header */}
       <div className="flex shrink-0 items-center justify-between p-4 border-b bg-muted/30">
@@ -78,6 +70,5 @@ export function MessageContext({ messageId, channelId: _channelId, onClose, onBa
         </div>
       </ScrollArea>
     </div>
-    </ReactionsContext.Provider>
   );
 }

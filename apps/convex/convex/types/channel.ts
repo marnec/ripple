@@ -26,6 +26,17 @@ export type MentionedEvent = {
   deleted: boolean;
 };
 
+// Reactions ride on the message rather than arriving from a second query keyed
+// by message ids — see `enrichWithReactions`. `currentUserReacted` is resolved
+// per viewer server-side, so this shape is already viewer-specific.
+export type MessageReaction = {
+  emoji: string;
+  emojiNative: string;
+  count: number;
+  userIds: string[];
+  currentUserReacted: boolean;
+};
+
 export interface MessageWithAuthor extends Doc<"messages"> {
   author: string;
   authorImage?: string;
@@ -35,4 +46,5 @@ export interface MessageWithAuthor extends Doc<"messages"> {
   mentionedProjects: Record<string, MentionedProject>;
   mentionedResources: Record<string, MentionedResource>;
   mentionedEvents: Record<string, MentionedEvent>;
+  reactions: MessageReaction[];
 }

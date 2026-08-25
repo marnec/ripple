@@ -1,5 +1,4 @@
 import { ConvexError, v } from "convex/values";
-import type { Id } from "./_generated/dataModel";
 import { query } from "./_generated/server";
 import { mutation } from "./functions";
 import { checkChannelAccess, requireChannelAccess } from "./authHelpers";
@@ -48,7 +47,7 @@ export const toggle = mutation({
   },
 });
 
-const reactionGroupValidator = v.object({
+export const reactionGroupValidator = v.object({
   emoji: v.string(),
   emojiNative: v.string(),
   count: v.number(),
@@ -56,8 +55,16 @@ const reactionGroupValidator = v.object({
   currentUserReacted: v.boolean(),
 });
 
-/** Group raw reactions by emoji for a single message. */
-function groupReactions(
+/**
+ * Group raw reactions by emoji for a single message.
+ *
+ * Callers pass rows straight off the `by_message` index, which scans in
+ * `_creationTime` order — so the insertion order of `grouped` is
+ * first-reaction-first, and `Object.values` preserves it. That is what keeps
+ * the chips from reordering under a reader as counts change; there is no
+ * separate sort key to store.
+ */
+export function groupReactions(
   reactions: { emoji: string; emojiNative: string; userId: string }[],
   currentUserId: string,
 ) {
@@ -75,49 +82,18 @@ function groupReactions(
   }));
 }
 
-/** Batch-fetch reactions for multiple messages in a single query. */
-export const listForMessages = query({
-  args: { messageIds: v.array(v.id("messages")) },
-  returns: v.record(v.string(), v.array(reactionGroupValidator)),
-  handler: async (ctx, { messageIds }) => {
-    const results: Record<string, { emoji: string; emojiNative: string; count: number; userIds: string[]; currentUserReacted: boolean }[]> = {};
-
-    // Resolve each message's channel first, then check each DISTINCT channel
-    // once — a batch normally spans a single channel, so this is one access
-    // check regardless of page size. Messages in an unreachable channel are
-    // dropped rather than throwing, so one stale id cannot blank the page.
-    const messages = await Promise.all(messageIds.map((id) => ctx.db.get(id)));
-    const channelIds = [
-      ...new Set(messages.filter((m) => m !== null).map((m) => m.channelId)),
-    ];
-    const accessByChannel = new Map<Id<"channels">, boolean>();
-    let userId: Id<"users"> | null = null;
-    for (const channelId of channelIds) {
-      const access = await checkChannelAccess(ctx, channelId);
-      accessByChannel.set(channelId, access !== null);
-      if (access) userId = access.userId;
-    }
-    if (!userId) return results;
-
-    const currentUserId = userId;
-    await Promise.all(
-      messages.map(async (message) => {
-        if (!message || !accessByChannel.get(message.channelId)) return;
-        const reactions = await ctx.db
-          .query("messageReactions")
-          .withIndex("by_message", (q) => q.eq("messageId", message._id))
-          .collect();
-        const grouped = groupReactions(reactions, currentUserId);
-        if (grouped.length > 0) {
-          results[message._id] = grouped;
-        }
-      }),
-    );
-
-    return results;
-  },
-});
-
+/**
+ * Reactions for a page of messages are NOT fetched here — they ride on the
+ * message itself, out of `enrichMessages` in `messages.ts`, alongside the five
+ * other per-message relations (replyTo and the four mention kinds).
+ *
+ * The batch query this replaced took `messageIds` derived from the result of
+ * `messages.list`. That made its args change every time a message arrived, so
+ * Convex tore down the subscription and re-issued it, and the client held
+ * `undefined` for a round trip — every reaction chip in the channel unmounted
+ * and remounted on every send. Args that derive from another query's results
+ * cannot be made stable; the fix is to not have the second query.
+ */
 export const listForMessage = query({
   args: { messageId: v.id("messages") },
   returns: v.array(reactionGroupValidator),
