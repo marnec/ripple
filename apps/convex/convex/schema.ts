@@ -655,6 +655,10 @@ export default defineSchema({
     transcriptDocumentId: v.optional(v.id("documents")),
   })
     .index("by_channel_active", ["channelId", "active"])
+    // The sweep's index: active rows oldest-first (Convex appends
+    // `_creationTime` to every index), so `expireStaleCallSessions` can range
+    // straight to the ones past their age limit instead of scanning the table.
+    .index("by_active", ["active"])
     .index("by_meeting", ["cloudflareMeetingId"])
     // Lets the documents delete-trigger clear this FK when a transcript doc is
     // removed, keeping `transcriptDocumentId` consistent (no dangling links).

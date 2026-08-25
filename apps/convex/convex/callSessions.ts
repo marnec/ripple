@@ -13,6 +13,30 @@ import {
 } from "./lib/realtimeKit";
 
 /**
+ * Is the meeting behind an `active` session row still a real, occupied call?
+ *
+ * **Fails open.** Only a definitive Cloudflare answer of "no session" or "zero
+ * participants" retires a row; anything we could not ask (an outage, a rate
+ * limit, a timeout) is treated as live. The asymmetry is deliberate: wrongly
+ * keeping a dead row costs one call the transcription mode it asked for, while
+ * wrongly retiring a live one mints a second meeting for a call already in
+ * progress and splits the participants into two rooms that cannot see each
+ * other. Only one of those is recoverable by hanging up and rejoining.
+ */
+async function isMeetingLive(
+  rtk: RealtimeKitClient,
+  meetingId: string,
+): Promise<boolean> {
+  try {
+    const liveParticipants = await rtk.getLiveParticipants(meetingId);
+    return liveParticipants !== null && liveParticipants > 0;
+  } catch (e) {
+    console.error("RealtimeKit liveness check failed; assuming live:", e);
+    return true;
+  }
+}
+
+/**
  * Race-safe wrapper that returns the Cloudflare meetingId for a channel.
  *
  * The race: two parallel callers both see `getActiveSession` return null,
@@ -39,13 +63,32 @@ export async function ensureMeetingForChannel(
   const session = await ctx.runQuery(internal.callSessions.getActiveSession, {
     channelId,
   });
-  // An active call already exists — its transcription mode was fixed when the
-  // first joiner created the meeting; we reuse it (a late joiner can't flip it).
-  if (session)
+
+  // A session row saying `active` is a claim, not a fact. `endSession` is the
+  // only thing that clears it and it runs only when the last participant
+  // leaves *cleanly* — a closed tab, a crashed browser, two people leaving at
+  // the same moment, or a guest (who has no leave path at all) each strand the
+  // row with nobody in the meeting. Reusing a stranded row is what pinned a
+  // channel's transcription mode to whatever its first-ever call chose, and
+  // fed every later call's transcript into the first call's document. So ask
+  // Cloudflare, which knows.
+  if (session && (await isMeetingLive(rtk, session.cloudflareMeetingId))) {
+    // A live call: its transcription mode was fixed when the first joiner
+    // created the meeting, and a late joiner can't flip it.
     return {
       meetingId: session.cloudflareMeetingId,
       transcribe: session.transcribe ?? false,
     };
+  }
+
+  if (session) {
+    // Dead, definitively. Retire the row *by id* — never by channel — so we
+    // cannot clobber a fresh session a concurrent caller has already put in
+    // its place, then fall through and start a real call.
+    await ctx.runMutation(internal.callSessions.deactivateSession, {
+      sessionId: session._id,
+    });
+  }
 
   let ourMeetingId: string;
   try {
@@ -182,6 +225,71 @@ export const endSession = mutation({
       .collect();
 
     for (const session of sessions) {
+      await ctx.db.patch(session._id, { active: false });
+    }
+    return null;
+  },
+});
+
+/**
+ * Retire one session row, addressed by id.
+ *
+ * Distinct from `endSession`, which retires every active row for a *channel*.
+ * The liveness path must not use that: between reading a dead session and
+ * retiring it, a concurrent joiner may already have created the channel's next
+ * one, and a channel-wide sweep would kill that live call instead. Patching the
+ * exact row we judged dead cannot.
+ *
+ * Internal, and no access check: the only caller is `ensureMeetingForChannel`,
+ * which authorizes before it reaches here (`joinCall`) or is gated by an active
+ * share (`getGuestCallToken`).
+ */
+export const deactivateSession = internalMutation({
+  args: { sessionId: v.id("callSessions") },
+  returns: v.null(),
+  handler: async (ctx, { sessionId }) => {
+    const session = await ctx.db.get(sessionId);
+    // Already retired by whoever raced us here — nothing to do.
+    if (!session?.active) return null;
+    await ctx.db.patch(sessionId, { active: false });
+    return null;
+  },
+});
+
+/**
+ * How long an `active` session may go unclosed before the sweep presumes it
+ * abandoned. Generously beyond any real call: retiring a row mid-call would
+ * send the next joiner into a second meeting, splitting the room. The join-time
+ * liveness check is what makes a *short* window unnecessary — by the time this
+ * runs, any row it finds has already been read past by every joiner.
+ */
+const CALL_SESSION_MAX_AGE_MS = 12 * 60 * 60 * 1000;
+
+const EXPIRY_SWEEP_LIMIT = 100;
+
+/**
+ * Close out `active` session rows that nothing else will.
+ *
+ * The backstop, not the fix — `ensureMeetingForChannel` reads past a stale row
+ * on the next join, the same way `taskImports`' readers read past an abandoned
+ * import job rather than waiting on its cron. This exists because that check is
+ * edge-triggered: a channel nobody calls again keeps its stranded row forever,
+ * and the rows are what `by_channel_active` has to scan.
+ */
+export const expireStaleCallSessions = internalMutation({
+  args: {},
+  returns: v.null(),
+  handler: async (ctx) => {
+    const cutoff = Date.now() - CALL_SESSION_MAX_AGE_MS;
+
+    const stale = await ctx.db
+      .query("callSessions")
+      .withIndex("by_active", (q) =>
+        q.eq("active", true).lt("_creationTime", cutoff),
+      )
+      .take(EXPIRY_SWEEP_LIMIT);
+
+    for (const session of stale) {
       await ctx.db.patch(session._id, { active: false });
     }
     return null;

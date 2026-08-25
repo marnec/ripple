@@ -329,6 +329,7 @@ export type DataModel = {
     indexes: {
       by_id: ["_id"];
       by_creation_time: ["_creationTime"];
+      by_active: ["active", "_creationTime"];
       by_channel_active: ["channelId", "active", "_creationTime"];
       by_meeting: ["cloudflareMeetingId", "_creationTime"];
       by_transcript_document: ["transcriptDocumentId", "_creationTime"];

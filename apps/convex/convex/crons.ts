@@ -56,4 +56,15 @@ crons.interval(
   {},
 );
 
+// Close out call sessions nothing else will. Hourly like the import sweep, and
+// for the same reason: the row this cleans up is one the join path already
+// reads past (`ensureMeetingForChannel` asks Cloudflare whether the meeting is
+// live), so this is only tidying rows in channels nobody has called since.
+crons.interval(
+  "expire stale call sessions",
+  { hours: 1 },
+  internal.callSessions.expireStaleCallSessions,
+  {},
+);
+
 export default crons;

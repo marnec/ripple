@@ -175,14 +175,23 @@ export function useCallSession(): UseCallSessionResult {
     if (m) {
       try {
         await m.leave();
+      } catch (err) {
+        // Leave failures aren't user-facing — the local UI is going away
+        // anyway. Log + proceed to cleanup.
+        console.error("Failed to leave RTK meeting:", err);
+      }
+
+      // Its own try, deliberately: when these shared one, a throwing `leave()`
+      // skipped the hook, so the channel's session row was never closed. The
+      // app has torn the call down either way, so the source still gets its
+      // last-participant callback.
+      try {
         const remaining = m.participants.joined.toArray().length;
         if (port?.onAfterLeave) {
           await port.onAfterLeave({ remainingParticipants: remaining });
         }
       } catch (err) {
-        // Leave failures aren't user-facing — the local UI is going away
-        // anyway. Log + proceed to cleanup.
-        console.error("Failed to leave RTK meeting:", err);
+        console.error("Post-leave cleanup failed:", err);
       }
     }
 

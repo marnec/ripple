@@ -57,6 +57,10 @@ vi.mock("../convex/lib/realtimeKit", async (importOriginal) => ({
   realtimeKitFromEnv: () => ({
     createMeeting: rtkCreateMeeting,
     addParticipant: rtkAddParticipant,
+    // These tests only ever join meetings they just created, so the honest
+    // answer is "occupied" — which is also what keeps `ensureMeetingForChannel`
+    // on its reuse path rather than its stranded-row path.
+    getLiveParticipants: vi.fn(() => Promise.resolve(1)),
     deleteMeeting: vi.fn(() => Promise.resolve()),
   }),
 }));

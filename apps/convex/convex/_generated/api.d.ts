@@ -3881,6 +3881,12 @@ export declare const internal: {
       },
       null | { cloudflareMeetingId: string; transcribe: boolean }
     >;
+    deactivateSession: FunctionReference<
+      "mutation",
+      "internal",
+      { sessionId: Id<"callSessions"> },
+      null
+    >;
     enqueueTranscriptIngest: FunctionReference<
       "mutation",
       "internal",
@@ -3890,6 +3896,12 @@ export declare const internal: {
         formatHint?: "csv" | "json" | "vtt" | "srt";
         storageId: Id<"_storage">;
       },
+      null
+    >;
+    expireStaleCallSessions: FunctionReference<
+      "mutation",
+      "internal",
+      {},
       null
     >;
     getActiveSession: FunctionReference<

@@ -3,6 +3,7 @@ import { ChannelType } from "@ripple/shared/enums/roles";
 import type { ActionCtx } from "../convex/_generated/server";
 import type { Id } from "../convex/_generated/dataModel";
 import { ensureMeetingForChannel } from "../convex/callSessions";
+import { internal } from "../convex/_generated/api";
 import type {
   RealtimeKitClient,
   CreateMeetingOptions,
@@ -63,6 +64,7 @@ describe("ensureMeetingForChannel", () => {
     const rtk: RealtimeKitClient = {
       createMeeting: vi.fn(async () => ({ id: "our-meeting" })),
       addParticipant: vi.fn(async () => ({ token: "tok" })),
+      getLiveParticipants: vi.fn(async () => null),
       deleteMeeting: vi.fn(async () => {}),
     };
 
@@ -101,6 +103,8 @@ describe("ensureMeetingForChannel", () => {
     const rtk: RealtimeKitClient = {
       createMeeting: vi.fn(async () => ({ id: "should-not-be-used" })),
       addParticipant: vi.fn(async () => ({ token: "tok" })),
+      // The call is genuinely in progress.
+      getLiveParticipants: vi.fn(async () => 2),
       deleteMeeting: vi.fn(async () => {}),
     };
 
@@ -139,6 +143,7 @@ describe("ensureMeetingForChannel", () => {
         return { id: "our-meeting" };
       }),
       addParticipant: vi.fn(async () => ({ token: "tok" })),
+      getLiveParticipants: vi.fn(async () => null),
       deleteMeeting: vi.fn(async () => {}),
     };
 
@@ -155,5 +160,197 @@ describe("ensureMeetingForChannel", () => {
     expect(rtk.deleteMeeting).toHaveBeenCalledWith("our-meeting");
     // No duplicate session row was created.
     expect(await countActiveSessions(t, channelId)).toBe(1);
+  });
+});
+
+describe("ensureMeetingForChannel — stranded session rows", () => {
+  /**
+   * `endSession` only runs on a clean last-participant leave, so a closed tab,
+   * a crash, or a guest (who has no leave path) leaves `active: true` behind
+   * with nobody in the meeting. Cloudflare is the authority on whether the call
+   * is real; these cover what we do with each of its answers.
+   */
+
+  async function seedActiveSession(
+    t: T,
+    channelId: Id<"channels">,
+    transcribe: boolean,
+  ) {
+    return t.run((ctx) =>
+      ctx.db.insert("callSessions", {
+        channelId,
+        cloudflareMeetingId: "stranded-meeting",
+        active: true,
+        transcribe,
+      }),
+    );
+  }
+
+  it("starts a fresh call, on the caller's terms, when the row is stranded", async () => {
+    const t = createTestContext();
+    const channelId = await makeChannel(t);
+    const strandedId = await seedActiveSession(t, channelId, false);
+
+    const rtk: RealtimeKitClient = {
+      createMeeting: vi.fn(async () => ({ id: "new-meeting" })),
+      addParticipant: vi.fn(async () => ({ token: "tok" })),
+      // Cloudflare: that meeting has no session.
+      getLiveParticipants: vi.fn(async () => null),
+      deleteMeeting: vi.fn(async () => {}),
+    };
+
+    const result = await ensureMeetingForChannel(
+      actionCtx(t),
+      channelId,
+      rtk,
+      true,
+      "it",
+    );
+
+    // The whole point: the caller's transcription choice is honoured rather
+    // than inherited from a call that ended days ago.
+    expect(result).toEqual({ meetingId: "new-meeting", transcribe: true });
+    expect(rtk.createMeeting).toHaveBeenCalledWith({
+      title: `Channel call ${channelId}`,
+      transcribeOnEnd: true,
+      transcriptionLanguage: "it",
+    } satisfies CreateMeetingOptions);
+
+    const stranded = await t.run((ctx) => ctx.db.get(strandedId));
+    expect(stranded?.active).toBe(false);
+    expect(await countActiveSessions(t, channelId)).toBe(1);
+  });
+
+  it("treats a session with zero live participants as stranded", async () => {
+    const t = createTestContext();
+    const channelId = await makeChannel(t);
+    await seedActiveSession(t, channelId, false);
+
+    const rtk: RealtimeKitClient = {
+      createMeeting: vi.fn(async () => ({ id: "new-meeting" })),
+      addParticipant: vi.fn(async () => ({ token: "tok" })),
+      getLiveParticipants: vi.fn(async () => 0),
+      deleteMeeting: vi.fn(async () => {}),
+    };
+
+    const result = await ensureMeetingForChannel(
+      actionCtx(t),
+      channelId,
+      rtk,
+      false,
+    );
+
+    expect(result.meetingId).toBe("new-meeting");
+    expect(await countActiveSessions(t, channelId)).toBe(1);
+  });
+
+  it("fails open: an unreachable Cloudflare keeps the existing call", async () => {
+    const t = createTestContext();
+    const channelId = await makeChannel(t);
+    await seedActiveSession(t, channelId, true);
+
+    const rtk: RealtimeKitClient = {
+      createMeeting: vi.fn(async () => ({ id: "should-not-be-used" })),
+      addParticipant: vi.fn(async () => ({ token: "tok" })),
+      getLiveParticipants: vi.fn(async () => {
+        throw new Error("Cloudflare is having a day");
+      }),
+      deleteMeeting: vi.fn(async () => {}),
+    };
+
+    const result = await ensureMeetingForChannel(
+      actionCtx(t),
+      channelId,
+      rtk,
+      false,
+    );
+
+    // Splitting a live call across two meetings is the worse failure, so an
+    // unanswerable probe must not retire the row.
+    expect(result).toEqual({
+      meetingId: "stranded-meeting",
+      transcribe: true,
+    });
+    expect(rtk.createMeeting).not.toHaveBeenCalled();
+    expect(await countActiveSessions(t, channelId)).toBe(1);
+  });
+
+  it("retires only the row it judged dead, not the channel's next call", async () => {
+    const t = createTestContext();
+    const channelId = await makeChannel(t);
+    const strandedId = await seedActiveSession(t, channelId, false);
+
+    // A concurrent joiner gets there first: it retires the stranded row and
+    // opens a real call while we are still talking to Cloudflare. Retiring by
+    // channel rather than by id would kill that call.
+    let successorId: Id<"callSessions"> | null = null;
+    const rtk: RealtimeKitClient = {
+      createMeeting: vi.fn(async () => ({ id: "our-meeting" })),
+      addParticipant: vi.fn(async () => ({ token: "tok" })),
+      getLiveParticipants: vi.fn(async () => {
+        await t.run(async (ctx) => {
+          await ctx.db.patch(strandedId, { active: false });
+          successorId = await ctx.db.insert("callSessions", {
+            channelId,
+            cloudflareMeetingId: "successor-meeting",
+            active: true,
+            transcribe: true,
+          });
+        });
+        return null;
+      }),
+      deleteMeeting: vi.fn(async () => {}),
+    };
+
+    await ensureMeetingForChannel(actionCtx(t), channelId, rtk, false);
+
+    const successor = await t.run((ctx) =>
+      ctx.db.get(successorId as unknown as Id<"callSessions">),
+    );
+    expect(successor?.active).toBe(true);
+    expect(await countActiveSessions(t, channelId)).toBe(1);
+  });
+});
+
+describe("expireStaleCallSessions", () => {
+  const TWELVE_HOURS = 12 * 60 * 60 * 1000;
+
+  it("retires active rows past the age limit and leaves younger ones alone", async () => {
+    const t = createTestContext();
+    const channelId = await makeChannel(t);
+
+    // `_creationTime` is assigned by the harness, so age the row by moving the
+    // clock forward rather than trying to write a past timestamp.
+    const oldId = await t.run((ctx) =>
+      ctx.db.insert("callSessions", {
+        channelId,
+        cloudflareMeetingId: "old-meeting",
+        active: true,
+      }),
+    );
+
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(Date.now() + TWELVE_HOURS + 60_000);
+
+      const freshId = await t.run((ctx) =>
+        ctx.db.insert("callSessions", {
+          channelId,
+          cloudflareMeetingId: "fresh-meeting",
+          active: true,
+        }),
+      );
+
+      await t.mutation(internal.callSessions.expireStaleCallSessions, {});
+
+      expect(await t.run((ctx) => ctx.db.get(oldId))).toMatchObject({
+        active: false,
+      });
+      expect(await t.run((ctx) => ctx.db.get(freshId))).toMatchObject({
+        active: true,
+      });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

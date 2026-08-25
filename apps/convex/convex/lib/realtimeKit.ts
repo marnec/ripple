@@ -2,15 +2,15 @@
  * The one place Ripple talks to Cloudflare RealtimeKit (RTK) over HTTP.
  *
  * Every call surface — channel calls, calendar-event calls, guest share links,
- * the cascaded voice agent — needs the same three operations (create a meeting,
- * add a participant, delete an orphaned meeting), against the same REST shape,
- * with the same `Bearer` auth. Before this module each call site hand-rolled
+ * the cascaded voice agent — needs the same handful of operations (create a
+ * meeting, add a participant, ask whether a meeting is still live, delete an
+ * orphaned meeting), against the same REST shape, with the same `Bearer` auth. Before this module each call site hand-rolled
  * the URL, headers, response parsing, and the env-var load; the Cloudflare lore
  * (which body fields mean what, the `"multi"` language trap) was scattered as
  * comments next to whichever `fetch` happened to need it.
  *
  * `createRealtimeKitClient(creds)` binds the credentials once and returns the
- * three operations. `realtimeKitFromEnv()` is the production constructor —
+ * operations. `realtimeKitFromEnv()` is the production constructor —
  * loads + validates the env vars. Tests construct a fake `RealtimeKitClient`
  * directly, which is what makes the race-safe meeting creation in
  * `ensureMeetingForChannel` unit-testable without a live Cloudflare account.
@@ -78,6 +78,21 @@ export interface RealtimeKitClient {
     meetingId: string,
     opts: AddParticipantOptions,
   ): Promise<{ token: string }>;
+  /**
+   * How many participants are live in this meeting right now, or `null` when
+   * Cloudflare says there is no session to be in — the call ended, or the
+   * meeting itself is gone.
+   *
+   * The authority on "is this call still happening". Our own `callSessions`
+   * row cannot answer it: the row is only closed by a clean last-participant
+   * leave, so a closed tab, a crash, or a guest (who has no leave path at all)
+   * strands it as `active` forever.
+   *
+   * Throws `RealtimeKitError` when Cloudflare could not be asked. That is a
+   * different answer from `null` and callers must treat it as such — see the
+   * fail-open rule in `ensureMeetingForChannel`.
+   */
+  getLiveParticipants(meetingId: string): Promise<number | null>;
   /** Fire-and-forget orphan cleanup; never throws. */
   deleteMeeting(meetingId: string): Promise<void>;
 }
@@ -133,6 +148,35 @@ export function createRealtimeKitClient(
       }
       const data = (await res.json()) as { data: { token: string } };
       return { token: data.data.token };
+    },
+
+    async getLiveParticipants(meetingId) {
+      const res = await fetch(`${base}/meetings/${meetingId}/active-session`, {
+        method: "GET",
+        headers,
+      });
+
+      // 404 covers both "the meeting has no active session" and "no such
+      // meeting". Both mean the same thing to every caller — there is no live
+      // call here — and the second is if anything the more urgent, since
+      // re-using a deleted meeting's id would fail the next `addParticipant`.
+      if (res.status === 404) return null;
+
+      if (!res.ok) {
+        throw new RealtimeKitError(
+          "getLiveParticipants",
+          res.status,
+          await res.text(),
+        );
+      }
+
+      const data = (await res.json()) as {
+        data?: { live_participants?: number } | null;
+      };
+      // A 200 with no session body is the same answer as a 404; Cloudflare has
+      // been observed to express "nothing active" both ways.
+      if (!data.data) return null;
+      return data.data.live_participants ?? 0;
     },
 
     async deleteMeeting(meetingId) {
