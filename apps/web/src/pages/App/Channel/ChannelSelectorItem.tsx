@@ -28,6 +28,8 @@ import {
 } from "../../../components/ui/sidebar";
 import { LeaveChannelDialog } from "./LeaveChannelDialog";
 import { removeFromKnownChannels } from "@/hooks/use-acknowledged-channels";
+import { ChannelCallIndicator } from "./ChannelCallIndicator";
+import type { ChannelCallParticipant } from "@/hooks/use-channel-calls";
 
 /** Channel shape as returned by the sidebar query (extends Doc with isHidden). */
 export type SidebarChannel = Doc<"channels"> & { isHidden: boolean };
@@ -37,6 +39,8 @@ export interface ChannelSelectorItemProps {
   channelId: Id<"channels"> | undefined;
   /** Boolean "something new" signal — we deliberately don't show a count. */
   hasUnread: boolean;
+  /** Members currently in this channel's call. Empty when no call is live. */
+  callParticipants?: ChannelCallParticipant[];
   onChannelSelect: (id: string | null) => void;
   onManageChannel: (id: Id<"channels">) => void;
   onStartCall: (id: Id<"channels">) => void;
@@ -53,6 +57,7 @@ export function ChannelSelectorItem({
   channelId,
   channel,
   hasUnread,
+  callParticipants,
   onChannelSelect,
   onManageChannel,
   onStartCall,
@@ -112,12 +117,17 @@ export function ChannelSelectorItem({
             hasUnread && "font-semibold",
             channel.isHidden && "italic text-muted-foreground",
           )}>{channel.name}</span>
-          {hasUnread && (
-            <span
-              className="ml-auto size-2 shrink-0 rounded-full bg-primary"
-              aria-label="Unread messages"
-            />
-          )}
+          <div className="ml-auto flex shrink-0 items-center gap-1.5">
+            {callParticipants && callParticipants.length > 0 && (
+              <ChannelCallIndicator participants={callParticipants} />
+            )}
+            {hasUnread && (
+              <span
+                className="size-2 shrink-0 rounded-full bg-primary"
+                aria-label="Unread messages"
+              />
+            )}
+          </div>
       </SidebarMenuSubButton>
       <ResponsiveDropdownMenu>
         <ResponsiveDropdownMenuTrigger render={<button className="absolute right-1 top-1/2 -translate-y-1/2 rounded-sm p-0.5 text-sidebar-foreground/60 md:opacity-0 hover:bg-sidebar-accent hover:text-sidebar-foreground md:group-hover/subitem:opacity-100 data-popup-open:opacity-100" />}>

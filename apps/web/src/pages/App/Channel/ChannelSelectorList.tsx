@@ -18,6 +18,7 @@ import {
   useSidebar,
 } from "../../../components/ui/sidebar";
 import { ChannelSelectorItem } from "./ChannelSelectorItem";
+import { useChannelCalls } from "@/hooks/use-channel-calls";
 import { CreateChannelDialog } from "./CreateChannelDialog";
 import { SIDEBAR_ELEMENT_FADEIN_DELAY } from "../Resources/sidebar-constants";
 import { preloadChatContainer } from "../preload";
@@ -70,6 +71,10 @@ export const ChannelSelectorList = memo(function ChannelSelectorList({
     });
     return s;
   })();
+
+  // No subscription of its own: the workspace presence socket is already open
+  // (one room for the whole workspace), so this is a read of a map in memory.
+  const channelCalls = useChannelCalls();
 
   const channelEntries = channels?.map((c) => ({ id: c._id, name: c.name }));
   const { displayList, newCount, removedCount, acknowledgeAll, acknowledgeOne, autoAcknowledgeNext } =
@@ -200,6 +205,7 @@ export const ChannelSelectorList = memo(function ChannelSelectorList({
                       channel={channel}
                       channelId={channelId}
                       hasUnread={unreadSet.has(channel._id)}
+                      callParticipants={channelCalls.get(channel._id)}
                       onChannelSelect={(id) => {
                         if (id) {
                           const ch = channelMap.get(id);

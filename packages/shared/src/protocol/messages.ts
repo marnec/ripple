@@ -257,6 +257,14 @@ export interface PresenceUpdateMessage {
   resourceType?: string;
   /** ID of the specific resource */
   resourceId?: string;
+  /**
+   * Channel whose call this connection is currently joined to, if any.
+   *
+   * Deliberately independent of `currentPath`: the floating call window lets a
+   * participant navigate anywhere while still in the call, so the route is not
+   * a usable proxy for call membership.
+   */
+  callChannelId?: string;
 }
 
 /**
@@ -276,6 +284,7 @@ export interface PresenceSnapshotMessage {
     currentPath: string;
     resourceType?: string;
     resourceId?: string;
+    callChannelId?: string;
   }>;
 }
 
@@ -295,6 +304,7 @@ export interface PresenceChangedMessage {
   currentPath: string;
   resourceType?: string;
   resourceId?: string;
+  callChannelId?: string;
 }
 
 /**

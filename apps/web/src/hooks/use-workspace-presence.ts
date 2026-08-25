@@ -13,6 +13,7 @@ import {
   fetchCollaborationToken,
   invalidateCollaborationToken,
 } from "@/lib/collaboration-token-cache";
+import { useActiveCall } from "@/contexts/ActiveCallContext";
 
 export interface PresenceEntry {
   userId: string;
@@ -21,6 +22,12 @@ export interface PresenceEntry {
   currentPath: string;
   resourceType?: string;
   resourceId?: string;
+  /**
+   * Channel whose call this user is joined to, if any. Reported separately
+   * from the route because the floating call window lets a participant
+   * navigate away while staying in the call.
+   */
+  callChannelId?: string;
 }
 
 const CONNECTION_TIMEOUT = 4000;
@@ -48,6 +55,16 @@ export function useWorkspacePresence() {
   const { isAuthenticated } = useConvexAuth();
   const getToken = useAction(api.collaboration.getCollaborationToken);
 
+  // Presence is where "who is in this call right now" lives, rather than the
+  // `callSessions` row: that row is only cleared by a clean last-participant
+  // leave, so a closed tab strands it as `active` forever. A presence entry is
+  // connection-scoped and self-heals on disconnect.
+  const { status: callStatus, descriptor: callDescriptor } = useActiveCall();
+  const callChannelId =
+    callStatus === "joined" && callDescriptor?.kind === "channel"
+      ? callDescriptor.resourceId
+      : undefined;
+
   const [presenceMap, setPresenceMap] = useState<Map<string, PresenceEntry>>(
     new Map(),
   );
@@ -71,10 +88,12 @@ export function useWorkspacePresence() {
   const pathnameRef = useRef(pathname);
   const paramsRef = useRef(params);
   const getTokenRef = useRef(getToken);
+  const callChannelIdRef = useRef(callChannelId);
   useEffect(() => {
     pathnameRef.current = pathname;
     paramsRef.current = params;
     getTokenRef.current = getToken;
+    callChannelIdRef.current = callChannelId;
   });
 
   // Connect to presence party
@@ -145,6 +164,7 @@ export function useWorkspacePresence() {
               currentPath: pathnameRef.current,
               resourceType,
               resourceId,
+              callChannelId: callChannelIdRef.current,
             }),
           );
         });
@@ -174,6 +194,7 @@ export function useWorkspacePresence() {
                   currentPath: changed.currentPath,
                   resourceType: changed.resourceType,
                   resourceId: changed.resourceId,
+                  callChannelId: changed.callChannelId,
                 });
                 return next;
               });
@@ -257,6 +278,7 @@ export function useWorkspacePresence() {
         currentPath: pathnameRef.current,
         resourceType,
         resourceId,
+        callChannelId: callChannelIdRef.current,
       }),
     );
   };
@@ -271,6 +293,11 @@ export function useWorkspacePresence() {
     params.diagramId,
     params.projectId,
     params.taskId,
+    // Joining and leaving are not always route changes — the floating window
+    // keeps a call alive across navigation, and Leave from it changes no path
+    // at all. Without this dep the indicator would stick until the participant
+    // happened to navigate.
+    callChannelId,
   ]);
 
   // Browser offline/online detection

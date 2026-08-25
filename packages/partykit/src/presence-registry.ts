@@ -26,6 +26,13 @@ export interface PresenceLocation {
   currentPath: string;
   resourceType?: string;
   resourceId?: string;
+  /**
+   * Channel whose call this *connection* is joined to, if any.
+   *
+   * Unlike the rest of the location, this is not derived from the winning
+   * connection — see `callChannelIdFor`.
+   */
+  callChannelId?: string;
 }
 
 export type PresenceEntry = PresenceIdentity & PresenceLocation;
@@ -66,9 +73,9 @@ export class PresenceRegistry {
   }
 
   /**
-   * Record a location for a connection. Returns the user's derived entry —
-   * always this connection's, since it just became the most recent writer — or
-   * null if the connection is unknown (closed mid-flight).
+   * Record a location for a connection. Returns the user's derived entry — its
+   * location is always this connection's, since it just became the most recent
+   * writer — or null if the connection is unknown (closed mid-flight).
    */
   update(connectionId: string, location: PresenceLocation): PresenceEntry | null {
     const record = this.connections.get(connectionId);
@@ -77,7 +84,10 @@ export class PresenceRegistry {
     record.location = location;
     record.seq = ++this.seq;
 
-    return { ...record.identity, ...location };
+    // Via `entryFor` rather than this record alone: `callChannelId` is unioned
+    // across the user's tabs, so a browsing tab's update must not report the
+    // user as having left the call their other tab is still in.
+    return this.entryFor(record.identity.userId);
   }
 
   /**
@@ -124,7 +134,32 @@ export class PresenceRegistry {
     if (!connectionId) return null;
     const record = this.connections.get(connectionId);
     if (!record?.location) return null;
-    return { ...record.identity, ...record.location };
+    return {
+      ...record.identity,
+      ...record.location,
+      callChannelId: this.callChannelIdFor(userId),
+    };
+  }
+
+  /**
+   * The call this user is in, across *all* their connections.
+   *
+   * Location is "the tab you are looking at", so it comes from the most recent
+   * writer. Call membership is not: a user with the call in one tab and the
+   * board open in another is still in the call, and taking the winner's value
+   * would drop them from the indicator the moment they switched tabs. A user
+   * can only hold one call at a time (joining elsewhere leaves the first), so
+   * any connection reporting one is authoritative.
+   */
+  private callChannelIdFor(userId: string): string | undefined {
+    const conns = this.byUser.get(userId);
+    if (!conns) return undefined;
+    for (const connectionId of conns) {
+      const callChannelId = this.connections.get(connectionId)?.location
+        ?.callChannelId;
+      if (callChannelId) return callChannelId;
+    }
+    return undefined;
   }
 
   private winningConnectionId(userId: string): string | null {

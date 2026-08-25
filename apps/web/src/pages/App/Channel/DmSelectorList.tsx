@@ -29,6 +29,8 @@ import {
   useSidebar,
 } from "../../../components/ui/sidebar";
 import { preloadChatContainer } from "../preload";
+import { ChannelCallIndicator } from "./ChannelCallIndicator";
+import { useChannelCalls } from "@/hooks/use-channel-calls";
 
 type DmChannel = {
   _id: string;
@@ -58,6 +60,8 @@ export const DmSelectorList = memo(function DmSelectorList({
   const { isMobile, setOpen } = useSidebar();
   const hideChannel = useMutation(api.channelVisibility.hideChannel);
   const unhideChannel = useMutation(api.channelVisibility.unhideChannel);
+  // A DM is a channel, so its call reports through the same presence field.
+  const channelCalls = useChannelCalls();
 
   if (!channels || channels.length === 0) return null;
 
@@ -125,6 +129,12 @@ export const DmSelectorList = memo(function DmSelectorList({
                   "truncate",
                   dm.isHidden && "italic text-muted-foreground",
                 )}>{dm.name || "Direct Message"}</span>
+                {(channelCalls.get(dm._id)?.length ?? 0) > 0 && (
+                  <ChannelCallIndicator
+                    participants={channelCalls.get(dm._id) ?? []}
+                    className="ml-auto"
+                  />
+                )}
               </SidebarMenuSubButton>
               <ResponsiveDropdownMenu>
                 <ResponsiveDropdownMenuTrigger render={<button className="absolute right-1 top-1/2 -translate-y-1/2 rounded-sm p-0.5 text-sidebar-foreground/60 md:opacity-0 hover:bg-sidebar-accent hover:text-sidebar-foreground md:group-hover/subitem:opacity-100 data-popup-open:opacity-100" />}>

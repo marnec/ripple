@@ -125,6 +125,8 @@ export default class PresenceServer extends Server {
         currentPath: data.currentPath,
         resourceType: data.resourceType,
         resourceId: data.resourceId,
+        callChannelId:
+          typeof data.callChannelId === "string" ? data.callChannelId : undefined,
       });
       if (!entry) return;
 

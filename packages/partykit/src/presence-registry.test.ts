@@ -121,6 +121,77 @@ describe("PresenceRegistry", () => {
     expect(registry.snapshot()).toEqual([{ ...alice, currentPath: "/channel/2" }]);
   });
 
+  it("carries call membership through to the derived entry", () => {
+    const registry = new PresenceRegistry();
+    registry.add("c1", alice);
+    const entry = registry.update("c1", {
+      currentPath: "/workspaces/w1/channels/ch1/videocall",
+      callChannelId: "ch1",
+    });
+
+    expect(entry).toMatchObject({ callChannelId: "ch1" });
+  });
+
+  it("keeps a user in their call when another tab reports a different page", () => {
+    // The location is the tab you are looking at, so the browsing tab wins it.
+    // Call membership is not — dropping it here would blink the sidebar
+    // indicator off every time a participant switched tabs.
+    const registry = new PresenceRegistry();
+    registry.add("callTab", alice);
+    registry.add("browseTab", alice);
+
+    registry.update("callTab", {
+      currentPath: "/workspaces/w1/channels/ch1/videocall",
+      callChannelId: "ch1",
+    });
+    const entry = registry.update("browseTab", at("/workspaces/w1/projects/p1"));
+
+    expect(entry).toEqual({
+      ...alice,
+      currentPath: "/workspaces/w1/projects/p1",
+      callChannelId: "ch1",
+    });
+    expect(registry.snapshot()).toEqual([
+      {
+        ...alice,
+        currentPath: "/workspaces/w1/projects/p1",
+        callChannelId: "ch1",
+      },
+    ]);
+  });
+
+  it("drops call membership when the tab holding the call closes", () => {
+    const registry = new PresenceRegistry();
+    registry.add("callTab", alice);
+    registry.add("browseTab", alice);
+    registry.update("callTab", {
+      currentPath: "/workspaces/w1/channels/ch1/videocall",
+      callChannelId: "ch1",
+    });
+    registry.update("browseTab", at("/workspaces/w1/projects/p1"));
+
+    registry.remove("callTab");
+
+    expect(registry.snapshot()).toEqual([
+      { ...alice, currentPath: "/workspaces/w1/projects/p1" },
+    ]);
+  });
+
+  it("reports one call per participant, so a call groups by channel", () => {
+    const registry = new PresenceRegistry();
+    registry.add("a1", alice);
+    registry.add("b1", bob);
+    registry.update("a1", { currentPath: "/c/ch1", callChannelId: "ch1" });
+    registry.update("b1", { currentPath: "/elsewhere", callChannelId: "ch1" });
+
+    expect(
+      registry.snapshot().map((e) => [e.userId, e.callChannelId]),
+    ).toEqual([
+      ["u_alice", "ch1"],
+      ["u_bob", "ch1"],
+    ]);
+  });
+
   it("ignores unknown connections", () => {
     const registry = new PresenceRegistry();
     expect(registry.update("ghost", at("/doc/1"))).toBeNull();

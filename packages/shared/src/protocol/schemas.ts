@@ -72,6 +72,7 @@ const presenceUpdateMessageSchema = z.object({
   currentPath: z.string().min(1),
   resourceType: z.string().optional(),
   resourceId: z.string().optional(),
+  callChannelId: z.string().optional(),
 });
 
 /**
@@ -165,6 +166,7 @@ const presenceSnapshotMessageSchema = z.object({
       currentPath: z.string(),
       resourceType: z.string().optional(),
       resourceId: z.string().optional(),
+      callChannelId: z.string().optional(),
     }),
   ),
 });
@@ -180,6 +182,7 @@ const presenceChangedMessageSchema = z.object({
   currentPath: z.string(),
   resourceType: z.string().optional(),
   resourceId: z.string().optional(),
+  callChannelId: z.string().optional(),
 });
 
 /**
