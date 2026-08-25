@@ -11,7 +11,6 @@ interface NodeResult {
   resourceId: string;
   resourceType: string;
   name: string;
-  tags: string[];
 }
 
 interface CellRefDialogOpen {

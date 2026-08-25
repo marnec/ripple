@@ -768,7 +768,6 @@ describe("calendarEvents", () => {
       expect(node?.name).toBe("Sprint planning");
       expect(node?.workspaceId).toBe(workspaceId);
       expect(node?.searchable).toBe(false);
-      expect(node?.tags).toEqual([]);
     });
 
     it("renaming an event syncs the node name", async () => {
@@ -797,7 +796,7 @@ describe("calendarEvents", () => {
       expect(node?.name).toBe("Renamed");
     });
 
-    it("updateEventTags reconciles entityTags + denormalised tags + node tags", async () => {
+    it("updateEventTags reconciles entityTags + denormalised tags", async () => {
       const { workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
       const eventId = await asUser.mutation(api.calendarEvents.create, {
         workspaceId: workspaceId as any,
@@ -816,15 +815,6 @@ describe("calendarEvents", () => {
       // Denormalised on event row.
       const event = await t.run(async (ctx) => ctx.db.get(eventId));
       expect(event?.tags?.sort()).toEqual(["planning", "q2"]);
-
-      // Synced into the node row.
-      const node = await t.run(async (ctx) =>
-        ctx.db
-          .query("nodes")
-          .withIndex("by_resource", (q) => q.eq("resourceId", eventId))
-          .first(),
-      );
-      expect(node?.tags.sort()).toEqual(["planning", "q2"]);
 
       // entityTags rows exist for the event.
       const entityTags = await t.run(async (ctx) =>

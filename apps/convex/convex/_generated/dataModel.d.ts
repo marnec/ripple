@@ -1015,7 +1015,7 @@ export type DataModel = {
         | "user"
         | "calendarEvent";
       searchable?: boolean;
-      tags: Array<string>;
+      tags?: Array<string>;
       workspaceId: Id<"workspaces">;
       _id: Id<"nodes">;
       _creationTime: number;

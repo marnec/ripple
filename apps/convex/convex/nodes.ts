@@ -11,7 +11,6 @@ const nodeResultValidator = v.object({
   resourceId: v.string(),
   resourceType: v.string(),
   name: v.string(),
-  tags: v.array(v.string()),
 });
 
 /**
@@ -57,7 +56,6 @@ export const search = query({
       resourceId: r.resourceId,
       resourceType: r.resourceType,
       name: r.name,
-      tags: r.tags,
     }));
   },
 });

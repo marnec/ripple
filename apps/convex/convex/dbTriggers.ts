@@ -160,23 +160,23 @@ async function insertNode(
   await ctx.db.insert("nodes", fields);
 }
 
+// Name only. The node used to mirror the resource's tags too, which meant a
+// tag-only edit — where the name is untouched — still cost an indexed lookup
+// plus a patch here, inside the user's mutation, on every tagged resource.
+// Nothing read that mirror; see the note on `nodes.tags` in schema.ts.
 async function syncNode(
   ctx: Parameters<Parameters<typeof triggers.register>[1]>[0],
   id: string,
   newName: string,
-  newTags: string[],
   oldName: string,
-  oldTags: string[],
 ) {
-  if (newName === oldName && JSON.stringify(newTags) === JSON.stringify(oldTags)) {
-    return;
-  }
+  if (newName === oldName) return;
   const node = await ctx.db
     .query("nodes")
     .withIndex("by_resource", (q) => q.eq("resourceId", id))
     .first();
   if (node) {
-    await ctx.db.patch(node._id, { name: newName, tags: newTags });
+    await ctx.db.patch(node._id, { name: newName });
   }
 }
 
@@ -187,13 +187,10 @@ triggers.register("documents", async (ctx, change) => {
       resourceType: "document",
       resourceId: change.id,
       name: change.newDoc.name,
-      tags: change.newDoc.tags ?? [],
       searchable: true,
     });
   } else if (change.operation === "update") {
-    await syncNode(ctx, change.id,
-      change.newDoc.name, change.newDoc.tags ?? [],
-      change.oldDoc.name, change.oldDoc.tags ?? []);
+    await syncNode(ctx, change.id, change.newDoc.name, change.oldDoc.name);
   } else if (change.operation === "delete") {
     // Clear the transcript FK on any call session that linked to this doc, so
     // `callSessions.transcriptDocumentId` never dangles after a deletion.
@@ -217,13 +214,10 @@ triggers.register("diagrams", async (ctx, change) => {
       resourceType: "diagram",
       resourceId: change.id,
       name: change.newDoc.name,
-      tags: change.newDoc.tags ?? [],
       searchable: true,
     });
   } else if (change.operation === "update") {
-    await syncNode(ctx, change.id,
-      change.newDoc.name, change.newDoc.tags ?? [],
-      change.oldDoc.name, change.oldDoc.tags ?? []);
+    await syncNode(ctx, change.id, change.newDoc.name, change.oldDoc.name);
   }
   // delete: node + edge cleanup handled by cascade rules
 });
@@ -235,13 +229,10 @@ triggers.register("spreadsheets", async (ctx, change) => {
       resourceType: "spreadsheet",
       resourceId: change.id,
       name: change.newDoc.name,
-      tags: change.newDoc.tags ?? [],
       searchable: true,
     });
   } else if (change.operation === "update") {
-    await syncNode(ctx, change.id,
-      change.newDoc.name, change.newDoc.tags ?? [],
-      change.oldDoc.name, change.oldDoc.tags ?? []);
+    await syncNode(ctx, change.id, change.newDoc.name, change.oldDoc.name);
   }
   // delete: node + edge cleanup handled by cascade rules
 });
@@ -253,7 +244,6 @@ triggers.register("projects", async (ctx, change) => {
       resourceType: "project",
       resourceId: change.id,
       name: change.newDoc.name,
-      tags: [],
       searchable: true,
     });
   } else if (change.operation === "update") {
@@ -274,7 +264,6 @@ triggers.register("channels", async (ctx, change) => {
       resourceType: "channel",
       resourceId: change.id,
       name: change.newDoc.name,
-      tags: [],
       searchable: true,
     });
   } else if (change.operation === "update") {
@@ -295,7 +284,6 @@ triggers.register("tasks", async (ctx, change) => {
       resourceType: "task",
       resourceId: change.id,
       name: change.newDoc.title,
-      tags: change.newDoc.labels ?? [],
       metadata: { type: "task", projectId: change.newDoc.projectId },
       searchable: true,
     });
@@ -304,8 +292,6 @@ triggers.register("tasks", async (ctx, change) => {
     // something the node actually mirrors changes, to avoid unnecessary writes
     // to the nodes table.
     const titleChanged = change.newDoc.title !== change.oldDoc.title;
-    const labelsChanged =
-      JSON.stringify(change.newDoc.labels ?? []) !== JSON.stringify(change.oldDoc.labels ?? []);
     // No mutation currently moves a task between projects — `tasks.update` does
     // not accept `projectId` and nothing else patches it — so this is dead
     // today, exactly like the `belongs_to` move branch below. It is here so the
@@ -314,7 +300,7 @@ triggers.register("tasks", async (ctx, change) => {
     // workspace graph's task→project grouping, and both would silently show the
     // old project the day a "move task" feature lands.
     const projectChanged = change.newDoc.projectId !== change.oldDoc.projectId;
-    if (!titleChanged && !labelsChanged && !projectChanged) return;
+    if (!titleChanged && !projectChanged) return;
     const node = await ctx.db
       .query("nodes")
       .withIndex("by_resource", (q) => q.eq("resourceId", change.id))
@@ -322,7 +308,6 @@ triggers.register("tasks", async (ctx, change) => {
     if (node) {
       await ctx.db.patch(node._id, {
         name: change.newDoc.title,
-        tags: change.newDoc.labels ?? [],
         ...(projectChanged
           ? { metadata: { type: "task" as const, projectId: change.newDoc.projectId } }
           : {}),
@@ -336,8 +321,8 @@ triggers.register("tasks", async (ctx, change) => {
 // in the graph and edges (so transcripts, mentions, action-items can link to
 // them) but stay out of `nodes.search` (Ctrl+K). High-frequency patches like
 // SEQUENCE bumps and RSVP-driven sequence increments shouldn't write to the
-// node, so we filter on title/tags changes only — same shape as the tasks
-// trigger above.
+// node, so we filter on title changes only — same shape as the tasks trigger
+// above.
 triggers.register("calendarEvents", async (ctx, change) => {
   if (change.operation === "insert") {
     await insertNode(ctx, {
@@ -345,25 +330,10 @@ triggers.register("calendarEvents", async (ctx, change) => {
       resourceType: "calendarEvent",
       resourceId: change.id,
       name: change.newDoc.title,
-      tags: change.newDoc.tags ?? [],
       searchable: false,
     });
   } else if (change.operation === "update") {
-    const titleChanged = change.newDoc.title !== change.oldDoc.title;
-    const tagsChanged =
-      JSON.stringify(change.newDoc.tags ?? []) !==
-      JSON.stringify(change.oldDoc.tags ?? []);
-    if (!titleChanged && !tagsChanged) return;
-    const node = await ctx.db
-      .query("nodes")
-      .withIndex("by_resource", (q) => q.eq("resourceId", change.id))
-      .first();
-    if (node) {
-      await ctx.db.patch(node._id, {
-        name: change.newDoc.title,
-        tags: change.newDoc.tags ?? [],
-      });
-    }
+    await syncNode(ctx, change.id, change.newDoc.title, change.oldDoc.title);
   }
   // delete: cascadeDelete.ts handles node + edges + entityTags + invitees
 });
@@ -379,7 +349,6 @@ triggers.register("workspaceMembers", async (ctx, change) => {
       resourceType: "user",
       resourceId: change.newDoc.userId,
       name: user?.name ?? user?.email ?? "Unknown",
-      tags: [],
       searchable: true,
     });
   } else if (change.operation === "delete") {

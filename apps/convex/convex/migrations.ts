@@ -123,6 +123,7 @@ export const runAll = migrations.runner([
   internal.migrations.backfillChannelNodes,
   internal.migrations.backfillTaskNodes,
   internal.migrations.backfillNodeSearchable,
+  internal.migrations.stripNodeTags,
   internal.migrations.backfillCalendarEventNodes,
   internal.migrations.stripMessageEdges,
   internal.migrations.stripEdgeGroupId,
@@ -626,7 +627,6 @@ export const backfillDocumentNodes = migrations.define({
       resourceType: "document",
       resourceId: doc._id,
       name: doc.name,
-      tags: doc.tags ?? [],
       searchable: true,
     });
   },
@@ -645,7 +645,6 @@ export const backfillDiagramNodes = migrations.define({
       resourceType: "diagram",
       resourceId: doc._id,
       name: doc.name,
-      tags: doc.tags ?? [],
       searchable: true,
     });
   },
@@ -664,7 +663,6 @@ export const backfillSpreadsheetNodes = migrations.define({
       resourceType: "spreadsheet",
       resourceId: doc._id,
       name: doc.name,
-      tags: doc.tags ?? [],
       searchable: true,
     });
   },
@@ -683,7 +681,6 @@ export const backfillProjectNodes = migrations.define({
       resourceType: "project",
       resourceId: doc._id,
       name: doc.name,
-      tags: [],
       searchable: true,
     });
   },
@@ -702,7 +699,6 @@ export const backfillChannelNodes = migrations.define({
       resourceType: "channel",
       resourceId: channel._id,
       name: channel.name,
-      tags: [],
       searchable: true,
     });
   },
@@ -721,7 +717,6 @@ export const backfillTaskNodes = migrations.define({
       resourceType: "task",
       resourceId: task._id,
       name: task.title,
-      tags: task.labels ?? [],
       metadata: { type: "task", projectId: task.projectId },
       searchable: true,
     });
@@ -742,6 +737,23 @@ export const backfillNodeSearchable = migrations.define({
   },
 });
 
+// Drop the deprecated `nodes.tags` mirror. Nothing read it — `nodes.search` no
+// longer returns it and `getWorkspaceGraph` draws `tagged_with` from
+// `entityTags`/`taskTags` — but every tag edit on every taggable resource paid
+// an indexed lookup plus a patch here to maintain it. The triggers have stopped
+// writing it; this clears what they left. Once this has run everywhere, delete
+// the column from `nodes` in schema.ts (see the note there) — the same
+// widen → strip → narrow that `cleanupProjectTagsField` and `stripTaskStartDate`
+// perform for their columns. Idempotent, so it is safe in `runAll`.
+export const stripNodeTags = migrations.define({
+  table: "nodes",
+  migrateOne: async (ctx, node) => {
+    const legacy = node as Record<string, unknown>;
+    if (legacy.tags === undefined) return;
+    await ctx.db.patch(node._id, { tags: undefined } as never);
+  },
+});
+
 // Calendar events as nodes. `searchable: false` keeps them out of Ctrl+K
 // (`nodes.search`) — events are discovered via the calendar UI or via
 // backlinks from connected nodes — but they still participate in the
@@ -759,7 +771,6 @@ export const backfillCalendarEventNodes = migrations.define({
       resourceType: "calendarEvent",
       resourceId: event._id,
       name: event.title,
-      tags: event.tags ?? [],
       searchable: false,
     });
   },
@@ -1010,7 +1021,6 @@ export const backfillUserNodes = migrations.define({
       resourceType: "user",
       resourceId: member.userId,
       name: user?.name ?? user?.email ?? "Unknown",
-      tags: [],
     } as never);
   },
 });

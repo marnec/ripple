@@ -1054,7 +1054,19 @@ export default defineSchema({
     ),
     resourceId: v.string(), // typed Convex ID cast to string (polymorphic)
     name: v.string(),       // tasks map title→name
-    tags: v.array(v.string()), // tasks map labels→tags; channels always []
+    // DEPRECATED — being removed. Nothing reads this: `nodes.search` no longer
+    // returns it and `getWorkspaceGraph` builds its `tagged_with` links from
+    // `entityTags`/`taskTags` (which carry `tagName` alongside the resource id,
+    // so per-node tag chips come free from rows that query already collects in
+    // its `includeTags` branch). It could never have served tag search either —
+    // a search index's `filterFields` do whole-value equality, so `eq("tags",
+    // [...])` matches an exact array, not "has this tag".
+    //
+    // Widened to optional so the writers could stop; `stripNodeTags` (runAll)
+    // clears the column. Delete this line once that has run everywhere — the
+    // same widen → strip → narrow the `projects.tags` and `tasks.startDate`
+    // drops used.
+    tags: v.optional(v.array(v.string())),
     // Set at node creation and maintained by the tasks node trigger if the
     // task ever changes project. Was documented as "immutable, set once" —
     // which was true only because no write path moves a task between projects,

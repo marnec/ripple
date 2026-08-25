@@ -47,12 +47,6 @@ async function listTaskTags(t: Ctx, taskId: Id<"tasks">) {
   );
 }
 
-async function nodeFor(t: Ctx, resourceId: string) {
-  return await t.run(async (ctx) =>
-    ctx.db.query("nodes").withIndex("by_resource", (q) => q.eq("resourceId", resourceId)).first(),
-  );
-}
-
 // ── tasks.updatePosition (kanban drag) ───────────────────────────────
 // `updatePosition` writes `completed` alongside the status move. That is the
 // exact column `taskTags.by_project_tag_completed` partitions on, so a stale
@@ -120,48 +114,6 @@ describe("taskStatuses.update maintains denormalized columns", () => {
     await t.finishAllScheduledFunctions(vi.runAllTimers);
 
     expect((await listTaskTags(t, taskId))[0].completed).toBe(true);
-  });
-});
-
-// ── tagSync.deleteTag ────────────────────────────────────────────────
-// deleteTag strips the tag name from each resource's denormalized array. The
-// `nodes` mirror of that array powers the workspace graph and Ctrl+K search.
-
-describe("tagSync.deleteTag maintains the nodes mirror", () => {
-  it("clears the deleted tag from the document's node row", async () => {
-    const t = createTestContext();
-    const { workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
-
-    const docId = await asUser.mutation(api.documents.create, { workspaceId });
-    await asUser.mutation(api.documents.updateTags, { id: docId, tags: ["shared"] });
-    expect((await nodeFor(t, docId))?.tags).toEqual(["shared"]);
-
-    const tags = await t.run(async (ctx) =>
-      ctx.db.query("tags").withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId)).collect(),
-    );
-    await asUser.mutation(api.tagSync.deleteTag, { tagId: tags[0]._id });
-    await t.finishAllScheduledFunctions(vi.runAllTimers);
-
-    expect((await nodeFor(t, docId))?.tags ?? []).toEqual([]);
-  });
-
-  it("clears the deleted tag from the task's node row", async () => {
-    const t = createTestContext();
-    const { workspaceId, userId, asUser } = await setupWorkspaceWithAdmin(t);
-    const { projectId } = await setupProject(t, { workspaceId, userId });
-
-    const taskId = await asUser.mutation(api.tasks.create, {
-      projectId, workspaceId, title: "tagged", labels: ["shared"],
-    });
-    expect((await nodeFor(t, taskId))?.tags).toEqual(["shared"]);
-
-    const tags = await t.run(async (ctx) =>
-      ctx.db.query("tags").withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId)).collect(),
-    );
-    await asUser.mutation(api.tagSync.deleteTag, { tagId: tags[0]._id });
-    await t.finishAllScheduledFunctions(vi.runAllTimers);
-
-    expect((await nodeFor(t, taskId))?.tags ?? []).toEqual([]);
   });
 });
 

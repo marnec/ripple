@@ -2084,12 +2084,7 @@ export declare const api: {
         searchText: string;
         workspaceId: Id<"workspaces">;
       },
-      Array<{
-        name: string;
-        resourceId: string;
-        resourceType: string;
-        tags: Array<string>;
-      }>
+      Array<{ name: string; resourceId: string; resourceType: string }>
     >;
     suggest: FunctionReference<
       "query",
@@ -6032,6 +6027,20 @@ export declare const internal: {
       any
     >;
     stripMessageEdges: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        batchSize?: number;
+        cursor?: string | null;
+        dryRun?: boolean;
+        fn?: string;
+        next?: Array<string>;
+        oneBatchOnly?: boolean;
+        reset?: boolean;
+      },
+      any
+    >;
+    stripNodeTags: FunctionReference<
       "mutation",
       "internal",
       {
