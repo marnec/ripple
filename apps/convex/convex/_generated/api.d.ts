@@ -764,7 +764,7 @@ export declare const api: {
           numItems: number;
         };
         searchText?: string;
-        type?: "open" | "closed" | "dm";
+        type?: "open" | "closed";
         workspaceId: Id<"workspaces">;
       },
       {
@@ -6006,6 +6006,20 @@ export declare const internal: {
       },
       any
     >;
+    stripDmDiscoverability: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        batchSize?: number;
+        cursor?: string | null;
+        dryRun?: boolean;
+        fn?: string;
+        next?: Array<string>;
+        oneBatchOnly?: boolean;
+        reset?: boolean;
+      },
+      any
+    >;
     stripDocumentFields: FunctionReference<
       "mutation",
       "internal",
@@ -6615,14 +6629,6 @@ export declare const internal: {
         formatHint?: "csv" | "json" | "vtt" | "srt";
         storageId: Id<"_storage">;
       },
-      null
-    >;
-  };
-  userDenormalizationSync: {
-    syncDmChannelNames: FunctionReference<
-      "mutation",
-      "internal",
-      { userId: Id<"users"> },
       null
     >;
   };

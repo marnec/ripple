@@ -124,6 +124,7 @@ export const runAll = migrations.runner([
   internal.migrations.backfillTaskNodes,
   internal.migrations.backfillNodeSearchable,
   internal.migrations.stripNodeTags,
+  internal.migrations.stripDmDiscoverability,
   internal.migrations.backfillCalendarEventNodes,
   internal.migrations.stripMessageEdges,
   internal.migrations.stripEdgeGroupId,
@@ -753,6 +754,38 @@ export const backfillNodeSearchable = migrations.define({
 // the column from `nodes` in schema.ts (see the note there) — the same
 // widen → strip → narrow that `cleanupProjectTagsField` and `stripTaskStartDate`
 // perform for their columns. Idempotent, so it is safe in `runAll`.
+/**
+ * Undo both halves of a DM's old workspace-wide discoverability.
+ *
+ * 1. Delete its `nodes` row. The channels trigger no longer creates one: a
+ *    DM's label names both participants, and every reader of `nodes`
+ *    (`nodes.search`, `getWorkspaceGraph`) is scoped to the workspace rather
+ *    than to the conversation.
+ * 2. Blank `channels.name`. The label is now derived from the participants at
+ *    read time (`lib/dmLabel.ts`), so the stored snapshot has no reader — and
+ *    a stale roster string left lying in the column is a trap for whoever next
+ *    writes `channel.name` without checking the type. It also fed
+ *    `channels.searchIndex("by_name")`, which is the index this work exists to
+ *    stop feeding.
+ *
+ * Iterates `channels` rather than `nodes` so only DM rows pay an index lookup.
+ * Idempotent: a DM already stripped is a no-op on both counts.
+ */
+export const stripDmDiscoverability = migrations.define({
+  table: "channels",
+  migrateOne: async (ctx, channel) => {
+    if (channel.type !== "dm") return;
+
+    const node = await ctx.db
+      .query("nodes")
+      .withIndex("by_resource", (q) => q.eq("resourceId", channel._id))
+      .first();
+    if (node) await ctx.db.delete(node._id);
+
+    if (channel.name !== "") await ctx.db.patch(channel._id, { name: "" });
+  },
+});
+
 export const stripNodeTags = migrations.define({
   table: "nodes",
   migrateOne: async (ctx, node) => {

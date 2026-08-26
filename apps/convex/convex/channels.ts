@@ -6,6 +6,9 @@ import { ChannelRole, ChannelType } from "@ripple/shared/enums";
 import { logActivity } from "./auditLog";
 import { getUserDisplayName } from "@ripple/shared/displayName";
 import { WORKSPACE_CHANNEL_LIMIT } from "@ripple/shared/constants";
+import { mergedStream, stream } from "convex-helpers/server/stream";
+import { dmLabelForViewer } from "./lib/dmLabel";
+import schema from "./schema";
 import { internal } from "./_generated/api";
 import { cascadeDelete } from "./cascadeDelete";
 import { requireWorkspaceMember, checkWorkspaceMember, requireChannelAccess, requireUser } from "./authHelpers";
@@ -153,7 +156,21 @@ export const get = query({
     return {
       _id: channel._id,
       _creationTime: channel._creationTime,
-      name: channel.name,
+      // A DM stores no label, so derive it here rather than at each caller:
+      // the chat header, the call share sheet and the recent-items list all
+      // read this query's `name`, and none of them should have to know that a
+      // DM is different. Viewer-relative, because a conversation is labelled
+      // with the other person.
+      //
+      // This does not reopen the discovery hole that removing DMs from search
+      // closed: reaching this query means already holding the channel id, and
+      // `getAccessInfo` deliberately discloses a DM's participants to exactly
+      // that caller so the "you are not in this conversation" gate can name
+      // them. What a DM is not is *findable* without the id.
+      name:
+        channel.type === "dm"
+          ? await dmLabelForViewer(ctx, channel._id, auth.userId)
+          : channel.name,
       workspaceId: channel.workspaceId,
       type: channel.type,
     };
@@ -229,7 +246,11 @@ export const search = query({
   args: {
     workspaceId: v.id("workspaces"),
     searchText: v.optional(v.string()),
-    type: v.optional(channelTypeSchema),
+    // Browsable types only. `channelTypeSchema` would also admit "dm", and a
+    // DM is not a browsable resource — its name is its roster. The browse UI
+    // only ever sends "open" / "closed" / nothing (ChannelVisibilityFilter is
+    // "all" | "public" | "private"), so nothing legitimate is lost.
+    type: v.optional(v.union(v.literal("open"), v.literal("closed"))),
     paginationOpts: paginationOptsValidator,
   },
   returns: v.object({
@@ -249,6 +270,12 @@ export const search = query({
             const base = q.search("name", searchText).eq("workspaceId", workspaceId);
             return type !== undefined ? base.eq("type", type) : base;
           })
+          // A DM's stored name is `<A> × <B>` — it *is* the roster. The search
+          // index's filterFields do whole-value equality, so "any type except
+          // dm" cannot be expressed there; this is the sanctioned narrowing.
+          // Post-filtering can shorten a page, which is acceptable here: a
+          // name search matches few rows to begin with.
+          .filter((q) => q.neq(q.field("type"), "dm"))
           .paginate(paginationOpts)
       : type !== undefined
         ? await ctx.db
@@ -257,10 +284,28 @@ export const search = query({
               q.eq("type", type).eq("workspaceId", workspaceId),
             )
             .paginate(paginationOpts)
-        : await ctx.db
-            .query("channels")
-            .withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
-            .paginate(paginationOpts);
+        : // "All" means open + closed, never DMs. Merging two index ranges
+          // rather than scanning `by_workspace` and discarding: a workspace
+          // accumulates DMs faster than channels (their count grows with the
+          // square of the member count), so a post-filter would read mostly
+          // rows it throws away and hand back near-empty pages.
+          await mergedStream(
+            [
+              stream(ctx.db, schema)
+                .query("channels")
+                .withIndex("by_type_workspace", (q) =>
+                  q.eq("type", ChannelType.OPEN).eq("workspaceId", workspaceId),
+                ),
+              stream(ctx.db, schema)
+                .query("channels")
+                .withIndex("by_type_workspace", (q) =>
+                  q.eq("type", ChannelType.CLOSED).eq("workspaceId", workspaceId),
+                ),
+            ],
+            // Both streams pin every field before `_creationTime`, so each is
+            // already ordered by it and the merge is a straight interleave.
+            ["_creationTime"],
+          ).paginate(paginationOpts);
 
     return {
       ...result,
@@ -357,18 +402,26 @@ export const createDm = mutation({
       }
     }
 
-    // No existing DM — create one. Auto-generate a stable name from both
-    // participants' display names (sorted so both parties see the same label).
-    // This is a snapshot — if a user later changes their display name the DM
-    // label won't auto-update, but the sidebar falls back to dynamic resolution
-    // if `name` is empty (see workspaceSidebarData.ts).
+    // No existing DM — create one with NO stored label. A DM's label is
+    // derived from its participants at read time (`lib/dmLabel.ts`).
+    //
+    // It used to be materialized here as a sorted `<A> × <B>` snapshot, which
+    // then went stale on any rename — so a fan-out job patched every affected
+    // DM whenever a display name changed. That job existed to feed
+    // `channels.searchIndex("by_name")`, since a search index can only index a
+    // stored field. A DM is no longer workspace-wide discoverable, so there is
+    // no index to feed and nothing to keep fresh.
+    //
+    // `callerName` / `otherName` are still computed below, for the activity
+    // log: an audit entry is a point-in-time record and *should* say the name
+    // as of the event, which is the opposite of a cache.
     const callerName = callerUser ? getUserDisplayName(callerUser) : "Unknown";
     const otherName = otherUser ? getUserDisplayName(otherUser) : "Unknown";
     const [first, second] = [callerName, otherName].sort();
     const dmName = `${first} × ${second}`;
 
     const channelId = await ctx.db.insert("channels", {
-      name: dmName,
+      name: "",
       workspaceId,
       type: ChannelType.DM,
     });

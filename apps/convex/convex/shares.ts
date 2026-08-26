@@ -1,4 +1,5 @@
 import { v, ConvexError } from "convex/values";
+import { dmLabelFull } from "./lib/dmLabel";
 import { action, internalQuery, query } from "./_generated/server";
 import { internalMutation, mutation } from "./functions";
 import { internal } from "./_generated/api";
@@ -359,7 +360,11 @@ export const getShareInfo = query({
     if (share.resourceType === "channel") {
       const channel = await ctx.db.get(share.resourceId as Id<"channels">);
       if (!channel) return { status: "not_found" as const };
-      resourceName = channel.name;
+      // A DM stores no label. Guests on a share link are not Convex-
+      // authenticated, so there is no viewer to be relative to — the
+      // participant-independent form is the only one available here.
+      resourceName =
+        channel.type === "dm" ? await dmLabelFull(ctx, channel._id) : channel.name;
     } else if (share.resourceType === "calendarEvent") {
       // A missing event row means the organizer cancelled (cancellation =
       // hard delete + cascade). The share row itself is cascade-deleted, so

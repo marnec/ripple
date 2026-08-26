@@ -103,6 +103,9 @@ export const ingestTranscript = internalAction({
       hour: "numeric",
       minute: "2-digit",
     });
+    // `channel.name` is already the derived label for a DM: this runs in an
+    // action with no `ctx.db`, and the query that supplied it
+    // (`callSessions.getChannelForTranscript`) resolves it.
     const name = `${channel.name} call — ${stamp}`;
 
     // Markdown → Yjs cold-start snapshot via the headless editor (it owns the

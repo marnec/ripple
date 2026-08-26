@@ -35,8 +35,12 @@ describe("channels.createDm", () => {
 
     const channel = await t.run(async (ctx) => ctx.db.get(channelId));
     expect(channel?.type).toBe("dm");
-    // Name is auto-set from both participants' display names, sorted alphabetically
-    expect(channel?.name).toBe("Member × Test User");
+    // The row carries no rendered label. It used to store a sorted
+    // `<A> × <B>` snapshot to feed `channels.searchIndex("by_name")`, which
+    // then needed a rename fan-out to stay fresh. A DM is no longer
+    // workspace-wide discoverable, so the label is derived where it is shown
+    // (`lib/dmLabel.ts`) and there is nothing to keep in sync.
+    expect(channel?.name).toBe("");
   });
 
   it("deduplicates DMs — second call returns the same channel", async () => {
@@ -178,7 +182,7 @@ describe("channels.createDm", () => {
     expect(adminAccess).toEqual({ isMember: true });
   });
 
-  it("updates DM channel name (and its node) when a participant's display name changes", async () => {
+  it("needs no propagation when a participant's display name changes", async () => {
     const t = createTestContext();
     const { workspaceId, asUser: asAdmin } = await setupWorkspaceWithAdmin(t);
     const { userId: memberId } = await setupAuthenticatedUser(t, {
@@ -200,7 +204,7 @@ describe("channels.createDm", () => {
     });
 
     const beforeRename = await t.run(async (ctx) => ctx.db.get(dmId));
-    expect(beforeRename?.name).toBe("Alice × Test User");
+    expect(beforeRename?.name).toBe("");
 
     // Rename Alice via writerWithTriggers so the users trigger fires and
     // schedules the sync mutation.
@@ -210,16 +214,23 @@ describe("channels.createDm", () => {
     });
     await t.finishAllScheduledFunctions(vi.runAllTimers);
 
+    // Nothing was propagated, because nothing is stored. What the user sees
+    // is asserted where it is produced — see `tests/dmLabel.test.ts`, which
+    // checks the sidebar reflects the rename with no scheduled work at all.
     const afterRename = await t.run(async (ctx) => ctx.db.get(dmId));
-    expect(afterRename?.name).toBe("Test User × Zelda");
+    expect(afterRename?.name).toBe("");
 
-    // And the node that mirrors the DM should have been updated too
+    // This used to assert that the DM's `nodes` mirror was renamed alongside
+    // it. A DM now has no node at all: `nodes` is a workspace-wide index, and
+    // every reader of it is scoped to the workspace rather than to the
+    // conversation, so a label that names both participants does not belong
+    // there. See `tests/dmDiscovery.access.test.ts`.
     const dmNode = await t.run(async (ctx) =>
       ctx.db
         .query("nodes")
         .withIndex("by_resource", (q) => q.eq("resourceId", dmId))
         .first(),
     );
-    expect(dmNode?.name).toBe("Test User × Zelda");
+    expect(dmNode, "a DM is not mirrored into the workspace-wide node index").toBeNull();
   });
 });

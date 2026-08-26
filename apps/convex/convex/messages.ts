@@ -6,6 +6,7 @@ import { paginationOptsValidator } from "convex/server";
 import { getAll } from "convex-helpers/server/relationships";
 import { extractEventMentionIds, extractMentionedUserIds, extractPlainTextFromBody, extractProjectIds, extractResourceReferenceIds, extractTaskMentionIds } from "./utils/blocknote";
 import { getUserDisplayName } from "@ripple/shared/displayName";
+import { mentionTitle } from "./lib/mentionTitle";
 import { isMessageEditable } from "@ripple/shared/constants";
 import { DatabaseReader } from "./_generated/server";
 import { requireChannelAccess, filterChannelRecipients } from "./authHelpers";
@@ -710,7 +711,7 @@ export const send = mutation({
         userName: getUserDisplayName(user),
         recipientIds: mentionRecipients,
         resourceId: channelId,
-        title: `${getUserDisplayName(user)} mentioned you in #${channel.name}`,
+        title: mentionTitle(getUserDisplayName(user), channel),
         body: pushText.length > 100 ? pushText.slice(0, 97) + "..." : pushText,
         url: `/workspaces/${channel.workspaceId}/channels/${channelId}`,
       });

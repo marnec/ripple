@@ -260,6 +260,19 @@ triggers.register("projects", async (ctx, change) => {
 
 triggers.register("channels", async (ctx, change) => {
   if (change.operation === "insert") {
+    // A DM gets no node row at all. Its name is `<A> × <B>`, so the label *is*
+    // the roster, and `nodes` is a workspace-wide index: every reader of it —
+    // `nodes.search` and `getWorkspaceGraph` — is scoped to the workspace, not
+    // to the conversation. Excluding it here rather than at each reader is
+    // what makes that true for readers not yet written; `searchable: false`
+    // would only have covered the search one, since the graph collects the
+    // whole `by_workspace` range regardless of that flag.
+    //
+    // Nothing needs a DM's node: breadcrumbs resolve names with `ctx.db.get`
+    // on the resource itself (`breadcrumb.resolveResourceName`), and the
+    // sidebar derives a DM's label from its participants.
+    if (change.newDoc.type === "dm") return;
+
     await insertNode(ctx, {
       workspaceId: change.newDoc.workspaceId,
       resourceType: "channel",
@@ -429,14 +442,14 @@ triggers.register("users", async (ctx, change) => {
       }),
     );
 
-    // DM channel names stay on the scheduler. That half is read-heavy (every
-    // member of every DM the user is in) and it patches `channels`, which
-    // cascades through the channels trigger into `nodes`. It is also the half
-    // that tolerates delay: a DM label is a label, not a key.
-    await ctx.scheduler.runAfter(0, internal.userDenormalizationSync.syncDmChannelNames, {
-      userId: change.id,
-    });
   }
+
+  // There used to be a second half here: a scheduled fan-out that recomputed
+  // `channels.name` for every DM this user is in. It is gone. A DM's label is
+  // derived from its participants when it is read (`lib/dmLabel.ts`), so a
+  // rename has nothing to propagate — no per-DM member scan, no `channels`
+  // patch, and none of the `nodes` and aggregate cascades those patches set
+  // off for every client subscribed to the workspace graph.
 });
 
 // ── Node ID lookup helper ───────────────────────────────────────────
