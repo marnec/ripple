@@ -6,6 +6,7 @@ import { components, internal } from "./_generated/api";
 import { Triggers, writerWithTriggers } from "convex-helpers/server/triggers";
 import type { GenericMutationCtx } from "convex/server";
 import { extractMessageTargets } from "./utils/blocknote";
+import { getUserDisplayName } from "@ripple/shared/displayName";
 import { scheduleSubscriptionDrain } from "./subscriptionPool";
 import {
   onChannelMemberInsert,
@@ -366,8 +367,12 @@ triggers.register("workspaceMembers", async (ctx, change) => {
 triggers.register("users", async (ctx, change) => {
   if (change.operation !== "update") return;
 
-  const oldName = change.oldDoc.name ?? change.oldDoc.email ?? "Unknown";
-  const newName = change.newDoc.name ?? change.newDoc.email ?? "Unknown";
+  // `getUserDisplayName` rather than a local `??` chain: it is the canonical
+  // derivation, and it differs from `??` for an empty-string name (`||` falls
+  // through to the email, `??` does not). The readers of both mirrors below
+  // use it, so writing anything else here mirrors a name nobody displays.
+  const oldName = getUserDisplayName(change.oldDoc);
+  const newName = getUserDisplayName(change.newDoc);
   const nameChanged = oldName !== newName;
   const emailChanged = change.oldDoc.email !== change.newDoc.email;
 
@@ -384,10 +389,51 @@ triggers.register("users", async (ctx, change) => {
     );
   }
 
-  // channelMembers denormalized name/email — offloaded via scheduler so the
-  // originating mutation stays fast even if the user is in many channels.
+  // channelMembers denormalized name/email — synced INLINE, in this
+  // transaction. It used to be offloaded with `scheduler.runAfter(0)` to keep
+  // the originating mutation fast, and that was the wrong trade:
+  // `channelMembers.email` is not a read cache. It is the DM-dedup key
+  // (`channels.createDm`) — when a user deletes their account and signs up
+  // again, the membership row is the only surviving record of who they were,
+  // because their `users` row is gone and there is nothing left to join to.
+  // A scheduled mutation that fails is never retried, so one silent failure
+  // used to make that key permanently wrong, and the symptom — a duplicate DM
+  // instead of the old conversation — surfaces much later and looks like
+  // something else entirely. In-transaction, the copy cannot disagree with
+  // the row it copies.
+  //
+  // The write set is bounded by the user's channel count, which
+  // WORKSPACE_CHANNEL_LIMIT caps per workspace, and the frequency is bounded
+  // by the rename cooldown in `users.update`. Note the nested trigger does
+  // NOT amplify this: the `channelMembers` trigger handles insert and delete
+  // only, so these updates cascade into nothing.
   if (nameChanged || emailChanged) {
-    await ctx.scheduler.runAfter(0, internal.userDenormalizationSync.syncToChannelMembers, {
+    // `.collect()` and not `.take(n)`: the rows past n would keep a stale
+    // dedup key, which is the exact failure this inline sync exists to
+    // prevent. Bounded by the user's channel count (WORKSPACE_CHANNEL_LIMIT
+    // per workspace, plus DMs) and rate-limited by the rename cooldown.
+    // eslint-disable-next-line @convex-dev/no-collect-in-query
+    const memberships = await ctx.db
+      .query("channelMembers")
+      .withIndex("by_user", (q) => q.eq("userId", change.id))
+      .collect();
+
+    await Promise.all(
+      memberships.map((m) => {
+        const updates: { name?: string; email?: string } = {};
+        if (m.name !== newName) updates.name = newName;
+        if (m.email !== change.newDoc.email) updates.email = change.newDoc.email;
+        return Object.keys(updates).length > 0
+          ? ctx.db.patch(m._id, updates)
+          : undefined;
+      }),
+    );
+
+    // DM channel names stay on the scheduler. That half is read-heavy (every
+    // member of every DM the user is in) and it patches `channels`, which
+    // cascades through the channels trigger into `nodes`. It is also the half
+    // that tolerates delay: a DM label is a label, not a key.
+    await ctx.scheduler.runAfter(0, internal.userDenormalizationSync.syncDmChannelNames, {
       userId: change.id,
     });
   }

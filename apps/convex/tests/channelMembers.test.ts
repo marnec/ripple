@@ -552,3 +552,93 @@ describe("channelMembers", () => {
     });
   });
 });
+
+/**
+ * Regression: the denormalized `channelMembers.name` is an optimization, not
+ * the source of truth. A row that predates the denormalization (or one written
+ * by a path that never set the column) must still resolve the person's real
+ * name from `users` — not fall through to their email or to "Unknown".
+ *
+ * The placeholder was the bug: it made this roster disagree with
+ * `channels.getAccessInfo`, which resolves the same people via `db.get`, so
+ * the two paths could print different names for one person.
+ */
+describe("membersByChannel — denormalized name falls back to the live user row", () => {
+  it("resolves the display name from users when the column is absent", async () => {
+    const t = createTestContext();
+    const { userId, workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
+    const channelId = await setupPrivateChannel(t, { workspaceId, userId });
+
+    // `setupPrivateChannel` inserts the membership with no `name`/`email` —
+    // exactly the unbackfilled shape.
+    const { userId: memberId } = await setupAuthenticatedUser(t, {
+      name: "Ada Lovelace",
+      email: "ada@example.com",
+    });
+    await t.run(async (ctx) => {
+      await ctx.db.insert("workspaceMembers", { userId: memberId, workspaceId, role: "member" });
+      await ctx.db.insert("channelMembers", {
+        channelId,
+        workspaceId,
+        userId: memberId,
+        role: ChannelRole.MEMBER,
+      });
+    });
+
+    const roster = await asUser.query(api.channelMembers.membersByChannel, { channelId });
+    const ada = roster.find((m) => m.userId === memberId);
+
+    expect(ada?.name, "an unbackfilled row must not degrade to email or Unknown").toBe(
+      "Ada Lovelace",
+    );
+  });
+
+  it("prefers the denormalized column when it is present", async () => {
+    const t = createTestContext();
+    const { userId, workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
+    const channelId = await setupPrivateChannel(t, { workspaceId, userId });
+
+    const { userId: memberId } = await setupAuthenticatedUser(t, {
+      name: "Grace Hopper",
+      email: "grace@example.com",
+    });
+    await t.run(async (ctx) => {
+      await ctx.db.insert("workspaceMembers", { userId: memberId, workspaceId, role: "member" });
+      await ctx.db.insert("channelMembers", {
+        channelId,
+        workspaceId,
+        userId: memberId,
+        role: ChannelRole.MEMBER,
+        name: "Grace Hopper",
+        email: "grace@example.com",
+      });
+    });
+
+    const roster = await asUser.query(api.channelMembers.membersByChannel, { channelId });
+    expect(roster.find((m) => m.userId === memberId)?.name).toBe("Grace Hopper");
+  });
+
+  it("still resolves a name when the user row has only an email", async () => {
+    const t = createTestContext();
+    const { userId, workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
+    const channelId = await setupPrivateChannel(t, { workspaceId, userId });
+
+    const { userId: memberId } = await setupAuthenticatedUser(t, {
+      name: undefined,
+      email: "nameless@example.com",
+    });
+    await t.run(async (ctx) => {
+      await ctx.db.patch(memberId, { name: undefined });
+      await ctx.db.insert("workspaceMembers", { userId: memberId, workspaceId, role: "member" });
+      await ctx.db.insert("channelMembers", {
+        channelId,
+        workspaceId,
+        userId: memberId,
+        role: ChannelRole.MEMBER,
+      });
+    });
+
+    const roster = await asUser.query(api.channelMembers.membersByChannel, { channelId });
+    expect(roster.find((m) => m.userId === memberId)?.name).toBe("nameless@example.com");
+  });
+});

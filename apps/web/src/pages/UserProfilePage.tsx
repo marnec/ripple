@@ -4,6 +4,7 @@ import { useMutation } from "convex/react";
 import { useState } from "react";
 import { useAuthActions } from "@convex-dev/auth/react";
 import { api } from "@convex/_generated/api";
+import { nameChangeAvailableAt } from "@ripple/shared/constants";
 import { UserSettingsDialog } from "@/pages/App/UserSettingsDialog";
 import { Avatar, AvatarFallback, AvatarImage } from "@ripple/ui/components/avatar";
 import { Button } from "@ripple/ui/components/button";
@@ -20,6 +21,14 @@ function getInitials(name: string, email?: string) {
   if (parts.length === 0) return "?";
   if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
   return (parts[0][0] + parts[1][0]).toUpperCase();
+}
+
+function formatUnlockDate(timestamp: number) {
+  return new Date(timestamp).toLocaleDateString(undefined, {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
 }
 
 function formatMemberSince(creationTime: number) {
@@ -60,11 +69,16 @@ export function UserProfilePage() {
   const trimmedName = currentName.trim();
   const hasChanges = nameOverride !== null && trimmedName !== savedName;
   const isValid = trimmedName.length > 0;
+  // A display name may be changed once a month (see NAME_CHANGE_COOLDOWN_MS).
+  // Surfaced here rather than left to fail on submit: the field is disabled
+  // while the cooldown holds, so the rule is visible before it is hit.
+  const nameUnlocksAt = nameChangeAvailableAt(user.nameChangedAt);
+  const isNameLocked = nameUnlocksAt !== null;
   const displayName = trimmedName || user.email || "Anonymous";
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!hasChanges || !isValid) return;
+    if (!hasChanges || !isValid || isNameLocked) return;
 
     setIsSaving(true);
     try {
@@ -146,10 +160,13 @@ export function UserProfilePage() {
               placeholder="Your name"
               maxLength={80}
               autoComplete="name"
+              disabled={isNameLocked}
               required
             />
             <p className="text-xs text-muted-foreground">
-              Shown to teammates across messages, documents, and mentions.
+              {isNameLocked
+                ? `You can change your name again on ${formatUnlockDate(nameUnlocksAt)}.`
+                : "Shown to teammates across messages, documents, and mentions."}
             </p>
           </div>
           {hasChanges && (

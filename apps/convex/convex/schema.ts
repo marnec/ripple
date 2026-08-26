@@ -103,6 +103,17 @@ export default defineSchema({
     // existing sessions are invalidated. Reversible (reactivate clears it).
     // Content authored by the user is preserved — mirrors member-removal policy.
     disabled: v.optional(v.boolean()),
+    // When the user last changed their display name, for the once-a-month
+    // cooldown in `users.update` (NAME_CHANGE_COOLDOWN_MS). Absent means "has
+    // never renamed", which is treated as eligible — so this needs no backfill.
+    // Only `users.update` writes it: an SSO profile refresh that fills in a
+    // previously-empty name is not the user spending their allowance, and
+    // `auth.ts` preserves an already-set name across refreshes anyway.
+    //
+    // Must also be declared in `userValidator` — `users.viewer` returns the
+    // whole row, and a column the return validator does not list fails the
+    // WHOLE query, for every caller, not just the rows that carry it.
+    nameChangedAt: v.optional(v.number()),
   })
     .index("email", ["email"])
     .index("phone", ["phone"])
@@ -322,7 +333,10 @@ export default defineSchema({
   // dictionary `tags` table and the polymorphic `entityTags` table are
   // unaffected.
   // Denormalized fields:
-  //   - `tagName`   : copied from tags.name for cheap reads (matches entityTags)
+  //   - `tagName`   : copied from tags.name (matches entityTags). Read only by
+  //                   the `syncTaskTags` reconciler, as a diff key — see the
+  //                   note on `entityTags.tagName` below for the constraint it
+  //                   carries.
   //   - `completed` : copied from tasks.completed so the primary access path
   //                   ("completed tasks in project P tagged X") is a single
   //                   indexed range scan. Kept in sync by a tasks.completed
@@ -356,7 +370,22 @@ export default defineSchema({
   entityTags: defineTable({
     workspaceId: v.id("workspaces"),
     tagId: v.id("tags"),
-    tagName: v.string(), // denormalized from tags.name for cheap reads
+    // Denormalized from tags.name. NOT a read optimization for queries: no
+    // query reads it. Its one reader is `syncTagsForResource` (tagSync.ts),
+    // which diffs the desired name list against the existing rows' names so it
+    // only resolves *new* names to ids. `syncTaskTags` does the same against
+    // `taskTags.tagName`. `getWorkspaceGraph` does not read it — its
+    // `tagged_with` links come from `tagId` and its labels from the `tags`
+    // dictionary rows.
+    //
+    // The constraint: this table's uniqueness invariant is keyed on `tagId`
+    // (dbTriggers.ts), not on this column. One rule, two keys. They agree only
+    // because `ensureTagDictionaryRow` is get-or-create by normalized name, so
+    // name → id is a bijection. Tag rename breaks the bijection, and the
+    // reconciler is the half that goes wrong. So shipping rename means moving
+    // both reconcilers to diff by `tagId` — which retires this column — rather
+    // than adding a rename fanout across every join row in the workspace.
+    tagName: v.string(),
     resourceType: v.union(
       v.literal("document"),
       v.literal("diagram"),
@@ -1055,10 +1084,11 @@ export default defineSchema({
     resourceId: v.string(), // typed Convex ID cast to string (polymorphic)
     name: v.string(),       // tasks map title→name
     // DEPRECATED — being removed. Nothing reads this: `nodes.search` no longer
-    // returns it and `getWorkspaceGraph` builds its `tagged_with` links from
-    // `entityTags`/`taskTags` (which carry `tagName` alongside the resource id,
-    // so per-node tag chips come free from rows that query already collects in
-    // its `includeTags` branch). It could never have served tag search either —
+    // returns it, and `getWorkspaceGraph` needs no per-node tag column at all:
+    // it emits one tag node per `tags` dictionary row and synthesizes
+    // `tagged_with` links from `entityTags.tagId` / `taskTags.tagId`, all three
+    // tables already collected in its `includeTags` branch. Graph nodes carry
+    // no tag chips. It could never have served tag search either —
     // a search index's `filterFields` do whole-value equality, so `eq("tags",
     // [...])` matches an exact array, not "has this tag".
     //

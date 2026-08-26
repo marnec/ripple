@@ -1,4 +1,5 @@
 import { getAll } from "convex-helpers/server/relationships";
+import { getUserDisplayName } from "@ripple/shared/displayName";
 import { v } from "convex/values";
 import { query } from "./_generated/server";
 import { requireWorkspaceMember } from "./authHelpers";
@@ -107,8 +108,14 @@ export const get = query({
             .withIndex("by_channel", (q) => q.eq("channelId", c._id))
             .collect();
           const otherMember = dmMembers.find((m) => m.userId !== userId);
-          if (otherMember?.name) {
-            name = otherMember.name;
+          if (otherMember) {
+            // Denormalized `name` first, live `users` row as the fallback —
+            // the same rule as `channelMembers.membersByChannel`. Without the
+            // fallback a membership row predating the denormalization leaves
+            // the DM unnamed in the sidebar.
+            name =
+              otherMember.name ??
+              getUserDisplayName(await ctx.db.get(otherMember.userId));
           }
         }
 

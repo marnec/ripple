@@ -1,31 +1,32 @@
 /**
- * Syncs denormalized user fields (`name`, `email`) stored on `channelMembers`
- * rows — and DM channel names derived from those fields — to match the
- * authoritative values on the user's row.
+ * Recomputes DM channel names after a user's display name changes.
  *
- * Scheduled from the `users` trigger in dbTriggers.ts whenever a user's name
- * or email changes (rare — happens on SSO refresh). Runs as an internal
- * mutation so it's transactional and cheap; wrapped in the scheduler so the
- * originating user mutation returns quickly and any failure here can be
- * retried independently.
+ * Scheduled from the `users` trigger in dbTriggers.ts. This is the *deferred*
+ * half of the user-denormalization story; the other half — refreshing
+ * `name`/`email` on the user's `channelMembers` rows — now runs inline in that
+ * trigger, because `channelMembers.email` is the DM-dedup key and must not be
+ * able to drift. See the comment there.
  *
- * Three things happen here:
- *   1. Patch each of the user's channelMembers rows to hold their fresh
- *      name/email (denormalized for N+1 avoidance).
- *   2. For every DM the user is in, recompute the channel name in the
- *      `<A> × <B>` format (sorted) and patch the channel row. The channels
- *      trigger propagates the new channel name to the node in the `nodes`
- *      table automatically.
+ * This half stays deferred on purpose. It reads every member of every DM the
+ * user belongs to and patches `channels.name`, which cascades through the
+ * channels trigger into the `nodes` table — the expensive, fan-out-heavy side.
+ * And it tolerates delay in a way the key does not: a DM label that is briefly
+ * stale is cosmetic, and `workspaceSidebarData` resolves an unnamed DM from
+ * the participants anyway.
  *
- * If the user has thousands of channelMember rows, the single mutation could
- * approach Convex's per-mutation write limit. Add pagination here if that
- * becomes a problem (rare — typical users are in tens of channels).
+ * `channels.name` for a DM is itself a correctly-denormalized derived value:
+ * it backs `channels.searchIndex("by_name")`, and a search index cannot index
+ * a computed value.
+ *
+ * If the user has thousands of DMs the single mutation could approach Convex's
+ * per-mutation write limit. Add pagination here if that becomes a problem
+ * (rare — a user's DM count is bounded by their workspaces' member counts).
  */
 import { v } from "convex/values";
 import { internalMutation } from "./functions";
 import { getUserDisplayName } from "@ripple/shared/displayName";
 
-export const syncToChannelMembers = internalMutation({
+export const syncDmChannelNames = internalMutation({
   args: { userId: v.id("users") },
   returns: v.null(),
   handler: async (ctx, { userId }) => {
@@ -33,25 +34,14 @@ export const syncToChannelMembers = internalMutation({
     if (!user) return null;
 
     const name = getUserDisplayName(user);
-    const email = user.email;
 
     const memberships = await ctx.db
       .query("channelMembers")
       .withIndex("by_user", (q) => q.eq("userId", userId))
       .collect();
 
-    // 1. Refresh denormalized name/email on this user's channelMember rows
-    for (const m of memberships) {
-      const updates: { name?: string; email?: string } = {};
-      if (m.name !== name) updates.name = name;
-      if (m.email !== email) updates.email = email;
-      if (Object.keys(updates).length > 0) {
-        await ctx.db.patch(m._id, updates);
-      }
-    }
-
-    // 2. Recompute DM channel names. The channels trigger syncs the new
-    //    channel name onto the row in the `nodes` table.
+    // Recompute DM channel names. The channels trigger syncs the new channel
+    // name onto the row in the `nodes` table.
     for (const m of memberships) {
       const channel = await ctx.db.get(m.channelId);
       if (channel?.type !== "dm") continue;

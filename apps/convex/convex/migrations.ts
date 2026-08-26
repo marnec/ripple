@@ -330,8 +330,16 @@ export const migrateChannelLastReadAtToUserChannelState = migrations.define({
       });
     }
 
-    // Strip the field from the membership row. `replace` is the only way to
-    // remove an optional field — `patch` with `undefined` would leave it.
+    // Strip the field from the membership row. `patch` with `undefined` also
+    // removes a field (ctx.db.patch: "Fields set to `undefined` are removed"),
+    // so `replace` is a choice, not the only option — it is kept because it
+    // states the surviving shape explicitly and needs no cast for a column the
+    // schema no longer declares.
+    //
+    // The cost of that choice: this object must list every column the table
+    // still has. Dropping one from schema.ts (e.g. the denormalized `name`)
+    // makes this replace write an undeclared field and fail validation — and
+    // this migration is in `runAll`. Edit it in the same change.
     await ctx.db.replace(member._id, {
       channelId: member.channelId,
       workspaceId: member.workspaceId,

@@ -892,6 +892,7 @@ export declare const api: {
           isBot?: boolean;
           isPlatformAdmin?: boolean;
           name?: string;
+          nameChangedAt?: number;
         } | null;
         assigneeId?: Id<"users">;
         completed: boolean;
@@ -2769,6 +2770,7 @@ export declare const api: {
           isBot?: boolean;
           isPlatformAdmin?: boolean;
           name?: string;
+          nameChangedAt?: number;
         } | null;
         assigneeId?: Id<"users">;
         completed: boolean;
@@ -2880,6 +2882,7 @@ export declare const api: {
           isBot?: boolean;
           isPlatformAdmin?: boolean;
           name?: string;
+          nameChangedAt?: number;
         } | null;
         assigneeId?: Id<"users">;
         completed: boolean;
@@ -2970,6 +2973,7 @@ export declare const api: {
           isBot?: boolean;
           isPlatformAdmin?: boolean;
           name?: string;
+          nameChangedAt?: number;
         } | null;
         assigneeId?: Id<"users">;
         completed: boolean;
@@ -3065,6 +3069,7 @@ export declare const api: {
           isBot?: boolean;
           isPlatformAdmin?: boolean;
           name?: string;
+          nameChangedAt?: number;
         } | null;
         assigneeId?: Id<"users">;
         completed: boolean;
@@ -3166,6 +3171,7 @@ export declare const api: {
             isBot?: boolean;
             isPlatformAdmin?: boolean;
             name?: string;
+            nameChangedAt?: number;
           } | null;
           assigneeId?: Id<"users">;
           completed: boolean;
@@ -3421,6 +3427,7 @@ export declare const api: {
         isBot?: boolean;
         isPlatformAdmin?: boolean;
         name?: string;
+        nameChangedAt?: number;
       } | null
     >;
   };
@@ -3548,6 +3555,7 @@ export declare const api: {
         isBot?: boolean;
         isPlatformAdmin?: boolean;
         name?: string;
+        nameChangedAt?: number;
       }>
     >;
     membersWithRoles: FunctionReference<
@@ -6611,7 +6619,7 @@ export declare const internal: {
     >;
   };
   userDenormalizationSync: {
-    syncToChannelMembers: FunctionReference<
+    syncDmChannelNames: FunctionReference<
       "mutation",
       "internal",
       { userId: Id<"users"> },

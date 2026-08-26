@@ -66,6 +66,10 @@ export const userValidator = v.object({
   // Account-disabled flag (see schema.ts). Surfaced so the admin app can show a
   // disabled badge; sign-in enforcement is server-side in auth.ts.
   disabled: v.optional(v.boolean()),
+  // Last display-name change (see schema.ts). Surfaced because `users.viewer`
+  // returns the full row — and because the profile page needs it to say when
+  // the next rename is allowed instead of only failing on submit.
+  nameChangedAt: v.optional(v.number()),
 });
 
 /**

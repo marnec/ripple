@@ -5,6 +5,7 @@ import { mutation } from "./functions";
 import { ChannelRole, ChannelType } from "@ripple/shared/enums";
 import { logActivity } from "./auditLog";
 import { getUserDisplayName } from "@ripple/shared/displayName";
+import { WORKSPACE_CHANNEL_LIMIT } from "@ripple/shared/constants";
 import { internal } from "./_generated/api";
 import { cascadeDelete } from "./cascadeDelete";
 import { requireWorkspaceMember, checkWorkspaceMember, requireChannelAccess, requireUser } from "./authHelpers";
@@ -21,6 +22,34 @@ export const create = mutation({
   returns: v.id("channels"),
   handler: async (ctx, { name, type, workspaceId }) => {
     const { userId } = await requireWorkspaceMember(ctx, workspaceId);
+
+    // Per-workspace channel cap. Counts `open` + `closed` only — see
+    // WORKSPACE_CHANNEL_LIMIT for why DMs are excluded. `createDm` is not
+    // gated at all for the same reason.
+    //
+    // Counted through `by_type_workspace` rather than the `channelsByWorkspace`
+    // aggregate: that aggregate is namespaced by workspace alone, so its count
+    // includes DMs and cannot answer this question. `.take(LIMIT)` bounds the
+    // read at 2 x 150 rows on a mutation that runs rarely.
+    const [openChannels, closedChannels] = await Promise.all([
+      ctx.db
+        .query("channels")
+        .withIndex("by_type_workspace", (q) =>
+          q.eq("type", ChannelType.OPEN).eq("workspaceId", workspaceId),
+        )
+        .take(WORKSPACE_CHANNEL_LIMIT),
+      ctx.db
+        .query("channels")
+        .withIndex("by_type_workspace", (q) =>
+          q.eq("type", ChannelType.CLOSED).eq("workspaceId", workspaceId),
+        )
+        .take(WORKSPACE_CHANNEL_LIMIT),
+    ]);
+    if (openChannels.length + closedChannels.length >= WORKSPACE_CHANNEL_LIMIT) {
+      throw new ConvexError(
+        `This workspace has reached its limit of ${WORKSPACE_CHANNEL_LIMIT} channels. Delete a channel to create a new one.`,
+      );
+    }
 
     const channelId = await ctx.db.insert("channels", {
       name,

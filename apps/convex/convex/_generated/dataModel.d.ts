@@ -2087,6 +2087,7 @@ export type DataModel = {
       isBot?: boolean;
       isPlatformAdmin?: boolean;
       name?: string;
+      nameChangedAt?: number;
       phone?: string;
       phoneVerificationTime?: number;
       _id: Id<"users">;
@@ -2106,6 +2107,7 @@ export type DataModel = {
       | "isBot"
       | "isPlatformAdmin"
       | "name"
+      | "nameChangedAt"
       | "phone"
       | "phoneVerificationTime";
     indexes: {

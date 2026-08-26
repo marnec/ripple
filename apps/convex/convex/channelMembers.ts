@@ -42,16 +42,22 @@ export const membersByChannel = query({
     // fails the WHOLE query — every member of the channel loses the roster,
     // not just the stale row. TypeScript cannot catch that: excess-property
     // checking does not apply to spreads.
-    return members.map((member) => ({
+    return await Promise.all(members.map(async (member) => ({
       _id: member._id,
       _creationTime: member._creationTime,
       channelId: member.channelId,
       workspaceId: member.workspaceId,
       userId: member.userId,
       role: member.role,
-      name: member.name ?? member.email ?? "Unknown",
+      // The denormalized `name` is an optimization; the `users` row is the
+      // correctness path. When the column is absent, read the live row instead
+      // of substituting `member.email ?? "Unknown"` — a placeholder makes this
+      // roster disagree with `channels.getAccessInfo`, which resolves the same
+      // people through `db.get`. One extra read, and only for rows the
+      // denormalization has not covered.
+      name: member.name ?? getUserDisplayName(await ctx.db.get(member.userId)),
       email: member.email,
-    } satisfies ChannelMember));
+    } satisfies ChannelMember)));
   },
 });
 

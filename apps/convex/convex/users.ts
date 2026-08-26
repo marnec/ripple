@@ -4,6 +4,7 @@ import { ConvexError, v } from "convex/values";
 import { Doc, Id } from "./_generated/dataModel";
 import { publicUserValidator, userValidator } from "./validators";
 import { getUser, requireUser } from "./authHelpers";
+import { nameChangeAvailableAt } from "@ripple/shared/constants";
 
 export const viewer = query({
   args: {},
@@ -52,6 +53,18 @@ export const get = query({
   },
 });
 
+/**
+ * Change the caller's display name — at most once every
+ * `NAME_CHANGE_COOLDOWN_MS` (30 days).
+ *
+ * The cooldown is a cost control, not a policy: a rename fans out through the
+ * `users` trigger to the caller's `nodes` row and to every `channelMembers`
+ * row they hold, all inside this transaction. Without a limit that fan-out is
+ * repeatable at will.
+ *
+ * A no-op rename does not spend the allowance. Submitting the name you already
+ * have is not a change, and burning a month on it would be indefensible.
+ */
 export const update = mutation({
   args: {
     userId: v.id("users"),
@@ -62,8 +75,22 @@ export const update = mutation({
     const currentUserId = await requireUser(ctx);
     if (currentUserId !== userId) throw new ConvexError("Not authorized to update this user");
 
+    const user = await ctx.db.get(userId);
+    if (!user) throw new ConvexError("User not found");
+
+    // No-op: nothing fans out, so nothing is spent and nothing is blocked.
+    if (user.name === name) return null;
+
+    const availableAt = nameChangeAvailableAt(user.nameChangedAt);
+    if (availableAt !== null) {
+      throw new ConvexError(
+        `You can change your name again on ${new Date(availableAt).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}.`,
+      );
+    }
+
     await ctx.db.patch(userId, {
       name,
+      nameChangedAt: Date.now(),
     });
     return null;
   },
