@@ -51,7 +51,7 @@
     "zod": "4.4.3"
   },
   "devDependencies": {
-    "@convex-dev/eslint-plugin": "^1.2.2",
+    "@convex-dev/eslint-plugin": "^4.0.0",
     "@types/jsdom": "^21.1.7",
     "@types/node": "^20.14.9",
     "@types/web-push": "3.6.4",

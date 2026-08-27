@@ -33,6 +33,33 @@ export async function getWorkspaceIntegration(
 }
 
 /**
+ * Resolve a workspace's integration row for one specific provider.
+ *
+ * The provider-scoped sibling of `getWorkspaceIntegration`. A workspace can
+ * hold both a GitHub and a GitLab install, so callers that already know which
+ * provider they mean must say so: `getWorkspaceIntegration` returns whichever
+ * row sorts first, which would mis-attribute a GitLab failure to the GitHub
+ * install (or vice versa).
+ *
+ * Reads `by_workspace_provider` rather than narrowing `by_workspace` with a
+ * `.filter()` — the row count per workspace is small either way, but the index
+ * makes the intent explicit and is what `@convex-dev/no-filter-in-query` asks
+ * for.
+ */
+export async function getWorkspaceIntegrationByProvider(
+  ctx: QueryCtx,
+  workspaceId: Id<"workspaces">,
+  provider: string,
+): Promise<Doc<"workspaceIntegrations"> | null> {
+  return ctx.db
+    .query("workspaceIntegrations")
+    .withIndex("by_workspace_provider", (q) =>
+      q.eq("workspaceId", workspaceId).eq("provider", provider),
+    )
+    .first();
+}
+
+/**
  * Resolve the integration a project link belongs to. This is the correct
  * resolver for any caller that has a `projectIntegrationLinks` row, because a
  * workspace may hold several integrations (multi-account / multi-provider) and

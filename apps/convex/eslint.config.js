@@ -3,8 +3,10 @@ import tseslint from "typescript-eslint";
 import convexPlugin from "@convex-dev/eslint-plugin";
 
 /**
- * `apps/convex` linted for one thing the type system cannot see: unbounded
- * `.collect()` inside a query.
+ * `apps/convex` linted for what the type system cannot see: unbounded
+ * `.collect()` inside a query, plus the `no-filter-in-query`,
+ * `no-top-of-hour-crons` and `no-schema-import-cycle` rules added in plugin
+ * 4.0.0.
  *
  * This exists because of `graph.getWorkspaceGraph`, which collected five whole
  * workspace-scoped tables inside a live subscription. Convex stops a query at
@@ -30,6 +32,14 @@ export default tseslint.config(
     plugins: { "@convex-dev": convexPlugin },
     rules: {
       "@convex-dev/no-collect-in-query": "error",
+      // Added in plugin 4.0.0. All three start clean: the five sites that
+      // tripped `no-filter-in-query` and `no-top-of-hour-crons` were either
+      // fixed (the two `workspaceIntegrations` reads now use the
+      // `by_workspace_provider` index) or carry an inline disable naming the
+      // reason. There is no debt list for these — keep it that way.
+      "@convex-dev/no-filter-in-query": "error",
+      "@convex-dev/no-top-of-hour-crons": "error",
+      "@convex-dev/no-schema-import-cycle": "error",
     },
   },
   {

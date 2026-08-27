@@ -1259,6 +1259,7 @@ export default defineSchema({
     installedBy: v.optional(v.id("users")),
   })
     .index("by_workspace", ["workspaceId"])
+    .index("by_workspace_provider", ["workspaceId", "provider"])
     .index("by_externalAccount", ["externalAccountId"]),
 
   // Short-lived CSRF/state rows for the GitHub App install redirect. The

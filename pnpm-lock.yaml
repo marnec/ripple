@@ -308,8 +308,8 @@ importers:
         version: 4.4.3
     devDependencies:
       '@convex-dev/eslint-plugin':
-        specifier: ^1.2.2
-        version: 1.2.2(convex@1.45.0(react@19.2.8))(eslint@10.9.1(jiti@2.7.0))(typescript@6.0.3)
+        specifier: ^4.0.0
+        version: 4.0.0(convex@1.45.0(react@19.2.8))(eslint@10.9.1(jiti@2.7.0))(typescript@6.0.3)
       '@types/jsdom':
         specifier: ^21.1.7
         version: 21.1.7
@@ -1679,6 +1679,11 @@ packages:
 
   '@convex-dev/eslint-plugin@1.2.2':
     resolution: {integrity: sha512-hLElzzSHuO83O/7PqaeFrMy8EOaDPMAUBNaqo7wkOzCsUCgA+tI9SXVSVLUozDGBBQjyXjAaPYRIBKoPeZbZKg==}
+    peerDependencies:
+      convex: 1.45.0
+
+  '@convex-dev/eslint-plugin@4.0.0':
+    resolution: {integrity: sha512-7bYP8Fkk+19L7LWl3xIqUqq/0yIEZNoUQHOodZKIvupqmgaMisz8NKz6OkmMwBVLUQ0sh/9+iPK1OyASANiWyw==}
     peerDependencies:
       convex: 1.45.0
 
@@ -10250,16 +10255,6 @@ snapshots:
       convex: 1.45.0(react@19.2.8)
       react: 19.2.8
 
-  '@convex-dev/eslint-plugin@1.2.2(convex@1.45.0(react@19.2.8))(eslint@10.9.1(jiti@2.7.0))(typescript@6.0.3)':
-    dependencies:
-      '@typescript-eslint/types': 8.58.2
-      '@typescript-eslint/utils': 8.58.2(eslint@10.9.1(jiti@2.7.0))(typescript@6.0.3)
-      convex: 1.45.0(react@19.2.8)
-    transitivePeerDependencies:
-      - eslint
-      - supports-color
-      - typescript
-
   '@convex-dev/eslint-plugin@1.2.2(convex@1.45.0(react@19.2.8))(eslint@9.39.1(jiti@2.7.0))(typescript@6.0.3)':
     dependencies:
       '@typescript-eslint/types': 8.58.2
@@ -10274,6 +10269,16 @@ snapshots:
     dependencies:
       '@typescript-eslint/types': 8.58.2
       '@typescript-eslint/utils': 8.58.2(eslint@9.39.2(jiti@2.7.0))(typescript@6.0.3)
+      convex: 1.45.0(react@19.2.8)
+    transitivePeerDependencies:
+      - eslint
+      - supports-color
+      - typescript
+
+  '@convex-dev/eslint-plugin@4.0.0(convex@1.45.0(react@19.2.8))(eslint@10.9.1(jiti@2.7.0))(typescript@6.0.3)':
+    dependencies:
+      '@typescript-eslint/types': 8.58.2
+      '@typescript-eslint/utils': 8.58.2(eslint@10.9.1(jiti@2.7.0))(typescript@6.0.3)
       convex: 1.45.0(react@19.2.8)
     transitivePeerDependencies:
       - eslint

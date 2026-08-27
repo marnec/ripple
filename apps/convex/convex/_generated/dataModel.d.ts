@@ -2181,6 +2181,7 @@ export type DataModel = {
       by_creation_time: ["_creationTime"];
       by_externalAccount: ["externalAccountId", "_creationTime"];
       by_workspace: ["workspaceId", "_creationTime"];
+      by_workspace_provider: ["workspaceId", "provider", "_creationTime"];
     };
     searchIndexes: {};
     vectorIndexes: {};

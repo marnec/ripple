@@ -5,6 +5,7 @@ import { auditLog } from "../../auditLog";
 import { requireWorkspaceMember } from "../../authHelpers";
 import { WorkspaceRole } from "@ripple/shared/enums/roles";
 import { createImportJob } from "../core/importJob";
+import { getWorkspaceIntegrationByProvider } from "../core/integrationLookups";
 
 /**
  * Public entry point the activation wizard calls after binding the repo
@@ -33,11 +34,11 @@ export const startGithubImport = mutation({
       role: WorkspaceRole.ADMIN,
     });
 
-    const integration = await ctx.db
-      .query("workspaceIntegrations")
-      .withIndex("by_workspace", (q) => q.eq("workspaceId", link.workspaceId))
-      .filter((q) => q.eq(q.field("provider"), "github"))
-      .first();
+    const integration = await getWorkspaceIntegrationByProvider(
+      ctx,
+      link.workspaceId,
+      "github",
+    );
     if (!integration) {
       throw new ConvexError("No GitHub installation for this workspace");
     }

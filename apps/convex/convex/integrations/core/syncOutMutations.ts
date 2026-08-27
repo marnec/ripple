@@ -3,7 +3,10 @@ import { internalMutation } from "../../functions";
 import type { MutationCtx } from "../../_generated/server";
 import type { Doc, Id } from "../../_generated/dataModel";
 import { auditLog } from "../../auditLog";
-import { getIntegrationForLink } from "./integrationLookups";
+import {
+  getIntegrationForLink,
+  getWorkspaceIntegrationByProvider,
+} from "./integrationLookups";
 import { logTaskIntegrationActivity } from "./integrationActivity";
 import { setTaskExternalLink } from "./taskExternalLink";
 import { onCompleteValidator } from "@convex-dev/action-retrier";
@@ -201,11 +204,11 @@ async function recordIssueCloseFailureImpl(
   // provider (a workspace can hold both GitHub + GitLab, so a workspace-wide
   // `.unique()` would crash and assuming "github" would mis-attribute a
   // GitLab failure).
-  const integration = await ctx.db
-    .query("workspaceIntegrations")
-    .withIndex("by_workspace", (q) => q.eq("workspaceId", args.workspaceId))
-    .filter((q) => q.eq(q.field("provider"), args.provider))
-    .first();
+  const integration = await getWorkspaceIntegrationByProvider(
+    ctx,
+    args.workspaceId,
+    args.provider,
+  );
   if (!integration) return;
   try {
     await auditLog.log(ctx, {

@@ -4,8 +4,12 @@ import { internal } from "./_generated/api";
 const crons = cronJobs();
 
 // Run storage garbage collection daily at 4:00 AM UTC
+// 04:00 is the head of a hand-staggered chain (04:00 → 04:30 → 04:50 → 05:00)
+// that keeps the heavy daily sweeps from overlapping; the minute is chosen
+// relative to the others, not by accident, and 4am UTC is already off-peak.
 crons.cron(
   "storage garbage collection",
+  // eslint-disable-next-line @convex-dev/no-top-of-hour-crons
   "0 4 * * *",
   internal.storageGc.runGarbageCollection,
   { cursor: null },
@@ -38,8 +42,10 @@ crons.cron(
 // UTC — after storage GC and email retention, so the three heavy sweeps do not
 // overlap. Like the resend component, the webhook receiver ships the cleanup
 // and schedules none of it; see `webhookMaintenance.ts`.
+// The tail of the same 04:00 → 05:00 chain; see the note on storage GC above.
 crons.cron(
   "webhook event retention",
+  // eslint-disable-next-line @convex-dev/no-top-of-hour-crons
   "0 5 * * *",
   internal.webhookMaintenance.pruneWebhookEvents,
   {},

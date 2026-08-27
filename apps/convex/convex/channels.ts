@@ -275,6 +275,9 @@ export const search = query({
           // dm" cannot be expressed there; this is the sanctioned narrowing.
           // Post-filtering can shorten a page, which is acceptable here: a
           // name search matches few rows to begin with.
+          // Per the note above, a search index's filterFields do whole-value
+          // equality only, so this narrowing has nowhere else to live.
+          // eslint-disable-next-line @convex-dev/no-filter-in-query
           .filter((q) => q.neq(q.field("type"), "dm"))
           .paginate(paginationOpts)
       : type !== undefined

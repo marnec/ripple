@@ -82,6 +82,11 @@ async function findVerifiedEmailUser(ctx: QueryCtx, email: string) {
   const users = await ctx.db
     .query("users")
     .withIndex("email", (q) => q.eq("email", email))
+    // The `email` index has already narrowed this to the rows for one address
+    // (a handful at most), and the shape deliberately mirrors Convex Auth's own
+    // internal helper. A `by_email_verified` index would buy nothing and would
+    // make this drift from the upstream it tracks.
+    // eslint-disable-next-line @convex-dev/no-filter-in-query
     .filter((q) => q.neq(q.field("emailVerificationTime"), undefined))
     .take(2);
   return users.length === 1 ? users[0] : null;
@@ -91,6 +96,8 @@ async function findVerifiedPhoneUser(ctx: QueryCtx, phone: string) {
   const users = await ctx.db
     .query("users")
     .withIndex("phone", (q) => q.eq("phone", phone))
+    // As above, on the `phone` index.
+    // eslint-disable-next-line @convex-dev/no-filter-in-query
     .filter((q) => q.neq(q.field("phoneVerificationTime"), undefined))
     .take(2);
   return users.length === 1 ? users[0] : null;
