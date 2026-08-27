@@ -42,7 +42,11 @@ import { useResourceSuggestions } from "../../../hooks/use-resource-suggestions"
 import { useTaskSuggestions } from "../../../hooks/use-task-suggestions";
 import { isEditorEmpty, editorClear, blocksToPlainText } from "@/lib/editor-utils";
 import { generateThumbnail } from "@/lib/image-thumbnail";
-import { snapshotDiagramToBlob, EmptyDiagramSnapshotError } from "@/lib/exporters/diagram-snapshot";
+import {
+  fetchDiagramSnapshotBlob,
+  EmptyDiagramSnapshotError,
+  MissingDiagramSnapshotError,
+} from "@/lib/exporters/diagram-snapshot";
 import { FormattingToolbar } from "./FormattingToolbar";
 import { Kbd } from "../../../components/ui/kbd";
 
@@ -298,18 +302,7 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
     if (!fileUpload) return;
     setIsCapturingSnapshot(true);
     try {
-      const snapshotUrl = await convex.query(api.snapshots.getSnapshotUrl, {
-        resourceType: "diagram",
-        resourceId: diagram.id,
-      });
-      if (!snapshotUrl) {
-        toast.error("That diagram has no saved content to snapshot yet.");
-        setIsCapturingSnapshot(false);
-        return;
-      }
-      const res = await fetch(snapshotUrl);
-      const bytes = new Uint8Array(await res.arrayBuffer());
-      const blob = await snapshotDiagramToBlob(bytes, frameId);
+      const blob = await fetchDiagramSnapshotBlob(convex, diagram.id, frameId);
       // `File` here is the lucide icon import — use the DOM constructor.
       const file = new globalThis.File([blob], `${diagram.name || "diagram"}.png`, {
         type: "image/png",
@@ -325,7 +318,9 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
       });
       handleImageReady(urls);
     } catch (err) {
-      if (err instanceof EmptyDiagramSnapshotError) {
+      if (err instanceof MissingDiagramSnapshotError) {
+        toast.error("That diagram has no saved content to snapshot yet.");
+      } else if (err instanceof EmptyDiagramSnapshotError) {
         toast.error("That diagram is empty — nothing to snapshot.");
       } else {
         console.error("Diagram snapshot failed:", err);

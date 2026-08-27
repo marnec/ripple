@@ -1,3 +1,6 @@
+import type { ConvexReactClient } from "convex/react";
+import { api } from "@convex/_generated/api";
+import type { Id } from "@convex/_generated/dataModel";
 import { frameViewElements } from "@/pages/App/Diagram/frames";
 
 /** Thrown when a diagram (or the chosen frame) has no drawable content. */
@@ -6,6 +9,37 @@ export class EmptyDiagramSnapshotError extends Error {
     super("Diagram has no content to snapshot");
     this.name = "EmptyDiagramSnapshotError";
   }
+}
+
+/** Thrown when the diagram has never been persisted, so there is nothing to rasterise. */
+export class MissingDiagramSnapshotError extends Error {
+  constructor() {
+    super("Diagram has no saved snapshot");
+    this.name = "MissingDiagramSnapshotError";
+  }
+}
+
+/**
+ * Fetch a diagram's persisted Yjs state and rasterise it to a PNG blob.
+ *
+ * The single entry point for "freeze this diagram as an image": chat's
+ * `#`-reference snapshot and the document diagram block's snapshot action both
+ * go through here, so they capture the same bytes the same way.
+ */
+export async function fetchDiagramSnapshotBlob(
+  convex: ConvexReactClient,
+  diagramId: Id<"diagrams">,
+  frameId: string | null,
+): Promise<Blob> {
+  const snapshotUrl = await convex.query(api.snapshots.getSnapshotUrl, {
+    resourceType: "diagram",
+    resourceId: diagramId,
+  });
+  if (!snapshotUrl) throw new MissingDiagramSnapshotError();
+  const res = await fetch(snapshotUrl);
+  if (!res.ok) throw new Error(`Diagram snapshot fetch failed: ${res.status}`);
+  const bytes = new Uint8Array(await res.arrayBuffer());
+  return snapshotDiagramToBlob(bytes, frameId);
 }
 
 /**

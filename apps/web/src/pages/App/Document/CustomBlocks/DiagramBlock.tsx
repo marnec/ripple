@@ -5,17 +5,33 @@ import { createReactBlockSpec, type ReactCustomBlockRenderProps } from "@blockno
 import { CircleSlash } from "lucide-react";
 import { useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { useConvex } from "convex/react";
+import { toast } from "sonner";
+import {
+  fetchDiagramSnapshotBlob,
+  EmptyDiagramSnapshotError,
+  MissingDiagramSnapshotError,
+} from "@/lib/exporters/diagram-snapshot";
 import type { Id } from "@convex/_generated/dataModel";
+import { DiagramBlockToolbar } from "./DiagramBlockToolbar";
 
 
 const DiagramView = ({
   diagramId,
   frameId,
+  showToolbar,
+  isSnapshotting,
+  onSnapshot,
   onAspectRatioChange,
   onNavigate,
 }: {
   diagramId: Id<"diagrams">;
   frameId: string | null;
+  /** Show the hover toolbar (editable + hovered). */
+  showToolbar: boolean;
+  isSnapshotting: boolean;
+  /** Freeze the embed as a static image; receives the caption to carry over. */
+  onSnapshot: (caption: string) => void;
   onAspectRatioChange?: (ratio: number) => void;
   onNavigate: () => void;
 }) => {
@@ -39,6 +55,12 @@ const DiagramView = ({
       }
     };
 
+  // Same label the caption bar shows — reused as the snapshot's caption and
+  // file name so a frozen copy still says where it came from.
+  const caption = diagram
+    ? `${diagram.name}${frameName ? ` › ${frameName}` : ""}`
+    : "";
+
   if (!isLoading && diagram === null) {
     return (
       <div data-embed-deleted className="w-full flex flex-col items-center justify-center p-3 border rounded-lg text-center text-muted-foreground bg-secondary h-40 gap-2">
@@ -54,10 +76,17 @@ const DiagramView = ({
     <div className="relative w-full min-h-40 h-full">
       {svgHtml ? (
         <div className="animate-fade-in">
-          <div className="w-full text-xs text-right text-muted-foreground rounded-tr rounded-bl min-h-lh">
+          <div className="flex w-full items-center gap-2 text-xs text-muted-foreground rounded-tr rounded-bl min-h-lh">
+            {showToolbar && (
+              <DiagramBlockToolbar
+                isSnapshotting={isSnapshotting}
+                onSnapshot={() => onSnapshot(caption)}
+              />
+            )}
+            <div className="flex-1" />
             {diagram ? (
               <span
-                className="cursor-pointer hover:underline"
+                className="cursor-pointer hover:underline truncate"
                 onClick={onNavigate}
                 role="button"
                 tabIndex={0}
@@ -68,8 +97,7 @@ const DiagramView = ({
                   }
                 }}
               >
-                {diagram.name}
-                {frameName ? ` › ${frameName}` : ""}
+                {caption}
               </span>
             ) : null}
           </div>
@@ -123,6 +151,46 @@ const ResizableDiagram = ({ block, editor }: DiagramBlockProps) => {
   const { workspaceId } = useParams<{ workspaceId: string }>();
 
   const [showHandles, setShowHandles] = useState(false);
+  const [isSnapshotting, setIsSnapshotting] = useState(false);
+  const convex = useConvex();
+
+  // Freeze the live embed as a static image, the diagram counterpart of the
+  // spreadsheet range's "clone as editable table": the snapshot is inserted
+  // after the embed and stops tracking the diagram from that point on.
+  const handleSnapshot = async (caption: string) => {
+    const uploadFile = editor.uploadFile;
+    if (!uploadFile || isSnapshotting) return;
+    setIsSnapshotting(true);
+    try {
+      const blob = await fetchDiagramSnapshotBlob(
+        convex,
+        diagramId as Id<"diagrams">,
+        frameId || null,
+      );
+      // Slashes would read as path separators once downloaded.
+      const name = `${caption.replace(/[/\\]/g, "-") || "diagram"}.png`;
+      const uploaded = await uploadFile(
+        new File([blob], name, { type: "image/png" }),
+      );
+      const url = typeof uploaded === "string" ? uploaded : (uploaded.url as string);
+      editor.insertBlocks(
+        [{ type: "image" as const, props: { url, name, caption } } as any],
+        block,
+        "after",
+      );
+    } catch (err) {
+      if (err instanceof MissingDiagramSnapshotError) {
+        toast.error("That diagram has no saved content to snapshot yet.");
+      } else if (err instanceof EmptyDiagramSnapshotError) {
+        toast.error("That diagram is empty — nothing to snapshot.");
+      } else {
+        console.error("Diagram snapshot failed:", err);
+        toast.error("Couldn't capture the diagram snapshot.");
+      }
+    } finally {
+      setIsSnapshotting(false);
+    }
+  };
 
   const handleNavigate = () => {
     if (diagramId && workspaceId) {
@@ -226,6 +294,9 @@ const ResizableDiagram = ({ block, editor }: DiagramBlockProps) => {
         <DiagramView
           diagramId={diagramId as Id<"diagrams">}
           frameId={frameId || null}
+          showToolbar={editor.isEditable && showHandles}
+          isSnapshotting={isSnapshotting}
+          onSnapshot={(caption) => void handleSnapshot(caption)}
           onAspectRatioChange={handleAspectRatioChange}
           onNavigate={handleNavigate}
         />
