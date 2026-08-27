@@ -24,7 +24,6 @@ keyboard accessiblity
     - [ ] AI document agent
     - [ ] AI tasks agent
 
-
 - avatars:
     - [ ] user custom avatars: look at dicebear
     - [ ] facepile not using user avatar (investigate convex cost)
@@ -40,7 +39,6 @@ keyboard accessiblity
 - deferred refactors
     - [ ] `workspaceSidebarData.get` is channels-only now (the projects/documents/diagrams/spreadsheets `.collect()` moved to `nodes.suggest` / `breadcrumb.getResourceNames`). Residual cost on the always-mounted query: `channels` + `channelMembers` + `userChannelState` still join the invalidation set of every connected member, plus a per-hidden-DM latest-message read and a per-unnamed-DM `channelMembers.collect()` for the display name. Denormalize the DM name before considering a digest table.
     - [ ] extract `IntegrationCardShell` + shared stepper from `ConnectGithubWizard`/`ConnectGitlabCard` twins (keep provider wizards as explicit variants)
-
 
 - [ ] External integrations
     - [ ] github issues
@@ -59,7 +57,6 @@ keyboard accessiblity
 - identity model refactor
     - [ ] split `users` (auth-only) from a new `profiles` table that can host synthetic / bot identities (integration bots, system actors); `creatorId`/`assigneeId`/`userId` refs point at `profiles`. Lets integrations create non-auth identities without polluting the auth surface.
 
-
 - local-first: done for collaborative content and per-resource metadata.
   `isHydrated` in `use-collaborative-doc.ts` (no editor binds to a replica whose
   contents we were never told), `collab/empty-document.ts` (shared empty root),
@@ -76,7 +73,6 @@ keyboard accessiblity
     - [ ] offline mutations are not queued for resources loaded cold offline —
       controls are hidden rather than offered and silently dropped. A write
       queue is the separate, larger project if that isn't good enough
-
 
 - evaluate cross-workspace aggregates to re-introduce admin overview
 

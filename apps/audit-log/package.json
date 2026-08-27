@@ -54,7 +54,7 @@
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.1.1",
     "chokidar-cli": "3.0.0",
-    "convex": "1.43.0",
+    "convex": "1.45.0",
     "convex-test": "0.0.41",
     "cpy-cli": "^6.0.0",
     "eslint": "9.39.1",

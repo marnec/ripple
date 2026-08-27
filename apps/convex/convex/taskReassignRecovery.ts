@@ -43,7 +43,13 @@ const RETIRED_BY: Record<string, "taskStatuses" | "tags" | undefined> = {
  * plus the un-retiring above, for the drains that retired something.
  */
 export const recordDrainGiveUp = internalMutation({
-  args: vOnCompleteArgs(vJobContext),
+  // `v.any()` is passed explicitly: workpool 0.4.10's `vOnCompleteArgs` defaults
+  // its return-value validator to `v.optional(v.any()) as unknown as VReturn`,
+  // which emits `returnValue?: any` into the generated api types while its own
+  // `RunResult<T>` still declares `returnValue` required — so the `onComplete`
+  // reference stops matching `OnCompleteArgs` at every enqueue site. Drop this
+  // second argument once the package's validator and type agree again.
+  args: vOnCompleteArgs(vJobContext, v.any()),
   returns: v.null(),
   handler: async (ctx, { context, result }) => {
     if (result.kind !== "failed") return null;

@@ -44,7 +44,13 @@ export type BackgroundJob = { kind: string; key: string };
  * drain itself is not — the recording cannot be the thing that goes missing.
  */
 export const recordTerminalFailure = internalMutation({
-  args: vOnCompleteArgs(vJobContext),
+  // `v.any()` is passed explicitly: workpool 0.4.10's `vOnCompleteArgs` defaults
+  // its return-value validator to `v.optional(v.any()) as unknown as VReturn`,
+  // which emits `returnValue?: any` into the generated api types while its own
+  // `RunResult<T>` still declares `returnValue` required — so the `onComplete`
+  // reference stops matching `OnCompleteArgs` at every enqueue site. Drop this
+  // second argument once the package's validator and type agree again.
+  args: vOnCompleteArgs(vJobContext, v.any()),
   returns: v.null(),
   handler: async (ctx, { context, result }) => {
     if (result.kind !== "failed") return null;

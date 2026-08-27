@@ -5,9 +5,9 @@ import { Password } from "@convex-dev/auth/providers/Password";
 import { convexAuth } from "@convex-dev/auth/server";
 import { APP_NAME, EMAIL_FROM_DOMAIN } from "@ripple/shared/constants";
 import { ConvexError } from "convex/values";
-import { alphabet, generateRandomString } from "oslo/crypto";
 import type { QueryCtx } from "./_generated/server";
 import { withTriggers } from "./dbTriggers";
+import { generateNumericCode } from "./utils/otp";
 
 // Helper to send emails via Resend API using fetch (avoids Node-only dependencies)
 async function sendResendEmail(
@@ -38,7 +38,7 @@ const ResendOTP = Resend({
   id: "resend-otp",
   apiKey: process.env.AUTH_RESEND_KEY,
   async generateVerificationToken() {
-    return generateRandomString(8, alphabet("0-9"));
+    return generateNumericCode(8);
   },
   async sendVerificationRequest({ identifier: email, provider, token }) {
     if (!provider.apiKey) {
@@ -58,7 +58,7 @@ const ResendOTPPasswordReset = Resend({
   id: "resend-otp",
   apiKey: process.env.AUTH_RESEND_KEY,
   async generateVerificationToken() {
-    return generateRandomString(8, alphabet("0-9"));
+    return generateNumericCode(8);
   },
   async sendVerificationRequest({ identifier: email, provider, token }) {
     if (!provider.apiKey) {
