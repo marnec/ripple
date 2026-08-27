@@ -17,12 +17,18 @@ export const ResourceReference = createReactInlineContentSpec(
       resourceName: {
         default: "",
       },
+      // A1 range this chip was inserted with, when it introduces a frozen
+      // table of that range. Empty on every other resourceReference, and on
+      // every chip that pre-dates the chat table embed.
+      cellRef: {
+        default: "",
+      },
     },
     content: "none",
   } as const,
   {
     render: ({ inlineContent }) => {
-      const { resourceId, resourceType, resourceName } = inlineContent.props;
+      const { resourceId, resourceType, resourceName, cellRef } = inlineContent.props;
 
       if (!resourceId) {
         return (
@@ -42,7 +48,10 @@ export const ResourceReference = createReactInlineContentSpec(
           className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-muted text-sm font-medium cursor-default align-middle"
         >
           <Icon className="h-3 w-3 shrink-0" />
-          <span className="max-w-50 truncate">{resourceName || "Resource"}</span>
+          <span className="max-w-50 truncate">
+            {resourceName || "Resource"}
+            {cellRef ? ` \u203A ${cellRef}` : ""}
+          </span>
         </span>
       );
     },

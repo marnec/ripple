@@ -152,6 +152,32 @@ on desktop, but the read itself is still uncapped. Treat "add it to the graph"
 as a question about which of those two surfaces you mean.
 _Avoid_: knowledge graph, node graph, graph view, force graph
 
+**Reference chip**:
+The inline, name-only pointer a `#` pick inserts into a message or a document —
+`resourceReference` in BlockNote, rendered by `ResourceReferenceChip`. It shows
+the resource's name *as resolved at read time*, not the one stored on the node,
+so a renamed resource reads correctly and a deleted one degrades to
+`#inaccessible-<type>`. It is **not** a tag: a [tag](#) in Ripple is a workspace
+label a resource carries, with its own tables and its own synthesis into the
+[workspace graph](#). A chip is one message's reference to one resource.
+_Avoid_: tag, mention pill, resource tag, inline link
+
+**Snapshot embed**:
+A frozen copy of another resource's content, carried inside the message or
+document that embeds it and never updated again — a diagram as a PNG, a
+spreadsheet range as a table of its cells. The opposite of a
+[reference chip](#), which resolves at read time, and of the document range
+block, which tracks its cells through a `spreadsheetCellRefs` row. Frozen is the
+point: a message is a record of what someone said, and a table that silently
+rewrote itself in the channel history would be a different product.
+Its values are read from a [hydrated replica](#) of the source room at pick
+time, never from the stored snapshot, so what the sender saw in the picker is
+what the channel gets — a stored snapshot can lag the room by a save interval.
+In chat a range embed is a chip *and* a table: the chip states the sheet and the
+A1 range and remains the only thing that click-throughs, since the table carries
+no coordinates of its own.
+_Avoid_: frozen embed, copy, paste, static embed, inline table
+
 **Mention edge**:
 An `edges` row with `edgeType: "mentions"` and `sourceType: "channel"` — one per
 (channel, target) pair, **not** one per message. The `messages` trigger

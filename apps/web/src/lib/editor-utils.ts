@@ -1,4 +1,5 @@
 import type { BlockNoteEditor } from "@blocknote/core";
+import { tableCellContent } from "./blocknote-table";
 
 /** Check if a BlockNote editor is empty (no text, no inline nodes like mentions). */
 export function isEditorEmpty(editor: BlockNoteEditor<any, any, any>): boolean {
@@ -57,7 +58,26 @@ export function parseCommentBody(body: string): any[] {
   }
 }
 
-/** Extract plain text from BlockNote document JSON, including mention text. */
+/** A `tableContent` row's cells, flattened to their text. */
+function tableRowToText(row: { cells: unknown[] }): string {
+  return row.cells
+    .map((cell) =>
+      tableCellContent(cell)
+        .map((node: any) => (node?.type === "text" ? node.text : ""))
+        .join(""),
+    )
+    .join(" | ");
+}
+
+/** Extract plain text from BlockNote document JSON, including mention text.
+ *
+ * This is the SEARCH projection, and it deliberately says more than the
+ * server's `extractPlainTextFromBody` does: it flattens table cells, so a
+ * frozen spreadsheet range posted to a channel can be found by the numbers in
+ * it. The server's copy feeds reply previews and lock screens, where a wall of
+ * pipe-separated cells is noise — it stops at the chip. Keep the two apart on
+ * purpose; everything else about them agrees.
+ */
 export function blocksToPlainText(
   blocks: any[],
   userNames: Map<string, string>,
@@ -90,9 +110,17 @@ export function blocksToPlainText(
           }
           case "resourceReference":
             line += `#${inline.props.resourceName || "resource"}`;
+            if (inline.props.cellRef) line += ` \u203A ${inline.props.cellRef}`;
             break;
         }
       }
+    }
+    if (
+      block.content &&
+      !Array.isArray(block.content) &&
+      block.content.type === "tableContent"
+    ) {
+      line = block.content.rows.map(tableRowToText).join("\n");
     }
     lines.push(line);
     if (block.children?.length) {

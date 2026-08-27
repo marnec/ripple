@@ -98,3 +98,57 @@ describe("MessageRenderer layout reservation", () => {
     expect(img).toHaveClass("animate-fade-in");
   });
 });
+
+/** A table row's cells in the object shape the editor actually produces. */
+const cellObjects = (texts: string[]) =>
+  texts.map((text) => ({
+    type: "tableCell",
+    props: {},
+    content: [{ type: "text", text, styles: {} }],
+  }));
+
+const tableBlock = (rows: unknown[][]): Block => ({
+  type: "table",
+  content: { type: "tableContent", rows: rows.map((cells) => ({ cells })) } as any,
+});
+
+describe("MessageRenderer tables", () => {
+  it("renders a frozen spreadsheet range stored in BlockNote's tableCell shape", () => {
+    // Regression: TableRenderer read cells as bare inline arrays and threw
+    // "cell.map is not a function" on the first real table a message carried,
+    // taking the whole channel route down with it.
+    render(
+      <MessageRenderer
+        blocks={[tableBlock([cellObjects(["Q3", "Q4"]), cellObjects(["1200", "1450"])])]}
+      />,
+    );
+
+    expect(screen.getByText("Q3")).toBeInTheDocument();
+    expect(screen.getByText("1450")).toBeInTheDocument();
+    expect(screen.getAllByRole("cell")).toHaveLength(4);
+  });
+
+  it("still renders the bare inline-array shape older bodies carry", () => {
+    render(
+      <MessageRenderer
+        blocks={[tableBlock([[[{ type: "text", text: "legacy", styles: {} }]]])]}
+      />,
+    );
+
+    expect(screen.getByText("legacy")).toBeInTheDocument();
+  });
+
+  it("honours a merged cell's span", () => {
+    render(
+      <MessageRenderer
+        blocks={[
+          tableBlock([
+            [{ type: "tableCell", props: { colspan: 2 }, content: [{ type: "text", text: "wide", styles: {} }] }],
+          ]),
+        ]}
+      />,
+    );
+
+    expect(screen.getByRole("cell", { name: "wide" })).toHaveAttribute("colspan", "2");
+  });
+});

@@ -5,26 +5,21 @@ import { removeAwarenessStates } from "y-protocols/awareness";
 import { AwarenessOwnership } from "./awareness-ownership";
 import type { ServerMessage } from "@ripple/shared/protocol";
 import { DOCUMENT_FRAGMENT } from "@ripple/shared/blockRef";
-import { parseCellName, parseRange } from "@ripple/shared/cellRef";
+import { extractCellValues, type CellSource } from "@ripple/shared/cellValues";
 import { parseStableRef, resolveStableRef } from "@ripple/shared/stableRef";
 import { extractBlocksFromFragment } from "@ripple/shared/blockRef";
 import type { ShareAccessLevel } from "@ripple/shared/shareTypes";
 
-/**
- * If the raw cell value is a formula (starts with "="), return the computed
- * display value from formulaValues. Falls back to raw value if not available.
- */
-function resolveDisplayValue(
-  rawValue: string,
-  row: number,
-  col: number,
+/** Grid accessors for a spreadsheet room's Yjs shape. */
+function cellSource(
+  yData: Y.Array<Y.Map<string>>,
   yFormulaValues?: Y.Map<string>,
-): string {
-  if (rawValue.startsWith("=") && yFormulaValues) {
-    const computed = yFormulaValues.get(`${row},${col}`);
-    if (computed !== undefined) return computed;
-  }
-  return rawValue;
+): CellSource {
+  return {
+    rowCount: yData.length,
+    read: (row, col) => yData.get(row)?.get(String(col)) ?? "",
+    formulaValue: (row, col) => yFormulaValues?.get(`${row},${col}`),
+  };
 }
 
 /**
@@ -611,7 +606,7 @@ export default class CollaborationServer extends YServer {
         continue;
       }
 
-      const values = this.extractCellValues(yData, result.a1, yFormulaValues);
+      const values = extractCellValues(result.a1, cellSource(yData, yFormulaValues));
       if (values) {
         updates.push({
           stableRef: tracked.stableRef,
@@ -638,34 +633,7 @@ export default class CollaborationServer extends YServer {
     }
   }
 
-  private extractCellValues(
-    yData: Y.Array<Y.Map<string>>,
-    cellRef: string,
-    yFormulaValues?: Y.Map<string>,
-  ): string[][] | null {
-    if (cellRef.includes(":")) {
-      const range = parseRange(cellRef);
-      if (!range) return null;
-      const result: string[][] = [];
-      for (let r = range.startRow; r <= range.endRow && r < yData.length; r++) {
-        const row: string[] = [];
-        const rowMap = yData.get(r);
-        for (let c = range.startCol; c <= range.endCol; c++) {
-          const raw = rowMap?.get(String(c)) ?? "";
-          row.push(resolveDisplayValue(raw, r, c, yFormulaValues));
-        }
-        result.push(row);
-      }
-      return result;
-    } else {
-      const cell = parseCellName(cellRef);
-      if (!cell) return null;
-      if (cell.row >= yData.length) return [[""]];
-      const rowMap = yData.get(cell.row);
-      const raw = rowMap?.get(String(cell.col)) ?? "";
-      return [[resolveDisplayValue(raw, cell.row, cell.col, yFormulaValues)]];
-    }
-  }
+
 
   // ---------------------------------------------------------------------------
   // Document block reference observer (doc rooms only)

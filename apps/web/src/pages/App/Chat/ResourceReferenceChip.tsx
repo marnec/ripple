@@ -17,9 +17,11 @@ const RESOURCE_ROUTES: Record<string, string> = {
 type ResourceReferenceChipProps = {
   resourceId: string;
   resourceType: string;
+  /** A1 range this chip introduces, when it heads a frozen range table. */
+  cellRef?: string;
 };
 
-export function ResourceReferenceChip({ resourceId, resourceType }: ResourceReferenceChipProps) {
+export function ResourceReferenceChip({ resourceId, resourceType, cellRef }: ResourceReferenceChipProps) {
   const mentionedResources = useMentionedResources();
   const cached = mentionedResources[resourceId];
   const navigate = useNavigate();
@@ -69,7 +71,10 @@ export function ResourceReferenceChip({ resourceId, resourceType }: ResourceRefe
                  transition-colors cursor-pointer text-sm font-medium align-middle"
     >
       <Icon className="h-3 w-3 shrink-0" />
-      <span className="max-w-50 truncate">{name}</span>
+      <span className="max-w-50 truncate">
+        {name}
+        {cellRef ? ` \u203A ${cellRef}` : ""}
+      </span>
     </button>
   );
 }

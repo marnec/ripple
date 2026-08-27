@@ -13,6 +13,15 @@ type ResourceSuggestionsOptions = {
    * so the message carries a snapshot. Omit to leave diagrams out entirely.
    */
   onDiagramSelect?: (diagram: { id: Id<"diagrams">; name: string }) => void;
+  /**
+   * Spreadsheets get the same treatment when this is passed: picking one opens
+   * the range dialog, where a blank field still yields the plain chip and a
+   * range yields a frozen table of it. Omit to insert the chip directly.
+   */
+  onSpreadsheetSelect?: (spreadsheet: {
+    id: Id<"spreadsheets">;
+    name: string;
+  }) => void;
   /** Suggestions per resource group. Default 5. */
   perType?: number;
 };
@@ -39,6 +48,7 @@ export function useResourceSuggestions({
   workspaceId,
   editor,
   onDiagramSelect,
+  onSpreadsheetSelect,
   perType,
 }: ResourceSuggestionsOptions) {
   const convex = useConvex();
@@ -60,7 +70,7 @@ export function useResourceSuggestions({
       return [
         {
           title: r.name,
-          onItemClick: () => insert(r, editor, onDiagramSelect),
+          onItemClick: () => insert(r, editor, onDiagramSelect, onSpreadsheetSelect),
           icon: group.icon,
           group: group.group,
         },
@@ -73,9 +83,14 @@ function insert(
   r: { resourceId: string; resourceType: ResourceType; name: string },
   editor: any,
   onDiagramSelect?: (diagram: { id: Id<"diagrams">; name: string }) => void,
+  onSpreadsheetSelect?: (spreadsheet: { id: Id<"spreadsheets">; name: string }) => void,
 ) {
   if (r.resourceType === "diagram") {
     onDiagramSelect?.({ id: r.resourceId as Id<"diagrams">, name: r.name });
+    return;
+  }
+  if (r.resourceType === "spreadsheet" && onSpreadsheetSelect) {
+    onSpreadsheetSelect({ id: r.resourceId as Id<"spreadsheets">, name: r.name });
     return;
   }
   if (r.resourceType === "project") {

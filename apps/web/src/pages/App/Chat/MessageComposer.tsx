@@ -41,6 +41,8 @@ import { useEventSuggestions } from "../../../hooks/use-event-suggestions";
 import { useResourceSuggestions } from "../../../hooks/use-resource-suggestions";
 import { useTaskSuggestions } from "../../../hooks/use-task-suggestions";
 import { isEditorEmpty, editorClear, blocksToPlainText } from "@/lib/editor-utils";
+import { buildTableContent } from "@/lib/spreadsheet-table";
+import { parseRange } from "@ripple/shared/cellRef";
 import { generateThumbnail } from "@/lib/image-thumbnail";
 import {
   fetchDiagramSnapshotBlob,
@@ -54,6 +56,12 @@ import { Kbd } from "../../../components/ui/kbd";
 // actually picks a diagram to snapshot, keeping it out of the chat entry chunk.
 const FramePickerDialog = lazy(() =>
   import("../Document/FramePickerDialog").then((m) => ({ default: m.FramePickerDialog })),
+);
+
+// Also heavy (opens a collaborative room, and its picker pulls jspreadsheet) —
+// loaded only when a user actually picks a spreadsheet to reference.
+const SpreadsheetRangeDialog = lazy(() =>
+  import("./SpreadsheetRangeDialog").then((m) => ({ default: m.SpreadsheetRangeDialog })),
 );
 
 interface MessageComposerProps {
@@ -168,6 +176,11 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
   } | null>(null);
   // True while capturing/exporting a snapshot, before the preview blob exists.
   const [isCapturingSnapshot, setIsCapturingSnapshot] = useState(false);
+  // Target spreadsheet for the range dialog; null when it's closed.
+  const [rangeTarget, setRangeTarget] = useState<{
+    id: Id<"spreadsheets">;
+    name: string;
+  } | null>(null);
 
   const editor = useCreateBlockNote(editorConfig);
 
@@ -330,6 +343,58 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
     }
   };
 
+  // A spreadsheet reference resolves to one of two things, exactly as it does
+  // in a document: a blank range is the chip alone, and a real range is that
+  // chip followed by a frozen table of the cells. The table is ordinary
+  // BlockNote content — the chat schema keeps the `table` block, so it round
+  // trips through send, render and edit with nothing added.
+  const insertSpreadsheetRange = (
+    spreadsheet: { id: Id<"spreadsheets">; name: string },
+    cellRef: string | null,
+    values: string[][] | null,
+  ) => {
+    if (!editor) return;
+    const chip = {
+      type: "resourceReference" as const,
+      props: {
+        resourceId: spreadsheet.id,
+        resourceType: "spreadsheet",
+        resourceName: spreadsheet.name,
+        // Nothing else in the message states which cells these are — the
+        // header gutter is off — so the chip carries the range.
+        cellRef: cellRef ?? "",
+      },
+    };
+
+    const range = cellRef ? parseRange(cellRef) : null;
+    if (!cellRef || !range || !values) {
+      editor.insertInlineContent([chip, " "]);
+      return;
+    }
+
+    editor.insertInlineContent([chip]);
+    const content = buildTableContent({
+      values,
+      rowCount: range.endRow - range.startRow + 1,
+      colCount: range.endCol - range.startCol + 1,
+      startCol: range.startCol,
+      startRow: range.startRow,
+      // Coordinates belong on a live embed you can go and point at; a frozen
+      // copy in a channel is just the data, and the chip above already says
+      // where it came from.
+      showHeaders: false,
+    });
+    // Deferred for the same reason the document's clone-as-table is: inserting
+    // a table synchronously re-enters BlockNote's table plugin mid-update.
+    setTimeout(() => {
+      editor.insertBlocks(
+        [{ type: "table" as const, content }],
+        editor.getTextCursorPosition().block,
+        "after",
+      );
+    }, 0);
+  };
+
   const getMemberItems = useMemberSuggestions({
     members: workspaceMembers,
     editor,
@@ -359,6 +424,9 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
     // frame) rather than an inline reference chip — open the frame picker to
     // choose what to capture.
     onDiagramSelect: setFramePickerTarget,
+    // Selecting a spreadsheet opens the range dialog: blank inserts the chip
+    // alone (the previous behaviour), a range adds a frozen table under it.
+    onSpreadsheetSelect: setRangeTarget,
   });
 
   const getResourceItems = useMemo(() => {
@@ -494,6 +562,18 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
             onInsert={(frameId) => {
               if (framePickerTarget) void captureDiagramSnapshot(framePickerTarget, frameId);
             }}
+          />
+        </Suspense>
+      )}
+      {rangeTarget && (
+        <Suspense fallback={null}>
+          <SpreadsheetRangeDialog
+            spreadsheetId={rangeTarget.id}
+            spreadsheetName={rangeTarget.name}
+            onPick={({ cellRef, values }) =>
+              insertSpreadsheetRange(rangeTarget, cellRef, values)
+            }
+            onClose={() => setRangeTarget(null)}
           />
         </Suspense>
       )}

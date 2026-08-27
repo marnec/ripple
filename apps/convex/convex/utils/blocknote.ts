@@ -15,7 +15,7 @@ type InlineContent =
   | { type: "userMention"; props: { userId: string } }
   | { type: "taskMention"; props: { taskId: string; taskTitle?: string } }
   | { type: "projectReference"; props: { projectId: string } }
-  | { type: "resourceReference"; props: { resourceId: string; resourceType: string; resourceName: string } }
+  | { type: "resourceReference"; props: { resourceId: string; resourceType: string; resourceName: string; cellRef?: string } }
   | { type: "eventMention"; props: { eventId: string } }
   | { type: string; [key: string]: unknown };
 
@@ -39,6 +39,16 @@ export function extractPlainTextFromBody(
   }
 }
 
+/**
+ * The NOTIFICATION projection: what a reply preview and a lock screen say.
+ *
+ * `table` blocks contribute nothing on purpose. A frozen spreadsheet range is
+ * headed by a `resourceReference` chip naming the sheet and the range, which is
+ * what a preview wants; the cells themselves would be 97 characters of
+ * pipe-separated numbers on a lock screen (see the truncation in `send`). The
+ * client's `blocksToPlainText` DOES flatten them, because it composes the
+ * `plainText` that `search` indexes — that divergence is intended.
+ */
 function blocksToPlainText(
   blocks: BlockNoteBlock[],
   userNames?: Map<string, string>,
@@ -96,8 +106,12 @@ function inlineContentToPlainText(
         break;
       }
       case "resourceReference": {
-        const ref = item as { type: "resourceReference"; props: { resourceName?: string } };
+        const ref = item as {
+          type: "resourceReference";
+          props: { resourceName?: string; cellRef?: string };
+        };
         text += `#${ref.props.resourceName || "resource"}`;
+        if (ref.props.cellRef) text += ` \u203A ${ref.props.cellRef}`;
         break;
       }
       case "eventMention": {

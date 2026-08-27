@@ -115,3 +115,65 @@ describe("blocknote utils — @event mention helpers", () => {
     });
   });
 });
+
+describe("extractPlainTextFromBody — the notification projection", () => {
+  const tableBlock = (rows: string[][]) => ({
+    type: "table",
+    content: {
+      type: "tableContent",
+      rows: rows.map((cells) => ({
+        cells: cells.map((text) => ({
+          type: "tableCell",
+          props: {},
+          content: [{ type: "text", text, styles: {} }],
+        })),
+      })),
+    },
+  });
+
+  const chip = (props: Record<string, string>) => ({
+    type: "resourceReference",
+    props,
+  });
+
+  it("states the range on a chip that heads a frozen table", () => {
+    const body = JSON.stringify([
+      textBlock([
+        chip({
+          resourceId: "s1",
+          resourceType: "spreadsheet",
+          resourceName: "Budget",
+          cellRef: "B2:D5",
+        }),
+      ]),
+    ]);
+    expect(extractPlainTextFromBody(body)).toBe("#Budget \u203A B2:D5");
+  });
+
+  it("leaves a chip without a range exactly as it was", () => {
+    const body = JSON.stringify([
+      textBlock([
+        chip({ resourceId: "s1", resourceType: "spreadsheet", resourceName: "Budget" }),
+      ]),
+    ]);
+    expect(extractPlainTextFromBody(body)).toBe("#Budget");
+  });
+
+  it("contributes nothing for a table's cells, unlike the client's converter", () => {
+    // A lock screen and a reply preview want the chip, not 97 characters of
+    // pipe-separated numbers. The client's blocksToPlainText DOES flatten
+    // these, because it composes the plainText that `search` indexes.
+    const body = JSON.stringify([
+      textBlock([
+        chip({
+          resourceId: "s1",
+          resourceType: "spreadsheet",
+          resourceName: "Budget",
+          cellRef: "A1:B2",
+        }),
+      ]),
+      tableBlock([["1200", "1450"]]),
+    ]);
+    expect(extractPlainTextFromBody(body)).toBe("#Budget \u203A A1:B2");
+  });
+});

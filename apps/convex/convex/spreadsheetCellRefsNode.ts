@@ -4,7 +4,8 @@ import { ConvexError, v } from "convex/values";
 import * as Y from "yjs";
 import { action, internalAction } from "./_generated/server";
 import { api, internal } from "./_generated/api";
-import { normalizeCellRef, parseCellName, parseRange } from "@ripple/shared/cellRef";
+import { normalizeCellRef } from "@ripple/shared/cellRef";
+import { extractCellValues, type CellSource } from "@ripple/shared/cellValues";
 import {
   a1ToStable,
   parseStableRef,
@@ -59,7 +60,7 @@ export const populateFromSnapshot = internalAction({
     const values =
       orphan || !liveA1
         ? [[""]]
-        : extractCellValues(yData, liveA1, yFormulaValues) ?? [[""]];
+        : extractCellValues(liveA1, cellSource(yData, yFormulaValues)) ?? [[""]];
 
     yDoc.destroy();
 
@@ -132,48 +133,14 @@ export const prepareStableRef = action({
   },
 });
 
-/**
- * If the raw cell value is a formula (starts with "="), return the computed
- * display value from formulaValues. Falls back to raw value if not available.
- */
-function resolveDisplayValue(
-  rawValue: string,
-  row: number,
-  col: number,
-  yFormulaValues?: Y.Map<string>,
-): string {
-  if (rawValue.startsWith("=") && yFormulaValues) {
-    const computed = yFormulaValues.get(`${row},${col}`);
-    if (computed !== undefined) return computed;
-  }
-  return rawValue;
-}
-
-function extractCellValues(
+/** Grid accessors for a spreadsheet room's Yjs shape. */
+function cellSource(
   yData: Y.Array<Y.Map<string>>,
-  cellRef: string,
   yFormulaValues?: Y.Map<string>,
-): string[][] | null {
-  if (cellRef.includes(":")) {
-    const range = parseRange(cellRef);
-    if (!range) return null;
-    const result: string[][] = [];
-    for (let r = range.startRow; r <= range.endRow && r < yData.length; r++) {
-      const row: string[] = [];
-      const rowMap = yData.get(r);
-      for (let c = range.startCol; c <= range.endCol; c++) {
-        const raw = rowMap?.get(String(c)) ?? "";
-        row.push(resolveDisplayValue(raw, r, c, yFormulaValues));
-      }
-      result.push(row);
-    }
-    return result;
-  } else {
-    const cell = parseCellName(cellRef);
-    if (!cell) return null;
-    if (cell.row >= yData.length) return [[""]];
-    const rowMap = yData.get(cell.row);
-    const raw = rowMap?.get(String(cell.col)) ?? "";
-    return [[resolveDisplayValue(raw, cell.row, cell.col, yFormulaValues)]];
-  }
+): CellSource {
+  return {
+    rowCount: yData.length,
+    read: (row, col) => yData.get(row)?.get(String(col)) ?? "",
+    formulaValue: (row, col) => yFormulaValues?.get(`${row},${col}`),
+  };
 }

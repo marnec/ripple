@@ -17,7 +17,7 @@ import type { Id } from "@convex/_generated/dataModel";
 import { useBlockResize } from "./useBlockResize";
 import { SpreadsheetRangeToolbar } from "./SpreadsheetRangeToolbar";
 import { SpreadsheetGrid } from "./SpreadsheetGrid";
-import { buildTableContent } from "./spreadsheetRangeActions";
+import { buildTableContent } from "@/lib/spreadsheet-table";
 
 // ---------------------------------------------------------------------------
 // Prop schema

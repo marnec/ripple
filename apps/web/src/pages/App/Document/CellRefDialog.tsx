@@ -28,6 +28,13 @@ interface CellRefDialogProps {
   spreadsheetId: Id<"spreadsheets">;
   spreadsheetName: string;
   onInsert: (cellRef: string | null) => void;
+  /**
+   * Whether a range can be confirmed right now. False while the caller is still
+   * getting hold of the data a range would resolve against — the blank-field
+   * "insert as link" path stays available either way. Defaults to true for
+   * callers that resolve the range themselves after the fact.
+   */
+  rangeReady?: boolean;
 }
 
 export function CellRefDialog({
@@ -36,6 +43,7 @@ export function CellRefDialog({
   spreadsheetId,
   spreadsheetName,
   onInsert,
+  rangeReady = true,
 }: CellRefDialogProps) {
   const [cellRef, setCellRef] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -56,6 +64,10 @@ export function CellRefDialog({
       reset();
       return;
     }
+
+    // Enter submits the form even while the button is disabled, so the
+    // not-ready gate has to be stated here too, not only on the button.
+    if (!rangeReady) return;
 
     const normalized = normalizeCellRef(trimmed);
 
@@ -139,7 +151,7 @@ export function CellRefDialog({
               >
                 Cancel
               </Button>
-              <Button type="submit">
+              <Button type="submit" disabled={!!cellRef.trim() && !rangeReady}>
                 {cellRef.trim() ? "Insert Reference" : "Insert Link"}
               </Button>
             </DialogFooter>

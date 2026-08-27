@@ -9,6 +9,7 @@ import { useQuery } from "convex-helpers/react/cache";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 import { FileText } from "lucide-react";
+import { tableCellContent, tableCellSpans } from "@/lib/blocknote-table";
 
 // BlockNote JSON types (simplified for rendering)
 export type Style = {
@@ -50,7 +51,13 @@ type UserMentionContent = {
 
 type ResourceReferenceContent = {
   type: "resourceReference";
-  props: { resourceId: string; resourceType: string; resourceName: string };
+  props: {
+    resourceId: string;
+    resourceType: string;
+    resourceName: string;
+    /** A1 range, when the chip heads a frozen range table. */
+    cellRef?: string;
+  };
 };
 
 type EventMentionContent = {
@@ -76,10 +83,9 @@ export type Block = {
 };
 
 type TableRow = {
-  cells: TableCell[];
+  /** Either shape of BlockNote's cell union — see `lib/blocknote-table`. */
+  cells: unknown[];
 };
-
-type TableCell = InlineContent[][];
 
 /**
  * Shared read-only renderer for BlockNote JSON blocks.
@@ -222,10 +228,12 @@ function TableRenderer({ content }: { content: Block["content"] }) {
         {rows.map((row, ri) => (
           <tr key={`row-${ri}`}>
             {row.cells.map((cell, ci) => (
-              <td key={`cell-${ri}-${ci}`} className="border border-muted-foreground/20 px-2 py-1">
-                {cell.map((cellContent, pi) => (
-                  <React.Fragment key={`p-${pi}`}>{renderInlineArray(cellContent)}</React.Fragment>
-                ))}
+              <td
+                key={`cell-${ri}-${ci}`}
+                className="border border-muted-foreground/20 px-2 py-1"
+                {...tableCellSpans(cell)}
+              >
+                {renderInlineArray(tableCellContent<InlineContent>(cell))}
               </td>
             ))}
           </tr>
@@ -280,6 +288,7 @@ function InlineRenderer({ content }: { content: InlineContent }) {
         <ResourceReferenceChip
           resourceId={content.props.resourceId}
           resourceType={content.props.resourceType}
+          cellRef={content.props.cellRef}
         />
       );
 
