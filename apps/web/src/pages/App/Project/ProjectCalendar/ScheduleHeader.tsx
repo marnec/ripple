@@ -207,16 +207,20 @@ export function ScheduleHeader({
           </button>
         </div>
 
-        {/* Unscheduled pool toggle. In calendar view this is desktop-only
-            (mobile uses the day drawer); in gantt view the pool is the
-            below-chart drawer, available on every breakpoint. */}
-        {/* Desktop-only pool toggle. On mobile the unscheduled pool is reached
-            by clicking an empty coordinate (calendar) / timeline slot (gantt). */}
+        {/* Desktop-only side-panel toggle. On mobile the pool is reached by
+            clicking an empty coordinate (calendar) / timeline slot (gantt).
+
+            The label tracks what the panel actually holds, which differs by
+            view: the calendar's panel has an Unscheduled *and* a Scheduled
+            section, so "Unscheduled" undersold it; the gantt's drawer really
+            is only the unscheduled pool. Hence "Tasks" vs "Unscheduled (N)".
+            The calendar button never disables — the scheduled list is worth
+            opening even with an empty unscheduled pool. */}
         <Button
           variant="outline"
           size="sm"
           onClick={onPoolToggle}
-          disabled={unscheduledCount === 0 && !poolOpen}
+          disabled={view === "gantt" && unscheduledCount === 0 && !poolOpen}
           className="h-7 text-xs hidden md:flex"
         >
           {poolOpen ? (
@@ -225,7 +229,9 @@ export function ScheduleHeader({
             <PanelRightOpen className="h-3.5 w-3.5 mr-1.5" />
           )}
           <ListTodo className="h-3.5 w-3.5 mr-1" />
-          Unscheduled {unscheduledCount > 0 && `(${unscheduledCount})`}
+          {view === "calendar"
+            ? "Tasks"
+            : `Unscheduled ${unscheduledCount > 0 ? `(${unscheduledCount})` : ""}`}
         </Button>
       </div>
     </div>

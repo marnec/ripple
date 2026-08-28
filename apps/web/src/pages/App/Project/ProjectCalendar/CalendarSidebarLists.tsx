@@ -1,3 +1,8 @@
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@ripple/ui/components/tooltip";
 import { Switch } from "@/components/ui/switch";
 import { calendarDragContext } from "../calendarDragContext";
 import {
@@ -51,13 +56,19 @@ function UnscheduledTaskItem({ task }: { task: EnrichedTask }) {
 // Desktop sidebar: scheduled tasks with actual-time toggles
 // ─────────────────────────────────────────────────────────────────────────────
 
+export const ACTUAL_TIME_HINT =
+  "Overlays the hours actually logged against each task on the calendar, alongside its planned block.";
+
 export function ScheduledSectionHeader({
   tasks,
+  monthLabel,
   visibleActualTaskIds,
   onSetAll,
   onClearAll,
 }: {
   tasks: EnrichedTask[];
+  /** e.g. "Aug 2026" — null until schedule-x has reported a range. */
+  monthLabel: string | null;
   visibleActualTaskIds: Set<string>;
   onSetAll: (ids: string[]) => void;
   onClearAll: () => void;
@@ -66,19 +77,39 @@ export function ScheduledSectionHeader({
   const allOn = togglable.length > 0 && togglable.every((t) => visibleActualTaskIds.has(t._id));
 
   return (
-    <div className="flex items-center justify-between">
-      <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-        Scheduled
-      </span>
-      <div className="flex items-center gap-2">
-        <span className="text-xs text-muted-foreground tabular-nums">{tasks.length}</span>
+    <div className="space-y-1">
+      {/* The list is scoped to the month on screen, so the heading has to name
+          it — otherwise the count silently changes under month navigation and
+          reads as tasks disappearing. */}
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide truncate">
+          {monthLabel ? `Scheduled · ${monthLabel}` : "Scheduled"}
+        </span>
+        <span className="text-xs text-muted-foreground tabular-nums shrink-0">{tasks.length}</span>
+      </div>
+      {/* The switch column needs a name. Unlabelled it is unreadable — nothing
+          on the row says the toggle is about logged time rather than, say,
+          hiding the task from the grid. */}
+      <div className="flex items-center justify-between gap-2">
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <span className="text-[11px] text-muted-foreground cursor-help decoration-dotted underline underline-offset-2" />
+            }
+          >
+            Show actual time
+          </TooltipTrigger>
+          <TooltipContent side="bottom" className="max-w-56">
+            {ACTUAL_TIME_HINT}
+          </TooltipContent>
+        </Tooltip>
         {togglable.length > 0 && (
           <Switch
             checked={allOn}
             onCheckedChange={(checked) =>
               checked ? onSetAll(togglable.map((t) => t._id)) : onClearAll()
             }
-            aria-label="Toggle actual times for all scheduled tasks"
+            aria-label="Show actual time for every task scheduled this month"
           />
         )}
       </div>
@@ -88,17 +119,19 @@ export function ScheduledSectionHeader({
 
 export function ScheduledTaskList({
   tasks,
+  monthLabel,
   visibleActualTaskIds,
   onToggle,
 }: {
   tasks: EnrichedTask[];
+  monthLabel: string | null;
   visibleActualTaskIds: Set<string>;
   onToggle: (taskId: string) => void;
 }) {
   if (tasks.length === 0) {
     return (
       <p className="px-3 py-3 text-xs text-muted-foreground">
-        No scheduled tasks
+        {monthLabel ? `Nothing scheduled in ${monthLabel}` : "No scheduled tasks"}
       </p>
     );
   }
@@ -133,12 +166,15 @@ function ScheduledTaskItem({
         style={{ backgroundColor: task.status ? tailwindToHex(task.status.color) : "#6b7280" }}
       />
       <span className="truncate text-foreground flex-1">{task.title}</span>
-      <Switch
-        checked={isVisible && canToggle}
-        disabled={!canToggle}
-        onCheckedChange={() => onToggle(task._id)}
-        aria-label={`Toggle actual times for ${task.title}`}
-      />
+      {/* A disabled switch with no explanation reads as broken; say why. */}
+      <span title={canToggle ? undefined : "No time logged on this task yet"}>
+        <Switch
+          checked={isVisible && canToggle}
+          disabled={!canToggle}
+          onCheckedChange={() => onToggle(task._id)}
+          aria-label={`Show actual time for ${task.title}`}
+        />
+      </span>
     </div>
   );
 }

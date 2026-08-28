@@ -31,6 +31,7 @@ import {
   buildTaskEvents,
   buildWorkPeriodEvents,
   buildCycleBackgroundEvents,
+  isTaskInMonth,
 } from "./calendar-events";
 import {
   CalendarTaskMenuContext,
@@ -53,6 +54,37 @@ import {
 } from "./ScheduleHeader";
 import { GanttView, type GanttApi } from "./GanttView";
 import "../project-calendar.css";
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Visible month
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * The month schedule-x is currently showing, or null before it has rendered.
+ *
+ * `rangeVersion` is deliberately an unused parameter: `getDate()` reads mutable
+ * state off the controls plugin, so the bump schedule-x reports on range change
+ * is the only thing that says the answer moved. Passing it in puts it in React
+ * Compiler's dependency list, which a bare `calendarControls.getDate()` in the
+ * component body would not do.
+ */
+function readVisibleMonth(
+  controls: ReturnType<typeof createCalendarControlsPlugin>,
+  rangeVersion: number,
+): { year: number; month: number; label: string } | null {
+  if (rangeVersion < 0) return null;
+  try {
+    const d = controls.getDate();
+    if (!d) return null;
+    return {
+      year: d.year,
+      month: d.month,
+      label: d.toLocaleString("en-US", { month: "short", year: "numeric" }),
+    };
+  } catch {
+    return null;
+  }
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Route entry
@@ -148,6 +180,15 @@ function ProjectCalendarContent({
     });
 
   const scheduledTasks: EnrichedTask[] = allTasks.filter((t) => !!t.plannedStartDate);
+
+  // The sidebar's Scheduled section is scoped to the month on screen — the
+  // whole-project list was unbounded and had no relationship to the grid next
+  // to it. Before schedule-x reports a range there is no month to scope to, so
+  // fall back to the full list rather than flashing an empty section.
+  const visibleMonth = readVisibleMonth(calendarControls, rangeVersion);
+  const monthScheduledTasks: EnrichedTask[] = visibleMonth
+    ? scheduledTasks.filter((t) => isTaskInMonth(t, visibleMonth, multiplier))
+    : scheduledTasks;
 
   // Gantt drag preview: the dragged task + its snapped drop date, reported by
   // GanttView while a drag is in flight (cleared on drop/leave). Combined with
@@ -345,7 +386,8 @@ function ProjectCalendarContent({
             <div className="border-t shrink-0" />
             <CalendarSidebarHeader>
               <ScheduledSectionHeader
-                tasks={scheduledTasks}
+                tasks={monthScheduledTasks}
+                monthLabel={visibleMonth?.label ?? null}
                 visibleActualTaskIds={visibleActualTaskIds}
                 onSetAll={ix.actualView.setAll}
                 onClearAll={ix.actualView.clearAll}
@@ -353,7 +395,8 @@ function ProjectCalendarContent({
             </CalendarSidebarHeader>
             <CalendarSidebarContent className="flex-1 min-h-0 overflow-y-auto">
               <ScheduledTaskList
-                tasks={scheduledTasks}
+                tasks={monthScheduledTasks}
+                monthLabel={visibleMonth?.label ?? null}
                 visibleActualTaskIds={visibleActualTaskIds}
                 onToggle={ix.actualView.toggle}
               />

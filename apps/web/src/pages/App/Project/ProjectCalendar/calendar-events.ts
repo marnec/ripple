@@ -164,6 +164,36 @@ export function hasActualData(task: EnrichedTask): boolean {
   return !!task.workPeriods?.some((p) => p.completedAt !== undefined);
 }
 
+/** A year/month pair, as reported by schedule-x's calendar controls. */
+export type VisibleMonth = { year: number; month: number };
+
+/**
+ * Does a task's planned span touch `month`?
+ *
+ * Intersection rather than "starts in this month" so the sidebar list matches
+ * what the grid actually draws: a task starting Jan 28 with a week's estimate
+ * is visibly on February's grid, and would be confusing to omit from
+ * February's list. Duration is derived exactly as `buildTaskEvents` derives it
+ * (same `multiplier`), so the two can never disagree.
+ */
+export function isTaskInMonth(
+  task: EnrichedTask,
+  month: VisibleMonth,
+  multiplier: 1 | 5 = 1,
+): boolean {
+  if (!task.plannedStartDate) return false;
+  const start = Temporal.PlainDate.from(task.plannedStartDate);
+  const end = Temporal.PlainDate.from(
+    addCalendarDays(task.plannedStartDate, estimateToDays(task.estimate, multiplier) - 1),
+  );
+  const monthStart = Temporal.PlainDate.from({ year: month.year, month: month.month, day: 1 });
+  const monthEnd = monthStart.add({ months: 1 }).subtract({ days: 1 });
+  return (
+    Temporal.PlainDate.compare(start, monthEnd) <= 0 &&
+    Temporal.PlainDate.compare(end, monthStart) >= 0
+  );
+}
+
 export function buildTaskEvents(
   tasks: EnrichedTask[],
   multiplier: 1 | 5 = 1,
