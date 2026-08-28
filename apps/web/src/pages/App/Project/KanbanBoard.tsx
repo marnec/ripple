@@ -493,6 +493,7 @@ export function KanbanBoard({ projectId, workspaceId, filters, sort, onSortBlock
               task={activeTask}
               onClick={() => { }}
               isDragging
+              interactive={false}
             />
           )}
         </DragOverlay>
@@ -543,7 +544,7 @@ export function KanbanBoard({ projectId, workspaceId, filters, sort, onSortBlock
               transition={{ duration: FLY_DURATION_S, ease: [0.16, 1, 0.3, 1] }}
               onAnimationComplete={() => completeFlight(flight.key, flight.taskId)}
             >
-              <KanbanCardPresenter task={flight.task} onClick={() => {}} />
+              <KanbanCardPresenter task={flight.task} onClick={() => {}} interactive={false} />
             </m.div>
           ))}
         </div>,

@@ -6,6 +6,7 @@ import { TaskIssueRef } from "./TaskIssueRef";
 import { cn } from "@/lib/utils";
 import { formatDueDate, formatEstimate, isOverdue, getPriorityIcon } from "@/lib/task-utils";
 import { ExternalAssigneeAvatars } from "./ExternalAssignees";
+import { KanbanAssigneePicker } from "./KanbanAssigneePicker";
 import type { KanbanTask } from "./kanban-types";
 import {
   Ban,
@@ -16,6 +17,7 @@ import {
   GitPullRequestDraft,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import { useRef, useState } from "react";
 import {
   Tooltip,
   TooltipContent,
@@ -36,14 +38,27 @@ type KanbanCardPresenterProps = {
   task: KanbanTask;
   onClick: () => void;
   isDragging?: boolean;
+  /**
+   * False for the copies that aren't the live card — the drag overlay, the
+   * cross-column flying ghost, the invisible drag placeholder. They render the
+   * assignee as a flat avatar so no popover is mounted four times per card.
+   */
+  interactive?: boolean;
 };
 
 export function KanbanCardPresenter({
   task,
   onClick,
   isDragging = false,
+  interactive = true,
 }: KanbanCardPresenterProps) {
   const hasExternalAssignees = (task.externalAssignees?.length ?? 0) > 0;
+
+  // Titles are truncated to one line, so hovering reveals the full text — but
+  // only when there is something hidden. Vetoing the open (rather than not
+  // rendering the tooltip) keeps base-ui's own hover/focus timing.
+  const titleRef = useRef<HTMLHeadingElement>(null);
+  const [titleTooltipOpen, setTitleTooltipOpen] = useState(false);
 
   return (
     <Card
@@ -83,7 +98,26 @@ export function KanbanCardPresenter({
             provider={task.externalRefs?.[0]?.provider}
           />
         </div>
-        <h3 className="text-sm font-medium truncate">{task.title}</h3>
+        <Tooltip
+          open={titleTooltipOpen}
+          onOpenChange={(open) => {
+            const el = titleRef.current;
+            setTitleTooltipOpen(
+              open && !!el && el.scrollWidth > el.clientWidth,
+            );
+          }}
+        >
+          <TooltipTrigger
+            render={
+              <h3 ref={titleRef} className="text-sm font-medium truncate" />
+            }
+          >
+            {task.title}
+          </TooltipTrigger>
+          <TooltipContent side="top" className="max-w-64 text-left">
+            {task.title}
+          </TooltipContent>
+        </Tooltip>
       </CardHeader>
       <CardContent className="py-2 px-3 pt-0">
         <div className="flex items-center justify-between mb-2">
@@ -118,8 +152,16 @@ export function KanbanCardPresenter({
               <div className="h-4 w-px bg-border" aria-hidden />
             )}
 
-            {/* Assignee Avatar — ghost placeholder keeps row height stable */}
-            {task.assignee ? (
+            {/* Assignee — the picker occupies the slot whether or not the
+                task is assigned (dotted circle when empty), so the row height
+                is stable and assigning never needs the detail sheet. */}
+            {interactive ? (
+              <KanbanAssigneePicker
+                taskId={task._id}
+                assigneeId={task.assigneeId}
+                assignee={task.assignee}
+              />
+            ) : task.assignee ? (
               <UserAvatar
                 className="h-6 w-6"
                 name={task.assignee.name}

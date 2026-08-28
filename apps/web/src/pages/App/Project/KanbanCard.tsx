@@ -67,7 +67,7 @@ export function KanbanCard({ task, onClick, layoutEnabled, isHidden }: KanbanCar
           // Placeholder while dragging — render invisibly to preserve height.
           <div className="relative overflow-hidden rounded-lg bg-muted/50 outline-dashed outline-2 outline-border -outline-offset-2">
             <div className="invisible">
-              <KanbanCardPresenter task={task} onClick={() => {}} />
+              <KanbanCardPresenter task={task} onClick={() => {}} interactive={false} />
             </div>
           </div>
         ) : (
