@@ -22,6 +22,8 @@ NEXT STEPS:
 
 - task show full title on hover
 
+- add DM plus btn and remove dm type from type select at channel creation, rebrand type as privacy lvl
+
 - [ ] link previews in chat
 
 keyboard accessiblity
