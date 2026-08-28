@@ -13,6 +13,7 @@ without requiring a full Convex runtime environment.
 */
 
 import { describe, it, expect, vi } from "vitest";
+import type { GenericDataModel, GenericMutationCtx } from "convex/server";
 import type { CascadeConfig } from "../component/types.js";
 
 vi.mock("convex/server", async () => {
@@ -103,6 +104,18 @@ function createMockDb(tables: Record<string, any[]>) {
   };
 }
 
+/**
+ * Members of the client's `MutationCtx` that these tests never exercise. They
+ * are present so the double satisfies the type, and they throw rather than
+ * return `undefined` so that a code path which starts using one fails here,
+ * loudly, instead of silently reading nothing.
+ */
+function unimplemented(name: string) {
+  return () => {
+    throw new Error(`mock ctx: ${name} is not implemented`);
+  };
+}
+
 function createMockCtx(db: any) {
   return {
     db,
@@ -113,6 +126,16 @@ function createMockCtx(db: any) {
       runAt: vi.fn(),
       cancel: vi.fn(),
     },
+    // `deleteWithCascade` and friends take the full `MutationCtx`, which
+    // includes `storage`; nothing in the cascade path touches it. The cast
+    // covers `StorageWriter`'s overloads, which plain stubs cannot match
+    // structurally.
+    storage: {
+      getUrl: unimplemented("storage.getUrl"),
+      generateUploadUrl: unimplemented("storage.generateUploadUrl"),
+      delete: unimplemented("storage.delete"),
+      getMetadata: unimplemented("storage.getMetadata"),
+    } as unknown as GenericMutationCtx<GenericDataModel>["storage"],
   };
 }
 

@@ -8,6 +8,28 @@ import type { Id } from "./_generated/dataModel.js";
 import { internal } from "./_generated/api.js";
 import schema from "./schema.js";
 import { stream, mergedStream } from "convex-helpers/server/stream";
+import type {
+  DataModelFromSchemaDefinition,
+  GenericDatabaseReader,
+} from "convex/server";
+
+/**
+ * The reader type `stream()` wants: one derived from `schema` rather than from
+ * `_generated/dataModel.ts`.
+ *
+ * The two disagree, and only in a phantom type. `ExtractFieldPaths` walks the
+ * schema and emits nested paths for `v.any()` columns — `metadata.${string}`,
+ * and the same for `before`/`after` — while the checked-in generated model
+ * lists a flat union of top-level names. `ctx.db` is the same object either
+ * way; nothing about the query changes.
+ *
+ * `npm run codegen` would normally reconcile them, but it needs a
+ * CONVEX_DEPLOYMENT and this package has none configured, so the generated
+ * file cannot be refreshed here.
+ */
+type SchemaReader = GenericDatabaseReader<
+  DataModelFromSchemaDefinition<typeof schema>
+>;
 import {
   vSeverity,
   vAuditEventInput,
@@ -311,7 +333,7 @@ export const queryByScope = query({
 
     // With resourceTypes filter: one indexed stream per type, merged by timestamp
     const streams = args.resourceTypes.map((resourceType) =>
-      stream(ctx.db, schema)
+      stream(ctx.db as unknown as SchemaReader, schema)
         .query("auditLogs")
         .withIndex("by_scope_resourceType_timestamp", (q) => {
           const q2 = q.eq("scope", args.scope).eq("resourceType", resourceType);
