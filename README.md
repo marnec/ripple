@@ -12,6 +12,8 @@ NEXT STEPS:
 
 - explore pdf reading, annotation and embedding
 
+- regression: admins should be able to see activity of whole workspace
+
 - [ ] link previews in chat
 
 keyboard accessiblity
