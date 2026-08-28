@@ -65,6 +65,11 @@ function renderHeader(surface: HydratedSurface<Meta>) {
 }
 
 beforeEach(() => {
+  // jsdom ships no `matchMedia`, so this installs a stub when it is missing.
+  // `unbound-method` fires on the `??=` read of `window.matchMedia`, but the
+  // reference is only tested for presence and never detached and called, so
+  // there is no `this` to lose.
+  // eslint-disable-next-line @typescript-eslint/unbound-method
   window.matchMedia ??= ((query: string) => ({
     matches: false,
     media: query,
