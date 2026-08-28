@@ -31,7 +31,7 @@
     "./convex.config": "./src/component/convex.config.ts"
   },
   "peerDependencies": {
-    "convex": "^1.32.0",
+    "convex": "^1.43.0",
     "react": "^18.3.1 || ^19.0.0"
   },
   "devDependencies": {
@@ -64,6 +64,6 @@
     "vitest": "4.1.11"
   },
   "dependencies": {
-    "@convex-dev/workflow": "^0.3.8"
+    "@convex-dev/workflow": "^0.4.6"
   }
 }

@@ -36,7 +36,7 @@
     "./convex.config": "./src/component/convex.config.ts"
   },
   "peerDependencies": {
-    "convex": "^1.29.3",
+    "convex": "1.45.0",
     "react": "^18.3.1 || ^19.0.0"
   },
   "peerDependenciesMeta": {
