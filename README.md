@@ -6,8 +6,6 @@ NEXT STEPS:
 
 - recurrent events in calendar
 
-- add navigate weeks / months in my dashboard calendar
-
 - add a dependency view to tasks
 
 - explore pdf reading, annotation and embedding
