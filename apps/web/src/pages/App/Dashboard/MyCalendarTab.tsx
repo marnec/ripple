@@ -35,6 +35,8 @@ import "../Project/project-calendar.css";
 import { type MemberCalendarMember } from "./MemberCalendarFilter";
 import { memberBlockStyle } from "./member-calendar-colors";
 import { CalendarHeader } from "./CalendarHeader";
+import { CalendarNav } from "./CalendarNav";
+import { DashboardToolbarSlot } from "./DashboardToolbarSlot";
 import {
   CalendarHeaderContext,
   type DashboardCalendarView,
@@ -675,8 +677,9 @@ function MyCalendarTabContent({ workspaceId }: { workspaceId: Id<"workspaces"> }
       )}
 
       {/* Calendar grid — fills remaining height. The header context feeds
-          our custom `headerContent` slot (prev/next, label, counters,
-          New event, view switcher) — see CalendarHeader. */}
+          two consumers: the range nav portalled into the dashboard toolbar
+          (CalendarNav) and our custom schedule-x `headerContent` slot
+          (view switcher, member filter, New event) — see CalendarHeader. */}
       <CalendarHeaderContext.Provider
         value={{
           calendarControls,
@@ -690,6 +693,14 @@ function MyCalendarTabContent({ workspaceId }: { workspaceId: Id<"workspaces"> }
           setVisibleMemberIds,
         }}
       >
+        {/* Week/month stepping sits in the layout toolbar next to the
+            Tasks/Calendar switch — the top row is where the eye already
+            is, and it frees the calendar's own header for secondary
+            controls. Context reaches it through the portal. */}
+        <DashboardToolbarSlot>
+          <CalendarNav />
+        </DashboardToolbarSlot>
+
         <div className="flex-1 min-h-0 relative">
           <ScheduleXCalendar
             calendarApp={calendarApp}
