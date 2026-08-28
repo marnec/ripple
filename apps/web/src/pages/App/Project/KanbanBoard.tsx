@@ -434,8 +434,12 @@ export function KanbanBoard({ projectId, workspaceId, filters, sort, onSortBlock
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
       >
+        {/* `scroll-fade-x` (shadcn utility) fades whichever horizontal edge
+            still has columns beyond it, so "there is more this way" reads
+            without waiting for an overlay scrollbar to appear. It is a pure
+            scroll-driven animation — no scroll listener, no re-render. */}
         <div
-          className="flex flex-1 min-h-0 gap-4 overflow-x-auto pb-4"
+          className="scroll-fade-x flex flex-1 min-h-0 gap-4 overflow-x-auto pb-4"
         >
           {statuses.map((status, index) => (
             <KanbanColumn
