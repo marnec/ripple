@@ -14,7 +14,7 @@
   "dependencies": {
     "@ripple/shared": "workspace:^",
     "ical.js": "2.2.1",
-    "postal-mime": "2.7.4"
+    "postal-mime": "3.0.0"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "5.20260828.1",

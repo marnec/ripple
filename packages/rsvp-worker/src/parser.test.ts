@@ -117,6 +117,29 @@ describe("parseRsvp", () => {
     expect(r!.authResults).toBe(ar);
   });
 
+  it("takes Cloudflare's prepended Authentication-Results, not an upstream forgery", async () => {
+    // Security invariant (see auth.ts): Cloudflare prepends its own
+    // Authentication-Results line to every inbound message, so the FIRST such
+    // header is the trusted verdict. Upstream lines are attacker-controlled —
+    // a relay preserves them and never strips them — so an attacker can ship a
+    // forged `dkim=pass` further down and must not be believed.
+    //
+    // This pins postal-mime's document-order guarantee for `email.headers`,
+    // which findAuthResults relies on. postal-mime 3.x changed duplicate-header
+    // resolution; this test is what proves the change is safe here.
+    const cloudflare =
+      "mx.cloudflare.net; dkim=fail header.d=evil.example; dmarc=fail header.from=evil.example";
+    const forged =
+      "attacker.example; dkim=pass header.d=example.com; dmarc=pass header.from=example.com";
+    const mime =
+      `Authentication-Results: ${cloudflare}\r\n` +
+      `Authentication-Results: ${forged}\r\n` +
+      buildMimeReply(baseIcs({ partstat: "ACCEPTED" }));
+    const r = await parseRsvp(mime);
+    expect(r).not.toBeNull();
+    expect(r!.authResults).toBe(cloudflare);
+  });
+
   it("returns null authResults when the header is absent", async () => {
     const mime = buildMimeReply(baseIcs({ partstat: "ACCEPTED" }));
     const r = await parseRsvp(mime);
