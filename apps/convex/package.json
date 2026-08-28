@@ -41,7 +41,7 @@
     "convex-cascading-delete": "workspace:*",
     "convex-helpers": "0.1.123",
     "convex-webhook-receiver": "^1.0.6",
-    "fractional-indexing": "3.2.0",
+    "fractional-indexing": "4.0.0",
     "jsdom": "^25.0.1",
     "resend": "6.24.0",
     "web-push": "3.6.7",

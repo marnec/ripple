@@ -283,8 +283,8 @@ importers:
         specifier: ^1.0.6
         version: 1.0.6(patch_hash=e2d1660c645007ed611d500d4a86c1dc096c1a38996a543ec85410ad12dec3b0)(convex@1.45.0(react@19.2.8))
       fractional-indexing:
-        specifier: 3.2.0
-        version: 3.2.0
+        specifier: 4.0.0
+        version: 4.0.0
       jsdom:
         specifier: ^25.0.1
         version: 25.0.1
@@ -552,8 +552,8 @@ importers:
         specifier: 4.19.1
         version: 4.19.1(react@19.2.8)
       fractional-indexing:
-        specifier: 3.2.0
-        version: 3.2.0
+        specifier: 4.0.0
+        version: 4.0.0
       framer-motion:
         specifier: 12.40.0
         version: 12.40.0(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
@@ -5897,6 +5897,10 @@ packages:
 
   fractional-indexing@3.2.0:
     resolution: {integrity: sha512-PcOxmqwYCW7O2ovKRU8OoQQj2yqTfEB/yeTYk4gPid6dN5ODRfU1hXd9tTVZzax/0NkO7AxpHykvZnT1aYp/BQ==}
+    engines: {node: ^14.13.1 || >=16.0.0}
+
+  fractional-indexing@4.0.0:
+    resolution: {integrity: sha512-Nr2P1Yyaj2sy1Qdt/wI3GcByxrUdbSKg5+cGvw8f18hT2SkQt6V72iOjBpk7IO3UkzBsdlGRs2a4z6dLrJprgw==}
     engines: {node: ^14.13.1 || >=16.0.0}
 
   framer-motion@12.40.0:
@@ -14947,6 +14951,8 @@ snapshots:
   fraction.js@5.3.4: {}
 
   fractional-indexing@3.2.0: {}
+
+  fractional-indexing@4.0.0: {}
 
   framer-motion@12.40.0(react-dom@19.2.8(react@19.2.8))(react@19.2.8):
     dependencies:
