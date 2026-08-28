@@ -20,6 +20,8 @@ NEXT STEPS:
 - the scheduled sections should show scheduled this month
 - the toggle in th scheduled sections even I forgot what it's for
 
+- task show full title on hover
+
 - [ ] link previews in chat
 
 keyboard accessiblity

@@ -1,19 +1,9 @@
 {
   "$schema": "https://turbo.build/schema.json",
   "tasks": {
-    "dev:setup": {
-      "cache": false
-    },
     "dev": {
       "cache": false,
-      "persistent": true,
-      "dependsOn": ["@ripple/convex#dev:setup"]
-    },
-    "@ripple/admin#dev": {
-      "cache": false,
-      "persistent": true,
-      "dependsOn": ["@ripple/convex#dev:setup"],
-      "with": ["@ripple/convex#dev"]
+      "persistent": true
     },
     "build": {
       "dependsOn": ["^build"],

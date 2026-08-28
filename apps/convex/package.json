@@ -19,7 +19,6 @@
   },
   "scripts": {
     "dev": "convex dev",
-    "dev:setup": "convex dev --once --typecheck disable || true",
     "deploy": "convex deploy && convex run migrations:runAll --prod && convex run version:set --prod",
     "test": "vitest run",
     "test:watch": "vitest",

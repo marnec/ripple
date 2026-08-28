@@ -26,27 +26,43 @@ npm run deploy
 
 ### Dev startup order
 
-`npm run dev` is **ordered**, not `--parallel` (that flag is deprecated and
-discards the task graph):
+**`convex dev` is the outer process, turbo is nested inside it.** `npm run dev`
+is `convex dev --start 'pnpm -w run dev:fleet'`:
 
-1. `@ripple/convex#dev:setup` — `convex dev --once`, pushes functions and writes
-   `convex/_generated/`. Nothing else starts until it finishes (~6s).
-2. Then, together: `vite` for web (`:5173`, `--open`) and admin (`:5273`),
-   `convex dev` (watch), and `wrangler dev` for the collaboration server
-   (`:1999`) and the RSVP email worker (`:1998`).
+1. `convex dev` pushes functions and writes `convex/_generated/`. Nothing else
+   starts until that first push lands.
+2. `--start` then spawns `dev:fleet` — `turbo run dev --filter=!@ripple/convex`:
+   `vite` for web (`:5173`, `--open`) and admin (`:5273`), and `wrangler dev` for
+   the collaboration server (`:1999`) and the RSVP email worker (`:1998`).
+3. The same `convex dev` stays in the foreground watching for backend changes.
 
 The gate exists because Vite boots in ~200ms: without it the browser opened onto
 a deployment that was still mid-push, so the first load hit missing functions and
-a dead `localhost:1999` and had to be reloaded. `dev:setup` ends in `|| true` on
-purpose — a schema or TS error should not stop the frontend from coming up; the
-persistent `convex dev` reprints it and keeps retrying. Typecheck is disabled in
-the gate for the same reason (the watcher does it, ~9s later, off the critical
-path).
+a dead `localhost:1999` and had to be reloaded.
 
-`dev` runs the whole fleet. `dev:admin` is the one subset worth having — admin +
-Convex, via `with` on `@ripple/admin#dev`, since a persistent task can't be
-depended on but can be co-scheduled. Only `@ripple/web` opens a browser tab; the
-admin console is one you open when you need it, not a second tab on every start.
+**Why not a turbo `dev:setup` task.** That was the previous shape — a
+`convex dev --once` gate that every other `dev` task depended on. It pushed
+*twice* every startup: `watchAndPush` in the Convex CLI runs an unconditional
+`runPush` when the watcher boots, with no "already up to date" short-circuit, so
+the persistent `convex dev` immediately re-pushed everything the gate had just
+pushed (~15s of pure waste, typecheck included). There is no flag to suppress it.
+`--start` is the CLI's own answer: one watcher, one push, ordering preserved.
+
+The cost of the swap: the `--start` command is spawned inside the success branch
+of `runPush`, so a schema or TS error now blocks the frontend from coming up
+instead of letting it start against the last-good deployment. When you need the
+frontend while the backend is broken, run `dev:frontend` / `dev:partykit` /
+`dev:rsvp-worker` directly.
+
+`dev` runs the whole fleet. `dev:admin` is the one subset worth having — same
+`convex dev --start` wrapper around `dev:admin:fleet`. Only `@ripple/web` opens a
+browser tab; the admin console is one you open when you need it, not a second tab
+on every start.
+
+The `dev:fleet` / `dev:admin:fleet` indirection is not cosmetic: `--start` runs
+its command with cwd `apps/convex`, and turbo auto-scopes to the package it is
+invoked from — `turbo run dev` there would resolve to `@ripple/convex#dev` and
+start a *second* watcher. `pnpm -w run` bounces back to the workspace root first.
 
 Ports are `--strictPort` on purpose: the dev deployment's `SITE_URL` is
 `https://localhost:5173`, so silently sliding to `:5174` would break invite and
