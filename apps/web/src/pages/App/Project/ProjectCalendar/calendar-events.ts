@@ -167,6 +167,18 @@ export function hasActualData(task: EnrichedTask): boolean {
 /** A year/month pair, as reported by schedule-x's calendar controls. */
 export type VisibleMonth = { year: number; month: number };
 
+/** Does an inclusive [start, end] ISO span overlap `month` at all? */
+export function spanInMonth(startISO: string, endISO: string, month: VisibleMonth): boolean {
+  const start = Temporal.PlainDate.from(startISO);
+  const end = Temporal.PlainDate.from(endISO);
+  const monthStart = Temporal.PlainDate.from({ year: month.year, month: month.month, day: 1 });
+  const monthEnd = monthStart.add({ months: 1 }).subtract({ days: 1 });
+  return (
+    Temporal.PlainDate.compare(start, monthEnd) <= 0 &&
+    Temporal.PlainDate.compare(end, monthStart) >= 0
+  );
+}
+
 /**
  * Does a task's planned span touch `month`?
  *
@@ -182,16 +194,39 @@ export function isTaskInMonth(
   multiplier: 1 | 5 = 1,
 ): boolean {
   if (!task.plannedStartDate) return false;
-  const start = Temporal.PlainDate.from(task.plannedStartDate);
-  const end = Temporal.PlainDate.from(
+  return spanInMonth(
+    task.plannedStartDate,
     addCalendarDays(task.plannedStartDate, estimateToDays(task.estimate, multiplier) - 1),
+    month,
   );
-  const monthStart = Temporal.PlainDate.from({ year: month.year, month: month.month, day: 1 });
-  const monthEnd = monthStart.add({ months: 1 }).subtract({ days: 1 });
-  return (
-    Temporal.PlainDate.compare(start, monthEnd) <= 0 &&
-    Temporal.PlainDate.compare(end, monthStart) >= 0
-  );
+}
+
+/**
+ * The calendar span the actual-time overlay will occupy for a task — the
+ * envelope of its *completed* work periods — or null when nothing is logged.
+ *
+ * Logged time has no relationship to `plannedStartDate`: a task planned for
+ * July can carry work periods from April. That is exactly why the sidebar has
+ * to say where the overlay lands, rather than leaving the switch to appear
+ * broken when the two fall in different months.
+ */
+export function actualSpan(task: EnrichedTask): { start: string; end: string } | null {
+  const done = (task.workPeriods ?? []).filter((p) => p.completedAt !== undefined);
+  if (done.length === 0) return null;
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const toISODate = (ms: number) =>
+    Temporal.Instant.fromEpochMilliseconds(ms).toZonedDateTimeISO(tz).toPlainDate().toString();
+  return {
+    start: toISODate(Math.min(...done.map((p) => p.startedAt))),
+    end: toISODate(Math.max(...done.map((p) => p.completedAt!))),
+  };
+}
+
+/** "Apr 29 – May 22", or just "Apr 29" for a span inside one day. */
+export function formatActualSpan(span: { start: string; end: string }): string {
+  const fmt = (iso: string) =>
+    Temporal.PlainDate.from(iso).toLocaleString("en-US", { month: "short", day: "numeric" });
+  return span.start === span.end ? fmt(span.start) : `${fmt(span.start)} – ${fmt(span.end)}`;
 }
 
 export function buildTaskEvents(

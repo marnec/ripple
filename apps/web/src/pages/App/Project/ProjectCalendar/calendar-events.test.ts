@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { isTaskInMonth } from "./calendar-events";
+import { Temporal } from "temporal-polyfill";
+import { actualSpan, formatActualSpan, isTaskInMonth, spanInMonth } from "./calendar-events";
 import type { EnrichedTask } from "./calendar-events";
 
 // Minimal EnrichedTask factory — only the fields the month scoping reads.
@@ -58,5 +59,55 @@ describe("isTaskInMonth", () => {
   it("handles a December → January boundary", () => {
     expect(isTaskInMonth(task("2025-12-30", 40), { year: 2026, month: 1 })).toBe(true);
     expect(isTaskInMonth(task("2025-12-30", 40), { year: 2025, month: 1 })).toBe(false);
+  });
+});
+
+// Local noon, so the UTC↔local conversion inside `actualSpan` can never tip a
+// fixture onto the neighbouring date wherever the suite runs.
+function noon(isoDate: string): number {
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  return Temporal.PlainDateTime.from(`${isoDate}T12:00`).toZonedDateTime(tz).epochMilliseconds;
+}
+
+function withPeriods(periods: { startedAt: number; completedAt?: number }[]): EnrichedTask {
+  return { ...task("2026-08-10"), workPeriods: periods };
+}
+
+describe("actualSpan", () => {
+  it("is null with no work periods at all", () => {
+    expect(actualSpan(task("2026-08-10"))).toBeNull();
+  });
+
+  it("is null when every period is still open", () => {
+    expect(actualSpan(withPeriods([{ startedAt: noon("2026-05-26") }]))).toBeNull();
+  });
+
+  it("envelopes every completed period, ignoring open ones", () => {
+    expect(
+      actualSpan(
+        withPeriods([
+          { startedAt: noon("2026-04-29"), completedAt: noon("2026-05-22") },
+          { startedAt: noon("2026-05-26") },
+        ]),
+      ),
+    ).toEqual({ start: "2026-04-29", end: "2026-05-22" });
+  });
+
+  // The case that made the toggle look broken: logged time months away from
+  // the planned date, so the overlay lands outside the month on screen.
+  it("is unrelated to plannedStartDate", () => {
+    const t = withPeriods([{ startedAt: noon("2026-04-29"), completedAt: noon("2026-05-22") }]);
+    expect(t.plannedStartDate).toBe("2026-08-10");
+    expect(spanInMonth(actualSpan(t)!.start, actualSpan(t)!.end, AUG)).toBe(false);
+  });
+});
+
+describe("formatActualSpan", () => {
+  it("collapses a single-day span", () => {
+    expect(formatActualSpan({ start: "2026-04-29", end: "2026-04-29" })).toBe("Apr 29");
+  });
+
+  it("renders a multi-day span as a range", () => {
+    expect(formatActualSpan({ start: "2026-04-29", end: "2026-05-22" })).toBe("Apr 29 – May 22");
   });
 });

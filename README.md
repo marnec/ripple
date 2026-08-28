@@ -16,7 +16,7 @@ NEXT STEPS:
 - export excalidraw presentation to pptx
 
 - task: show full title on hover
-- task: allow assignment without opening details, dotted line as btn for assignee selection
+- task: allow assignment without opening details, dotted circumference as btn for assignee selection when no assignee is present, else click on assignee triggers combobox for assignee selection
 
 - add DM plus btn and remove dm type from type select at channel creation, rebrand type as privacy lvl
 

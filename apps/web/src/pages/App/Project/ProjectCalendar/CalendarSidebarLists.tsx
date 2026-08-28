@@ -7,14 +7,47 @@ import { Switch } from "@/components/ui/switch";
 import { calendarDragContext } from "../calendarDragContext";
 import {
   type EnrichedTask,
+  type VisibleMonth,
   PRIORITY_COLORS,
   tailwindToHex,
   hasActualData,
+  actualSpan,
+  formatActualSpan,
+  spanInMonth,
 } from "./calendar-events";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Desktop: draggable unscheduled task list
 // ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Shared by the calendar sidebar and the gantt pool — the two headers were
+ * duplicated character-for-character before the hint went in.
+ *
+ * The hint is the whole point of the section: the only way to schedule from
+ * here is a drag, and nothing about a plain list says so. It names the drop
+ * target, which differs per view, and disappears once the pool is empty —
+ * there is nothing left to drag, so the instruction is just noise.
+ */
+export function UnscheduledSectionHeader({
+  count,
+  hint,
+}: {
+  count: number;
+  hint: string;
+}) {
+  return (
+    <div className="space-y-0.5 mt-1.5">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+          Unscheduled
+        </span>
+        <span className="text-xs text-muted-foreground tabular-nums shrink-0">{count}</span>
+      </div>
+      {count > 0 && <p className="text-[11px] text-muted-foreground">{hint}</p>}
+    </div>
+  );
+}
 
 export function UnscheduledTaskList({ tasks }: { tasks: EnrichedTask[] }) {
   return (
@@ -120,13 +153,18 @@ export function ScheduledSectionHeader({
 export function ScheduledTaskList({
   tasks,
   monthLabel,
+  visibleMonth,
   visibleActualTaskIds,
   onToggle,
+  onGoToDate,
 }: {
   tasks: EnrichedTask[];
   monthLabel: string | null;
+  visibleMonth: VisibleMonth | null;
   visibleActualTaskIds: Set<string>;
   onToggle: (taskId: string) => void;
+  /** Navigate the grid to the month containing an ISO date. */
+  onGoToDate: (isoDate: string) => void;
 }) {
   if (tasks.length === 0) {
     return (
@@ -142,7 +180,9 @@ export function ScheduledTaskList({
           key={task._id}
           task={task}
           isVisible={visibleActualTaskIds.has(task._id)}
+          visibleMonth={visibleMonth}
           onToggle={onToggle}
+          onGoToDate={onGoToDate}
         />
       ))}
     </div>
@@ -152,29 +192,58 @@ export function ScheduledTaskList({
 function ScheduledTaskItem({
   task,
   isVisible,
+  visibleMonth,
   onToggle,
+  onGoToDate,
 }: {
   task: EnrichedTask;
   isVisible: boolean;
+  visibleMonth: VisibleMonth | null;
   onToggle: (taskId: string) => void;
+  onGoToDate: (isoDate: string) => void;
 }) {
   const canToggle = hasActualData(task);
+  const span = actualSpan(task);
+  // Logged time is independent of the planned date, so a task listed under
+  // August can have its overlay drawn in April. Switching it on would then
+  // change nothing on screen and read as a dead control — so once it is on,
+  // the row says where the overlay actually is, and offers to go there.
+  const offMonth =
+    isVisible && span !== null && visibleMonth !== null
+      ? !spanInMonth(span.start, span.end, visibleMonth)
+      : false;
+
   return (
-    <div className="flex items-center gap-2 px-2 py-1.5 rounded text-sm hover:bg-muted select-none">
-      <span
-        className="w-1.5 h-1.5 rounded-full shrink-0"
-        style={{ backgroundColor: task.status ? tailwindToHex(task.status.color) : "#6b7280" }}
-      />
-      <span className="truncate text-foreground flex-1">{task.title}</span>
-      {/* A disabled switch with no explanation reads as broken; say why. */}
-      <span title={canToggle ? undefined : "No time logged on this task yet"}>
-        <Switch
-          checked={isVisible && canToggle}
-          disabled={!canToggle}
-          onCheckedChange={() => onToggle(task._id)}
-          aria-label={`Show actual time for ${task.title}`}
+    <div className="rounded hover:bg-muted select-none">
+      <div className="flex items-center gap-2 px-2 py-1.5 text-sm">
+        <span
+          className="w-1.5 h-1.5 rounded-full shrink-0"
+          style={{ backgroundColor: task.status ? tailwindToHex(task.status.color) : "#6b7280" }}
         />
-      </span>
+        <span className="truncate text-foreground flex-1">{task.title}</span>
+        {/* A disabled switch with no explanation reads as broken; say why. */}
+        <span title={canToggle ? undefined : "No time logged on this task yet"}>
+          <Switch
+            checked={isVisible && canToggle}
+            disabled={!canToggle}
+            onCheckedChange={() => onToggle(task._id)}
+            aria-label={`Show actual time for ${task.title}`}
+          />
+        </span>
+      </div>
+      {isVisible && canToggle && span && (
+        <div className="flex items-center gap-1.5 pl-5.5 pr-2 pb-1.5 text-[11px] text-muted-foreground">
+          <span className="truncate">Logged {formatActualSpan(span)}</span>
+          {offMonth && (
+            <button
+              className="shrink-0 underline underline-offset-2 hover:text-foreground"
+              onClick={() => onGoToDate(span.start)}
+            >
+              Show
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }

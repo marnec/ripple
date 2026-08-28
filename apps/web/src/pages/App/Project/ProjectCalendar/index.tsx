@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { Temporal } from "temporal-polyfill";
 import { AnimatePresence } from "framer-motion";
 import { useQuery } from "convex-helpers/react/cache";
 import { createCalendarControlsPlugin } from "@schedule-x/calendar-controls";
@@ -40,6 +41,7 @@ import {
 import { CalendarRenderer } from "./CalendarRenderer";
 import { CalendarGhostOverlay } from "./CalendarGhostOverlay";
 import {
+  UnscheduledSectionHeader,
   UnscheduledTaskList,
   ScheduledSectionHeader,
   ScheduledTaskList,
@@ -369,14 +371,10 @@ function ProjectCalendarContent({
           <CalendarSidebar side="right" className="hidden md:flex">
             {/* Top section: unscheduled tasks (draggable) */}
             <CalendarSidebarHeader>
-              <div className="flex items-center justify-between mt-1.5">
-                <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                  Unscheduled
-                </span>
-                <span className="text-xs text-muted-foreground tabular-nums">
-                  {unscheduledTasks.length}
-                </span>
-              </div>
+              <UnscheduledSectionHeader
+                count={unscheduledTasks.length}
+                hint="Drag onto a day to schedule"
+              />
             </CalendarSidebarHeader>
             <CalendarSidebarContent className="flex-1 min-h-0 overflow-y-auto">
               <UnscheduledTaskList tasks={unscheduledTasks} />
@@ -397,8 +395,10 @@ function ProjectCalendarContent({
               <ScheduledTaskList
                 tasks={monthScheduledTasks}
                 monthLabel={visibleMonth?.label ?? null}
+                visibleMonth={visibleMonth}
                 visibleActualTaskIds={visibleActualTaskIds}
                 onToggle={ix.actualView.toggle}
+                onGoToDate={(iso) => calendarControls.setDate(Temporal.PlainDate.from(iso))}
               />
             </CalendarSidebarContent>
           </CalendarSidebar>

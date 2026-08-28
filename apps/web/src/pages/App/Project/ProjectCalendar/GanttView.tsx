@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/calendar-sidebar";
 import { calendarDragContext } from "../calendarDragContext";
 import { CalendarTaskMenuContext } from "./calendar-contexts";
-import { UnscheduledTaskList } from "./CalendarSidebarLists";
+import { UnscheduledSectionHeader, UnscheduledTaskList } from "./CalendarSidebarLists";
 import { type EnrichedTask } from "./calendar-events";
 import type { GanttViewMode } from "./ScheduleHeader";
 import {
@@ -408,14 +408,10 @@ export function GanttView({
             slot opens the date picker (handleChartClick) instead. */}
         <CalendarSidebar side="right" className="hidden md:flex">
           <CalendarSidebarHeader>
-            <div className="flex items-center justify-between mt-1.5">
-              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                Unscheduled
-              </span>
-              <span className="text-xs text-muted-foreground tabular-nums">
-                {unscheduledTasks.length}
-              </span>
-            </div>
+            <UnscheduledSectionHeader
+              count={unscheduledTasks.length}
+              hint="Drag onto the timeline to schedule"
+            />
           </CalendarSidebarHeader>
           <CalendarSidebarContent className="flex-1 min-h-0 overflow-y-auto">
             {poolList}
