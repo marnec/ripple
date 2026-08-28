@@ -486,32 +486,32 @@ importers:
         specifier: workspace:*
         version: link:../../packages/ui
       '@schedule-x/calendar':
-        specifier: 4.5.0
-        version: 4.5.0(@preact/signals@2.9.1(preact@10.29.1))(preact@10.29.1)(temporal-polyfill@0.3.2)
+        specifier: 4.7.0
+        version: 4.7.0(@preact/signals@2.9.1(preact@10.29.1))(preact@10.29.1)(temporal-polyfill@0.3.2)
       '@schedule-x/calendar-controls':
-        specifier: 4.5.0
-        version: 4.5.0
+        specifier: 4.7.0
+        version: 4.7.0
       '@schedule-x/current-time':
-        specifier: 4.5.0
-        version: 4.5.0
+        specifier: 4.7.0
+        version: 4.7.0
       '@schedule-x/drag-and-drop':
         specifier: 3.7.3
         version: 3.7.3
       '@schedule-x/react':
         specifier: 4.1.0
-        version: 4.1.0(@schedule-x/calendar@4.5.0(@preact/signals@2.9.1(preact@10.29.1))(preact@10.29.1)(temporal-polyfill@0.3.2))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+        version: 4.1.0(@schedule-x/calendar@4.7.0(@preact/signals@2.9.1(preact@10.29.1))(preact@10.29.1)(temporal-polyfill@0.3.2))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       '@schedule-x/resize':
         specifier: 3.7.3
         version: 3.7.3
       '@schedule-x/scroll-controller':
-        specifier: 4.5.0
-        version: 4.5.0(@preact/signals@2.9.1(preact@10.29.1))
+        specifier: 4.7.0
+        version: 4.7.0(@preact/signals@2.9.1(preact@10.29.1))
       '@schedule-x/theme-default':
-        specifier: 4.5.0
-        version: 4.5.0
+        specifier: 4.7.0
+        version: 4.7.0
       '@schedule-x/theme-shadcn':
-        specifier: 4.5.0
-        version: 4.5.0
+        specifier: 4.7.0
+        version: 4.7.0
       '@svar-ui/react-gantt':
         specifier: ^2.7.1
         version: 2.7.1(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
@@ -3514,18 +3514,18 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@schedule-x/calendar-controls@4.5.0':
-    resolution: {integrity: sha512-ZoLwbflYx6D1pJaCw78a3tW1OSUu1yCdnDKugIbpcEZyCLOrMbf09ZIB+jtihzg3BaAU471l9fFn85cNfxK3dg==}
+  '@schedule-x/calendar-controls@4.7.0':
+    resolution: {integrity: sha512-N8OFTPwnL9Y1TNM23HPkY8kNgay+M8RZl8PbkAubOOHAK9inNer+r9TPwAu2RiPLSpq993tCneSlttjIYcyBrg==}
 
-  '@schedule-x/calendar@4.5.0':
-    resolution: {integrity: sha512-KEDtvder+nOLuHv0yWKvNBbJBsvxfBdbL/p1ZwX86sjC63Mp6u3zZt73a6V1a+8DbFSnBQpa+cReIUO3zjf7/A==}
+  '@schedule-x/calendar@4.7.0':
+    resolution: {integrity: sha512-9m7j5t35inOeuswlKIlJ+St9Tlk3FA1AxGz1BRN4P/Oj90eTDIW/IzIQIzQmBTGzpp5idN/jW4aS5uZrKRlLIg==}
     peerDependencies:
       '@preact/signals': ^2.0.2
       preact: ^10.19.2
       temporal-polyfill: 0.3.0
 
-  '@schedule-x/current-time@4.5.0':
-    resolution: {integrity: sha512-IRHGQVHn9gqia91v+oyXbAO6Y0mCI9NrYI/zG9XRKSuUg4PBwxDWyGyPVdM2RPac4Asn8UkbM34Ul3bYxqCJrg==}
+  '@schedule-x/current-time@4.7.0':
+    resolution: {integrity: sha512-aA4yKv7I+nP8fHfUekc2qLCymrr3SyVZY+t6NCkwq/pZTRhFj7ewADdNWoJ/nD+pbj3rNmqQhw/FnWQvTA/cMw==}
 
   '@schedule-x/drag-and-drop@3.7.3':
     resolution: {integrity: sha512-nHwZKzdIKWNTdT5BEXy4vLlHOmOH3C3M744QUIU0EOXPAFZQR1bBTviGs2NhmvaLiGstnVx2/TZtdhocy60hgg==}
@@ -3540,16 +3540,16 @@ packages:
   '@schedule-x/resize@3.7.3':
     resolution: {integrity: sha512-rdzsBx6Dw7d7jwYb8IQzphTwxAofegn1caVaWEdv9WTj8RkLzDILgpM2Oe6KHtpgjMcUWs6aKBaPirJh0T9VZg==}
 
-  '@schedule-x/scroll-controller@4.5.0':
-    resolution: {integrity: sha512-Hvnb7VtLXSymlL6RZGIHMj4fw1KYYqw+30QolV/V12syUAbpN2Lq3+TyoJjzuGwBcwCruBrZ4+TdURR39GPEXw==}
+  '@schedule-x/scroll-controller@4.7.0':
+    resolution: {integrity: sha512-ffWyr67s80x4oYWNckJy/693iu+AGjr4JNfMopJeI6nI5RVtmp5/jToFUgBFtL17IpHwMHxHzRUfdbTEVnn+CQ==}
     peerDependencies:
       '@preact/signals': ^2.0.2
 
-  '@schedule-x/theme-default@4.5.0':
-    resolution: {integrity: sha512-T+OvouoRUPKpR2weZlt/7EvUEjMRmmQeZVfWMnKykoSWuZ2w+ypBncplXuf6mstio+ty2Mx3X/rThr1iJB7XXw==}
+  '@schedule-x/theme-default@4.7.0':
+    resolution: {integrity: sha512-NdpcAdVM72piHVDlA9Yz1BW6XzuXO6ja3W8EM+2S7d541PoS44FMp2ZQm2CWTWvr+B87eainh0xh3DsZAgM2sw==}
 
-  '@schedule-x/theme-shadcn@4.5.0':
-    resolution: {integrity: sha512-N4xDJ/IBJ0ujPt27jmaWa5On0rqDkHQob+MiKlTOpqDxJCm8uq4azroPLk568/8UP/rpq09NVcv99xCSyVo2Ew==}
+  '@schedule-x/theme-shadcn@4.7.0':
+    resolution: {integrity: sha512-F9C9m1Z2ifXQDthJCuxVeRwEm6+FdVV4wHiZ3ZBS9V0Fl/nFxGDflRJj1ab7bMtOa67l8xFzgvTN0KkvekZmsw==}
 
   '@sec-ant/readable-stream@0.4.1':
     resolution: {integrity: sha512-831qok9r2t8AlxLko40y2ebgSDhenenCatLVeW/uBtnHPyhHOvG0C7TvfgecV+wHzIm5KUICgzmVpWS+IMEAeg==}
@@ -11552,33 +11552,33 @@ snapshots:
   '@rollup/rollup-win32-x64-msvc@4.60.2':
     optional: true
 
-  '@schedule-x/calendar-controls@4.5.0': {}
+  '@schedule-x/calendar-controls@4.7.0': {}
 
-  '@schedule-x/calendar@4.5.0(@preact/signals@2.9.1(preact@10.29.1))(preact@10.29.1)(temporal-polyfill@0.3.2)':
+  '@schedule-x/calendar@4.7.0(@preact/signals@2.9.1(preact@10.29.1))(preact@10.29.1)(temporal-polyfill@0.3.2)':
     dependencies:
       '@preact/signals': 2.9.1(preact@10.29.1)
       preact: 10.29.1
       temporal-polyfill: 0.3.2
 
-  '@schedule-x/current-time@4.5.0': {}
+  '@schedule-x/current-time@4.7.0': {}
 
   '@schedule-x/drag-and-drop@3.7.3': {}
 
-  '@schedule-x/react@4.1.0(@schedule-x/calendar@4.5.0(@preact/signals@2.9.1(preact@10.29.1))(preact@10.29.1)(temporal-polyfill@0.3.2))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)':
+  '@schedule-x/react@4.1.0(@schedule-x/calendar@4.7.0(@preact/signals@2.9.1(preact@10.29.1))(preact@10.29.1)(temporal-polyfill@0.3.2))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)':
     dependencies:
-      '@schedule-x/calendar': 4.5.0(@preact/signals@2.9.1(preact@10.29.1))(preact@10.29.1)(temporal-polyfill@0.3.2)
+      '@schedule-x/calendar': 4.7.0(@preact/signals@2.9.1(preact@10.29.1))(preact@10.29.1)(temporal-polyfill@0.3.2)
       react: 19.2.8
       react-dom: 19.2.8(react@19.2.8)
 
   '@schedule-x/resize@3.7.3': {}
 
-  '@schedule-x/scroll-controller@4.5.0(@preact/signals@2.9.1(preact@10.29.1))':
+  '@schedule-x/scroll-controller@4.7.0(@preact/signals@2.9.1(preact@10.29.1))':
     dependencies:
       '@preact/signals': 2.9.1(preact@10.29.1)
 
-  '@schedule-x/theme-default@4.5.0': {}
+  '@schedule-x/theme-default@4.7.0': {}
 
-  '@schedule-x/theme-shadcn@4.5.0': {}
+  '@schedule-x/theme-shadcn@4.7.0': {}
 
   '@sec-ant/readable-stream@0.4.1': {}
 

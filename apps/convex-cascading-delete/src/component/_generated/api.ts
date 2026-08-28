@@ -72,7 +72,27 @@ export const api: {
  */
 export const internal: {
   lib: {
-    deletionWorkflow: FunctionReference<"mutation", "internal", any, any>;
+    deletionWorkflow: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        args?: { jobId: string };
+        context?: any;
+        docs?: "To call a workflow directly, nest its arguments: { args: { ...yourWorkflowArgs } }";
+        generationNumber?: number;
+        onComplete?: string;
+        startAsync?: boolean;
+        workflowId?: string;
+      },
+      | string
+      | {
+          kind: "complete";
+          runResult:
+            | { kind: "success"; returnValue: any }
+            | { error: string; kind: "failed" }
+            | { kind: "canceled" };
+        }
+    >;
     dispatchNextChunk: FunctionReference<
       "mutation",
       "internal",
