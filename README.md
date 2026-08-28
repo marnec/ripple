@@ -16,6 +16,10 @@ NEXT STEPS:
 
 - export excalidraw presentation to pptx
 
+- unscheduled tab contains 2 sections, one for unscheduled and one for scheduled, change trigger label
+- the scheduled sections should show scheduled this month
+- the toggle in th scheduled sections even I forgot what it's for
+
 - [ ] link previews in chat
 
 keyboard accessiblity
