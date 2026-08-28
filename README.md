@@ -14,6 +14,8 @@ NEXT STEPS:
 
 - regression: admins should be able to see activity of whole workspace
 
+- export excalidraw presentation to pptx
+
 - [ ] link previews in chat
 
 keyboard accessiblity
