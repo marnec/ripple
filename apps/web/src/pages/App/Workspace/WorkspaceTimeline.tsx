@@ -35,6 +35,7 @@ import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 import { useTheme } from "next-themes";
 import { getNodeColor } from "./graphConstants";
+import { RESOURCE_TYPE_TO_GRAPH_TYPE, timelineResourceTypes } from "./timeline-filters";
 
 type TimelineEntry = {
   _id: string;
@@ -112,16 +113,6 @@ function getActionIcon(action: string) {
     default: return <Minus className={iconClass} />;
   }
 }
-
-// Map plural audit log resourceType → singular graph type for color lookup
-const RESOURCE_TYPE_TO_GRAPH_TYPE: Record<string, string> = {
-  documents: "document",
-  diagrams: "diagram",
-  spreadsheets: "spreadsheet",
-  channels: "channel",
-  projects: "project",
-  tasks: "task",
-};
 
 function getResourceIcon(resourceType: string | undefined, isDark: boolean) {
   const iconClass = "h-3.5 w-3.5";
@@ -307,18 +298,6 @@ function formatDateTime(timestamp: number): string {
 const PAGE_SIZE = 20;
 const MAX_FETCH = 50;
 
-// Map singular type (graph) → plural resourceType (audit log)
-const SINGULAR_TO_RESOURCE_TYPE: Record<string, string> = {
-  document: "documents",
-  diagram: "diagrams",
-  spreadsheet: "spreadsheets",
-  channel: "channels",
-  project: "projects",
-  task: "tasks",
-};
-
-const ALL_RESOURCE_TYPES = Object.values(SINGULAR_TO_RESOURCE_TYPE);
-
 const itemVariants = {
   initial: { opacity: 0, height: 0 },
   animate: { opacity: 1, height: "auto", transition: { duration: 0.2, ease: "easeOut" as const } },
@@ -348,12 +327,7 @@ export function WorkspaceTimeline({ workspaceId, hiddenTypes }: { workspaceId: I
   }, []);
 
   // Compute allowed resource types for server-side filtering
-  const resourceTypes = hiddenTypes && hiddenTypes.size > 0
-    ? ALL_RESOURCE_TYPES.filter((rt) => {
-        const singular = Object.entries(SINGULAR_TO_RESOURCE_TYPE).find(([, v]) => v === rt)?.[0];
-        return !singular || !hiddenTypes.has(singular);
-      })
-    : undefined;
+  const resourceTypes = timelineResourceTypes(hiddenTypes);
 
   const queryResult = useQuery(
     api.workspaceTimeline.list,
