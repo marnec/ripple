@@ -20,7 +20,8 @@ NEXT STEPS:
 - the scheduled sections should show scheduled this month
 - the toggle in th scheduled sections even I forgot what it's for
 
-- task show full title on hover
+- task: show full title on hover
+- task: allow assignment without opening details, dotted line as btn for assignee selection
 
 - add DM plus btn and remove dm type from type select at channel creation, rebrand type as privacy lvl
 
