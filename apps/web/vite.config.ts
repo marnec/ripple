@@ -1,6 +1,7 @@
 /// <reference types="vitest/config" />
 import { defineConfig } from "vite";
-import react from "@vitejs/plugin-react";
+import react, { reactCompilerPreset } from "@vitejs/plugin-react";
+import babel from "@rolldown/plugin-babel";
 import tailwindcss from "@tailwindcss/vite";
 import mkcert from "vite-plugin-mkcert";
 import { VitePWA } from "vite-plugin-pwa";
@@ -9,11 +10,8 @@ import path from "path";
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [
-    react({
-      babel: {
-        plugins: ["babel-plugin-react-compiler"],
-      },
-    }),
+    react(),
+    babel({ presets: [reactCompilerPreset()] }),
     tailwindcss(),
     mkcert(),
     VitePWA({
@@ -72,7 +70,9 @@ export default defineConfig({
   css: { devSourcemap: true },
   build: { sourcemap: true },
   optimizeDeps: {
-    esbuildOptions: { sourcemap: true },
+    // Vite 8 controls dep-prebundle sourcemaps itself — `sourcemap` is omitted
+    // from optimizeDeps.rolldownOptions.output, so the old
+    // `esbuildOptions: { sourcemap: true }` has no equivalent and is dropped.
     exclude: ["@ripple/shared", "@ripple/ui"],
   },
   resolve: {

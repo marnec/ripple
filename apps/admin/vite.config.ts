@@ -1,5 +1,6 @@
 import tailwindcss from "@tailwindcss/vite";
-import react from "@vitejs/plugin-react";
+import react, { reactCompilerPreset } from "@vitejs/plugin-react";
+import babel from "@rolldown/plugin-babel";
 import path from "path";
 import { defineConfig } from "vite";
 import mkcert from "vite-plugin-mkcert";
@@ -9,11 +10,8 @@ import mkcert from "vite-plugin-mkcert";
 // useCallback/useMemo" rule applies.
 export default defineConfig({
   plugins: [
-    react({
-      babel: {
-        plugins: ["babel-plugin-react-compiler"],
-      },
-    }),
+    react(),
+    babel({ presets: [reactCompilerPreset()] }),
     tailwindcss(),
     mkcert(),
   ],
