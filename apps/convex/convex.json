@@ -5,7 +5,8 @@
     "staticDataModel": true
   },
   "node": {
-    "externalPackages": ["@blocknote/core", "jsdom", "y-prosemirror", "yjs"]
+    "externalPackages": ["@blocknote/core", "jsdom", "y-prosemirror", "yjs"],
+    "nodeVersion": "24"
   },
   "aiFiles": {
     "skills": {
