@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useTheme } from "next-themes";
-import { FileImage, FileJson, FileText } from "lucide-react";
+import { FileImage, FileJson, FileText, Presentation } from "lucide-react";
 import { toast } from "sonner";
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 import { ShareDialog } from "@/components/ShareDialog";
@@ -62,6 +62,15 @@ export function DiagramActionsMenu({
         const m = await loadExporters();
         await m.exportDiagramPdf(api, diagramName);
       }, "Failed to export PDF."),
+    },
+    {
+      // One slide per frame, each frame rasterised (see exporters/diagram.ts).
+      label: "PowerPoint",
+      icon: <Presentation className="text-muted-foreground" />,
+      onSelect: guarded(async (api) => {
+        const m = await loadExporters();
+        await m.exportDiagramPptx(api, diagramName);
+      }, "Failed to export PowerPoint."),
     },
     {
       label: "Excalidraw",

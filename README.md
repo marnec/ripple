@@ -11,8 +11,6 @@ NEXT STEPS:
 - explore pdf reading, annotation and embedding
 - consider introducing document snapshots
 
-- export excalidraw presentation to pptx
-
 - [ ] link previews in chat
 
 keyboard accessiblity
