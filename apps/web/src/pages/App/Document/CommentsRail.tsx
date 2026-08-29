@@ -579,16 +579,35 @@ function CommentComposer({ editor }: { editor: AnyEditor }) {
 }
 
 /**
- * Always-mounted (renders nothing) watcher that opens the rail when the user
- * starts a comment from the document, so the fixed composer becomes visible and
- * focused. Must live inside `BlockNoteView` for the editor context.
+ * Always-mounted (renders nothing) watcher that keeps the rail's open state and
+ * the document's armed ("pending") comment in step, in both directions:
+ *
+ * - Arming a comment from the document opens the rail, so the fixed composer
+ *   becomes visible and focused.
+ * - Closing the rail — the X, the header toggle, a drawer dismiss — disarms the
+ *   comment. Otherwise the arm outlives the close and the first rule reopens the
+ *   rail on the spot, so the user cannot close it without first clicking away in
+ *   the document to drop the selection.
+ *
+ * Both rules fire on a *transition*, not on the current pair of values:
+ * `pending && !open` holds both just before the rail opens and just after it
+ * closes, so the state alone cannot tell those two moments apart.
+ *
+ * Must live inside `BlockNoteView` for the editor context.
  */
 export function CommentPendingWatcher({ editor }: { editor: AnyEditor }) {
   const pending = usePendingComment(editor);
   const { open, setOpen } = useCommentsUI();
+  const prev = useRef({ pending, open });
   useEffect(() => {
-    if (pending && !open) setOpen(true);
-  }, [pending, open, setOpen]);
+    const was = prev.current;
+    prev.current = { pending, open };
+    if (pending && !was.pending) {
+      if (!open) setOpen(true);
+    } else if (was.open && !open && pending) {
+      getCommentsExtension(editor)?.stopPendingComment();
+    }
+  }, [editor, pending, open, setOpen]);
   return null;
 }
 
