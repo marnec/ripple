@@ -1,6 +1,6 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { ConvexError, v } from "convex/values";
-import { dmLabelFull } from "./lib/dmLabel";
+import { channelLabel } from "./lib/dmLabel";
 import { action, internalQuery, type ActionCtx } from "./_generated/server";
 import { internalMutation, mutation } from "./functions";
 import type { Id } from "./_generated/dataModel";
@@ -450,10 +450,8 @@ export const getChannelForTranscript = internalQuery({
   handler: async (ctx, { channelId }) => {
     const channel = await ctx.db.get(channelId);
     if (!channel) return null;
-    // A DM stores no label — derive it. This query takes no viewer, so it is
-    // the participant-independent form.
-    const name =
-      isDirectMessage(channel) ? await dmLabelFull(ctx, channel._id) : channel.name;
+    // No viewer here, so the participant-independent form.
+    const name = await channelLabel(ctx, channel);
     return { name, workspaceId: channel.workspaceId };
   },
 });

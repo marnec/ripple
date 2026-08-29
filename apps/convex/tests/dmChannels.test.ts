@@ -139,7 +139,7 @@ describe("channels.createDm", () => {
     ).rejects.toThrow("Cannot add members to a DM");
   });
 
-  it("getAccessInfo returns DM participant info for non-members (dm existence is public)", async () => {
+  it("getAccessInfo names the participants to a non-member (dm existence is public)", async () => {
     const t = createTestContext();
     const { workspaceId, asUser: asAdmin } = await setupWorkspaceWithAdmin(t);
     const { userId: member1Id } = await setupAuthenticatedUser(t, { name: "Member1", email: "m1@test.com" });
@@ -164,15 +164,16 @@ describe("channels.createDm", () => {
       otherUserId: member1Id,
     });
 
-    // Outsider should get { isMember: false, type: "dm", participants: [...] }
+    // The outsider gets the rendered label, not the roster — one renderer, so
+    // the gate cannot invent its own join word or ordering. Sorted, which is
+    // what makes both participants read the same string.
     const outsiderAccess = await asOutsider.query(api.channels.getAccessInfo, {
       channelId: dmId,
     });
     expect(outsiderAccess).not.toBeNull();
     expect(outsiderAccess).toMatchObject({ isMember: false, type: "dm" });
     if (outsiderAccess && !outsiderAccess.isMember && outsiderAccess.type === "dm") {
-      const names = outsiderAccess.participants.map((p) => p.name).sort();
-      expect(names).toEqual(["Member1", "Test User"]);
+      expect(outsiderAccess.label).toBe("Member1 × Test User");
     }
 
     // Admin (a member of the DM) should get { isMember: true }

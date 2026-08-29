@@ -123,6 +123,70 @@ describe("channels.get", () => {
   });
 });
 
+/**
+ * The *dispatch* — "a DM's name is not `channel.name`" — as opposed to the
+ * rendering beneath it. It used to be written out at four call sites and
+ * forgotten at two more, so these cover the sites rather than the renderer:
+ * one per surface that has to get it right, including the two that had it
+ * wrong.
+ */
+describe("channelLabel dispatch, per surface", () => {
+  it("names a DM in the breadcrumb instead of rendering a blank crumb", async () => {
+    const t = createTestContext();
+    const { asAlice, dmId } = await setupDm(t);
+
+    // `resolveResourceName` fell through to the generic `resource.name`, which
+    // for a DM is the empty string the row was created with.
+    const names = await asAlice.query(api.breadcrumb.getResourceNames, {
+      resourceIds: [dmId],
+    });
+
+    expect(names[dmId]).toBe("Bob Bobson");
+  });
+
+  it("still names an ordinary channel in the breadcrumb", async () => {
+    const t = createTestContext();
+    const { asAlice, workspaceId } = await setupDm(t);
+    const openId = await t.run((ctx) =>
+      withTriggers(ctx).db.insert("channels", { name: "General", workspaceId, ...channelFields("open")}),
+    );
+
+    const names = await asAlice.query(api.breadcrumb.getResourceNames, {
+      resourceIds: [openId],
+    });
+
+    expect(names[openId]).toBe("General");
+  });
+
+  it("names both people where there is no viewer to be relative to", async () => {
+    const t = createTestContext();
+    const { workspaceId, dmId } = await setupDm(t);
+
+    // A third workspace member is not in the conversation, so the gate they
+    // hit names both participants rather than "the other one".
+    const { asUser: asOutsider, userId: outsiderId } = await setupAuthenticatedUser(t, {
+      name: "Outsider",
+      email: "outsider@example.com",
+    });
+    await t.run(async (ctx) => {
+      await withTriggers(ctx).db.insert("workspaceMembers", {
+        userId: outsiderId,
+        workspaceId,
+        role: "member",
+      });
+    });
+    const access = await asOutsider.query(api.channels.getAccessInfo, { channelId: dmId });
+
+    expect(access).toMatchObject({ isMember: false, type: "dm" });
+    if (access && !access.isMember && access.type === "dm") {
+      // Sorted and joined by the one renderer — not the gate's own formula,
+      // which joined with " and " and did not sort, so each participant saw a
+      // different ordering of the same two names.
+      expect(access.label).toBe("Bob Bobson × Test User");
+    }
+  });
+});
+
 describe("participant bound", () => {
   it("names the overflow instead of silently truncating", async () => {
     const t = createTestContext();

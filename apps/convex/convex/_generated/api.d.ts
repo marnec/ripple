@@ -713,11 +713,7 @@ export declare const api: {
           name: string;
           type: "closed";
         }
-      | {
-          isMember: false;
-          participants: Array<{ name: string; userId: Id<"users"> }>;
-          type: "dm";
-        }
+      | { isMember: false; label: string; type: "dm" }
       | null
     >;
     getMyPendingRequest: FunctionReference<
@@ -3981,21 +3977,6 @@ export declare const internal: {
       "internal",
       { channelId: Id<"channels"> },
       null
-    >;
-  };
-  channels: {
-    getInternal: FunctionReference<
-      "query",
-      "internal",
-      { id: Id<"channels"> },
-      {
-        _creationTime: number;
-        _id: Id<"channels">;
-        kind: "channel" | "dm";
-        name: string;
-        visibility: "public" | "private";
-        workspaceId: Id<"workspaces">;
-      } | null
     >;
   };
   collaboration: {

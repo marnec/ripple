@@ -7,7 +7,7 @@ import { logActivity } from "./auditLog";
 import { getUserDisplayName } from "@ripple/shared/displayName";
 import { WORKSPACE_CHANNEL_LIMIT } from "@ripple/shared/constants";
 import { mergedStream, stream } from "convex-helpers/server/stream";
-import { dmLabelForViewer } from "./lib/dmLabel";
+import { channelLabel } from "./lib/dmLabel";
 import schema from "./schema";
 import { internal } from "./_generated/api";
 import { cascadeDelete } from "./cascadeDelete";
@@ -166,10 +166,7 @@ export const get = query({
       // `getAccessInfo` deliberately discloses a DM's participants to exactly
       // that caller so the "you are not in this conversation" gate can name
       // them. What a DM is not is *findable* without the id.
-      name:
-        isDirectMessage(channel)
-          ? await dmLabelForViewer(ctx, channel._id, auth.userId)
-          : channel.name,
+      name: await channelLabel(ctx, channel, auth.userId),
       workspaceId: channel.workspaceId,
       kind: channel.kind,
       visibility: channel.visibility,
@@ -320,31 +317,12 @@ export const search = query({
   },
 });
 
-const channelValidator = v.object({
-  _id: v.id("channels"),
-  _creationTime: v.number(),
-  name: v.string(),
-  workspaceId: v.id("workspaces"),
-  kind: channelKindSchema,
-  visibility: channelVisibilitySchema,
-});
-
-export const getInternal = internalQuery({
-  args: { id: v.id("channels") },
-  returns: v.union(channelValidator, v.null()),
-  handler: async (ctx, { id }) => {
-    const channel = await ctx.db.get(id);
-    if (!channel) return null;
-    return {
-      _id: channel._id,
-      _creationTime: channel._creationTime,
-      name: channel.name,
-      workspaceId: channel.workspaceId,
-      kind: channel.kind,
-      visibility: channel.visibility,
-    };
-  },
-});
+// `getInternal` used to sit here: an action-facing projection of a channel row
+// with no caller anywhere in the monorepo. It shared `get`'s return validator
+// while returning the *stored* name, so a direct message came back labelled
+// with the empty string — one of the two sites that had forgotten the label
+// derivation, and the reason two functions with one validator disagreed about
+// what `name` meant.
 
 export const createDm = mutation({
   args: {
@@ -485,10 +463,11 @@ export const getAccessInfo = query({
     v.object({
       isMember: v.literal(false),
       type: v.literal("dm"),
-      participants: v.array(v.object({
-        userId: v.id("users"),
-        name: v.string(),
-      })),
+      // The rendered label, not the roster. Handing back raw participants left
+      // the gate to join them itself, and it did — with " and " instead of
+      // " × ", unsorted, so the two people in a conversation read different
+      // orderings of themselves, and with no overflow or empty case.
+      label: v.string(),
     }),
     v.null(),
   ),
@@ -515,20 +494,15 @@ export const getAccessInfo = query({
     // DM non-member: DM existence is public, so return participant info so the
     // frontend can show a "you're not in this conversation" gate (not a 404).
     if (isDirectMessage(channel)) {
-      const dmMembers = await ctx.db
-        .query("channelMembers")
-        .withIndex("by_channel", (q) => q.eq("channelId", channelId))
-        .collect();
-      const participants = await Promise.all(
-        dmMembers.map(async (m) => {
-          const user = await ctx.db.get(m.userId);
-          return {
-            userId: m.userId,
-            name: user ? getUserDisplayName(user) : (m.email ?? "Unknown"),
-          };
-        }),
-      );
-      return { isMember: false as const, type: "dm" as const, participants };
+      // The viewer is by definition not a participant here, so there is nobody
+      // for the label to be relative to — the full form names both people.
+      // This also drops an unbounded `.collect()` on the roster: `channelLabel`
+      // takes a bounded read and reports overflow rather than assuming two.
+      return {
+        isMember: false as const,
+        type: "dm" as const,
+        label: await channelLabel(ctx, channel),
+      };
     }
 
     // Closed channel non-member: return limited info for the ask-to-join flow

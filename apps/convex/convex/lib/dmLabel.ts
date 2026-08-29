@@ -84,13 +84,28 @@ export async function dmLabelFull(
   return render(await participantNames(ctx, channelId));
 }
 
-/** `channels.name` for a DM, or the derived label when it is a DM. */
-export async function channelLabelForViewer(
+/**
+ * What to *call* a conversation: its stored name, or — for a direct message,
+ * which stores none — the derived label.
+ *
+ * The one place the kind dispatch happens. It used to be written out at four
+ * call sites and forgotten at two more, where a DM's breadcrumb rendered as an
+ * empty string. `channelLabelForViewer` existed for exactly this and had zero
+ * callers while its body was inlined beside it.
+ *
+ * Omit `viewerId` when there is nobody for the label to be relative to — a
+ * share link read by a guest, a transcript title. One optional argument rather
+ * than a `ForViewer`/`Full` pair at this layer: the pair below is two functions
+ * because the distinction is the primitive; up here it would be two chances to
+ * pick the wrong one at every call site.
+ */
+export async function channelLabel(
   ctx: QueryCtx,
   channel: { _id: Id<"channels">; name: string; kind?: string },
-  viewerId: Id<"users">,
+  viewerId?: Id<"users">,
 ): Promise<string> {
-  return isDirectMessage(channel)
-    ? await dmLabelForViewer(ctx, channel._id, viewerId)
-    : channel.name;
+  if (!isDirectMessage(channel)) return channel.name;
+  return viewerId === undefined
+    ? await dmLabelFull(ctx, channel._id)
+    : await dmLabelForViewer(ctx, channel._id, viewerId);
 }

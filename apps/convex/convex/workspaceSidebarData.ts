@@ -1,5 +1,5 @@
 import { getAll } from "convex-helpers/server/relationships";
-import { dmLabelForViewer } from "./lib/dmLabel";
+import { channelLabel } from "./lib/dmLabel";
 import { v } from "convex/values";
 import { query } from "./_generated/server";
 import { requireWorkspaceMember } from "./authHelpers";
@@ -111,9 +111,9 @@ export const get = query({
           },
         );
 
-        // A DM carries no stored label — it is derived from the participants,
-        // and in a sidebar it is the *other* person, not "you × them".
-        const name = isDirectMessage(c) ? await dmLabelForViewer(ctx, c._id, userId) : c.name;
+        // In a sidebar a DM is labelled with the *other* person, not
+        // "you × them", so this is the viewer-relative form.
+        const name = await channelLabel(ctx, c, userId);
 
         return {
           _id: c._id,

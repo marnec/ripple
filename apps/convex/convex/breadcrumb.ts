@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { query, type QueryCtx } from "./_generated/server";
-import { checkChannelAccess, checkWorkspaceMember } from "./authHelpers";
+import { checkChannelAccess, checkWorkspaceMember, getUser } from "./authHelpers";
+import { channelLabel } from "./lib/dmLabel";
 
 const resourceIdValidator = v.union(v.id("workspaces"), v.id("channels"), v.id("projects"), v.id("documents"), v.id("diagrams"), v.id("spreadsheets"), v.id("tasks"), v.id("cycles"), v.id("calendarEvents"), v.id("taskImportJobs"));
 
@@ -62,6 +63,14 @@ async function resolveResourceName(
   if ("totalRows" in resource && "processedRows" in resource) {
     const n = resource.totalRows as number;
     return `CSV import (${n} row${n === 1 ? "" : "s"})`;
+  }
+
+  // A direct message stores no name, so the generic `resource.name` below
+  // returned the empty string and the crumb rendered blank. Viewer-relative,
+  // because a breadcrumb is one person's view of where they are.
+  const channelId = ctx.db.normalizeId("channels", resourceId);
+  if (channelId) {
+    return await channelLabel(ctx, resource, (await getUser(ctx)) ?? undefined);
   }
 
   return "title" in resource ? resource.title : resource.name;

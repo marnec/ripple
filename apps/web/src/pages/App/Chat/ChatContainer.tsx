@@ -22,7 +22,7 @@ export function ChatContainer() {
 
   if (accessInfo && !accessInfo.isMember) {
     if (accessInfo.type === "dm") {
-      return <DmGate participants={accessInfo.participants} />;
+      return <DmGate label={accessInfo.label} />;
     }
     return (
       <ClosedChannelGate
