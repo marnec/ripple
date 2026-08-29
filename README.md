@@ -2,8 +2,6 @@ NEXT STEPS:
 
 - cascade delete collection phase is bounded even for batched deletes and will hit a ceiling for extremely large cascaded entities.
 
-- first to join a call, btn should show "create"
-
 - recurrent events in calendar
 
 - add a dependency view to tasks
@@ -11,12 +9,13 @@ NEXT STEPS:
 - explore pdf reading, annotation and embedding
 - consider introducing document snapshots
 
-- [ ] link previews in chat
+- focus mode for docs and diagrams
 
 keyboard accessiblity
     - when pressing tab in a chat, it must focus the message composer
     - esc closes the comments sideba in docs
     - on login, pressing tab from email field should focus pasword field instead of password reset btn
+    - keyboard shortcut for focus mode
 
 - [ ] internationalization (i18n and localization)
 
@@ -78,6 +77,8 @@ keyboard accessiblity
       queue is the separate, larger project if that isn't good enough
 
 - evaluate cross-workspace aggregates to re-introduce admin overview
+
+- link previews in chat
 
 - external ticketing system??: 
     - connected to project
