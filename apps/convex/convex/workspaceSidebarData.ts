@@ -6,7 +6,8 @@ import { requireWorkspaceMember } from "./authHelpers";
 import { channelKindSchema, channelVisibilitySchema } from "./schema";
 import { ChannelKind, ChannelVisibility } from "@ripple/shared/enums";
 
-import { isDirectMessage, isPublicChannel } from "@ripple/shared/channel";
+import { isDirectMessage } from "@ripple/shared/channel";
+import { isDismissed } from "./channelDismissal";
 export const get = query({
   args: {
     workspaceId: v.id("workspaces"),
@@ -85,28 +86,25 @@ export const get = query({
       if (s.hiddenAt !== undefined) hiddenAtByChannelId.set(s.channelId, s.hiddenAt);
     }
 
-    // Compute isHidden per channel. For DMs the answer depends on whether a
-    // message has arrived after `hiddenAt` (auto-unhide). For opens any
-    // `hiddenAt` value means hidden. Closed channels never hide (they leave).
+    // The dismissal rule lives in `channelDismissal.isDismissed`; this is its
+    // shell. The thunk is what keeps the "only a dismissed DM pays for a
+    // message read" half of the rule out of here — `isDismissed` calls it or
+    // it doesn't, and this only says how the read is done. It is a single
+    // indexed read, bounded by the viewer's hidden-DM count.
     const enrichedChannels = await Promise.all(
       allChannels.map(async (c) => {
-        const hiddenAt = hiddenAtByChannelId.get(c._id);
-        let isHidden = false;
-        if (hiddenAt !== undefined) {
-          if (isPublicChannel(c)) {
-            isHidden = true;
-          } else if (isDirectMessage(c)) {
-            // Only DMs with a hide flag pay the latest-message lookup. Single
-            // indexed read; bounded by the user's hidden-DM count.
+        const isHidden = await isDismissed(
+          c,
+          hiddenAtByChannelId.get(c._id),
+          async () => {
             const latestMessage = await ctx.db
               .query("messages")
               .withIndex("by_channel", (q) => q.eq("channelId", c._id))
               .order("desc")
               .first();
-            isHidden = !latestMessage || latestMessage._creationTime <= hiddenAt;
-          }
-          // closed: isHidden stays false
-        }
+            return latestMessage?._creationTime;
+          },
+        );
 
         // A DM carries no stored label — it is derived from the participants,
         // and in a sidebar it is the *other* person, not "you × them".

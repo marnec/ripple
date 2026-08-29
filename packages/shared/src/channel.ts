@@ -21,7 +21,12 @@ import { ChannelKind, ChannelVisibility } from "./enums/roles";
  * channel — private channels and direct messages alike — requires a
  * `channelMembers` row.
  */
-type ChannelLike = { kind?: string; visibility?: string };
+/**
+ * The two columns every predicate here reads, structurally. Exported so that
+ * callers taking "something channel-shaped" — `channelDismissal.isDismissed`
+ * is one — name the same contract instead of respelling it.
+ */
+export type ChannelLike = { kind?: string; visibility?: string };
 
 /** A conversation between two people, rather than a channel. The *kind* axis. */
 export function isDirectMessage(channel: ChannelLike): boolean {

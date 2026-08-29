@@ -4,25 +4,56 @@ import { requireChannelAccess } from "./authHelpers";
 import type { MutationCtx } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 
-import { isPrivateChannel } from "@ripple/shared/channel";
+import { isDirectMessage, isPrivateChannel, isPublicChannel } from "@ripple/shared/channel";
+import type { ChannelLike } from "@ripple/shared/channel";
+
+/**
+ * Is this conversation currently dismissed *for this viewer*?
+ *
+ * The read half of **dismissal**, and the only statement of the rule. It used
+ * to live inside `workspaceSidebarData.get` — 130 lines from the module named
+ * after it, restated as prose in this file's docstring and a third time in
+ * `schema.ts`'s comment on the column. Three statements, one implementation,
+ * and the implementation was in neither module that claimed the rule.
+ *
+ *   - a **public channel** is dismissed for as long as `hiddenAt` is set. Any
+ *     value means hidden; only `restoreChannel` clears it.
+ *   - a **direct message** is dismissed until a message arrives newer than
+ *     `hiddenAt`, so the auto-restore costs no write.
+ *   - a **private channel** is never dismissed — those are left, not
+ *     dismissed, and `dismissChannel` refuses one.
+ *
+ * `latestMessageAt` is a thunk rather than a value because *whether* the read
+ * happens is part of the rule, not part of the caller's business: only a
+ * dismissed direct message pays for it. Handing this a value instead would
+ * put "a DM with a `hiddenAt` needs the latest message" back at the call
+ * site, which is half of what this function is for. It takes no `ctx` and
+ * touches no database, so the shell decides *how* to read and this decides
+ * *whether* to.
+ */
+export async function isDismissed(
+  channel: ChannelLike,
+  hiddenAt: number | undefined,
+  latestMessageAt: () => Promise<number | undefined>,
+): Promise<boolean> {
+  if (hiddenAt === undefined) return false;
+  if (isPublicChannel(channel)) return true;
+  if (!isDirectMessage(channel)) return false;
+
+  const latest = await latestMessageAt();
+  return latest === undefined || latest <= hiddenAt;
+}
+
 /**
  * **Dismissal**: one user drops a conversation out of their own sidebar.
  *
  * Not **visibility**, which is a property of a channel and identical for
  * everyone who can see it. This is per-user view state, and it used to occupy
- * that word — see `CONTEXT.md`.
+ * that word — see `CONTEXT.md`. What "dismissed" then *means* per kind is
+ * `isDismissed` above; this mutation only decides who may set the flag.
  *
- * Semantics, by what the conversation is:
- *   - a **public channel**: stays dismissed until `restoreChannel` is called.
- *     The sidebar query treats any `hiddenAt` value as dismissed. This is the
- *     only way to decline one, since you are not a member and so have nothing
- *     to leave.
- *   - a **direct message**: stays dismissed until a message arrives newer than
- *     `hiddenAt`. The sidebar query derives that without an extra write, so the
- *     auto-restore is free. It is also the whole lifecycle of a DM, which can
- *     be neither deleted nor left.
- *   - a **private channel**: rejected — those are left
- *     (`removeFromChannel`), not dismissed.
+ * A private channel is rejected — those are left (`removeFromChannel`), not
+ * dismissed.
  *
  * The stored column is still `hiddenAt`. Renaming it is a second migration on a
  * second table, and it appears in no user-facing string.

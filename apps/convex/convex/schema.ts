@@ -273,12 +273,11 @@ export default defineSchema({
     channelId: v.id("channels"),
     workspaceId: v.id("workspaces"),
     lastReadAt: v.optional(v.number()),
-    // Sidebar hide timestamp. Semantics depend on channel type — handled by
-    // the sidebar query, not by this field:
-    //   - DM: "hidden until a message newer than this arrives." Auto-unhide
-    //     on next message, no write needed.
-    //   - Open: "hidden until explicitly unhidden." Any value = stay hidden.
-    //   - Closed: ignored (closed channels are left, not hidden).
+    // Sidebar hide timestamp — **dismissal**. What a value here *means*
+    // depends on the channel's kind, and that rule has one statement:
+    // `channelDismissal.isDismissed`. It used to be restated here and in the
+    // sidebar query's comment while being implemented in neither module, so
+    // this is a pointer on purpose — do not re-describe the semantics.
     hiddenAt: v.optional(v.number()),
   })
     .index("by_channel_user", ["channelId", "userId"])
