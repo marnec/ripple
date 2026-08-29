@@ -55,6 +55,15 @@ export interface CallToken {
    * (treated as not transcribing).
    */
   transcribe?: boolean;
+  /**
+   * The channel whose meeting this call is using, if any.
+   *
+   * Not the same as `descriptor.resourceId`: an event call tied to a channel
+   * runs in *that channel's* meeting, so it is the channel — not the event —
+   * that presence must report. Resolved server-side, because only the backend
+   * knows whether an event is channel-tied. Absent for a standalone event.
+   */
+  channelId?: string;
 }
 
 /**

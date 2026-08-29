@@ -49,6 +49,12 @@ export interface CallState {
   meetingId: string | null;
   /** Whether the joined call is being transcribed. Set on TOKEN_OK. */
   transcribe: boolean;
+  /**
+   * Channel whose meeting this call is using, if any. Set on TOKEN_OK, since
+   * only the server knows it for a channel-tied event. Presence reports this
+   * rather than the descriptor's resource id.
+   */
+  callChannelId: string | null;
   error: CallError | null;
 }
 
@@ -60,6 +66,7 @@ export type CallEvent =
       authToken: string;
       meetingId: string;
       transcribe?: boolean;
+      channelId?: string;
     }
   | { type: "RTK_JOINED" }
   | { type: "JOIN_FAILED"; reason: CallErrorReason; message: string }
@@ -73,6 +80,7 @@ export const initialCallState: CallState = {
   authToken: null,
   meetingId: null,
   transcribe: false,
+  callChannelId: null,
   error: null,
 };
 
@@ -92,6 +100,7 @@ export function callReducer(state: CallState, event: CallEvent): CallState {
           authToken: null,
           meetingId: null,
           transcribe: false,
+          callChannelId: null,
           error: null,
         };
       }
@@ -110,6 +119,7 @@ export function callReducer(state: CallState, event: CallEvent): CallState {
         authToken: event.authToken,
         meetingId: event.meetingId,
         transcribe: event.transcribe ?? false,
+        callChannelId: event.channelId ?? null,
       };
 
     case "RTK_JOINED":
@@ -126,6 +136,7 @@ export function callReducer(state: CallState, event: CallEvent): CallState {
         authToken: null,
         meetingId: null,
         transcribe: false,
+        callChannelId: null,
         error: { reason: event.reason, message: event.message },
       };
 
@@ -158,6 +169,7 @@ export function callReducer(state: CallState, event: CallEvent): CallState {
         authToken: state.authToken,
         meetingId: state.meetingId,
         transcribe: state.transcribe,
+        callChannelId: state.callChannelId,
         error: { reason: event.reason, message: event.message },
       };
 

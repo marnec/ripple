@@ -7,6 +7,17 @@ export interface ChannelCallParticipant {
   userImage: string | null;
 }
 
+/** A live call in one channel, as reported by presence. */
+export interface ChannelCall {
+  participants: ChannelCallParticipant[];
+  /**
+   * Whether the call is being transcribed, or `undefined` if no participant
+   * reported it — every peer is on a client predating the field. Kept distinct
+   * from `false` so the lobby can say "unknown" instead of "off".
+   */
+  transcribing: boolean | undefined;
+}
+
 /**
  * Group presence entries by the channel call each user is in.
  *
@@ -15,23 +26,32 @@ export interface ChannelCallParticipant {
  */
 export function groupCallsByChannel(
   entries: Iterable<PresenceEntry>,
-): Map<string, ChannelCallParticipant[]> {
-  const calls = new Map<string, ChannelCallParticipant[]>();
+): Map<string, ChannelCall> {
+  const calls = new Map<string, ChannelCall>();
 
   for (const entry of entries) {
     if (!entry.callChannelId) continue;
-    const participants = calls.get(entry.callChannelId) ?? [];
-    participants.push({
+    const call = calls.get(entry.callChannelId) ?? {
+      participants: [],
+      transcribing: undefined,
+    };
+    call.participants.push({
       userId: entry.userId,
       userName: entry.userName,
       userImage: entry.userImage,
     });
-    calls.set(entry.callChannelId, participants);
+    // First participant who knows the mode settles it. They are all in the
+    // same meeting, so they cannot legitimately disagree; a peer on an older
+    // client simply reports nothing and defers to one who does.
+    if (call.transcribing === undefined && entry.callTranscribing !== undefined) {
+      call.transcribing = entry.callTranscribing;
+    }
+    calls.set(entry.callChannelId, call);
   }
 
   // Stable order so a re-render doesn't reshuffle the tooltip's name list.
-  for (const participants of calls.values()) {
-    participants.sort((a, b) => a.userId.localeCompare(b.userId));
+  for (const call of calls.values()) {
+    call.participants.sort((a, b) => a.userId.localeCompare(b.userId));
   }
 
   return calls;
@@ -55,7 +75,7 @@ export function groupCallsByChannel(
  * Costs nothing extra — the workspace presence socket is already open for
  * follow mode, and this is a filter over the map it already maintains.
  */
-export function useChannelCalls(): Map<string, ChannelCallParticipant[]> {
+export function useChannelCalls(): Map<string, ChannelCall> {
   const { presenceMap } = usePresence();
   return groupCallsByChannel(presenceMap.values());
 }

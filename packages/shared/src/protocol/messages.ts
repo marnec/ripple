@@ -265,6 +265,16 @@ export interface PresenceUpdateMessage {
    * a usable proxy for call membership.
    */
   callChannelId?: string;
+  /**
+   * Whether that call is being transcribed.
+   *
+   * Reported alongside `callChannelId` so someone about to join can be shown
+   * the mode they are inheriting rather than a control that does nothing —
+   * transcription is fixed by whoever started the call. `undefined` means "we
+   * do not know": no call, or a peer on a client predating this field. It is
+   * never a synonym for `false`; the lobby distinguishes the two.
+   */
+  callTranscribing?: boolean;
 }
 
 /**
@@ -285,6 +295,7 @@ export interface PresenceSnapshotMessage {
     resourceType?: string;
     resourceId?: string;
     callChannelId?: string;
+    callTranscribing?: boolean;
   }>;
 }
 
@@ -305,6 +316,7 @@ export interface PresenceChangedMessage {
   resourceType?: string;
   resourceId?: string;
   callChannelId?: string;
+  callTranscribing?: boolean;
 }
 
 /**

@@ -18,6 +18,7 @@ NEXT STEPS:
 keyboard accessiblity
     - when pressing tab in a chat, it must focus the message composer
     - esc closes the comments sideba in docs
+    - on login, pressing tab from email field should focus pasword field instead of password reset btn
 
 - [ ] internationalization (i18n and localization)
 

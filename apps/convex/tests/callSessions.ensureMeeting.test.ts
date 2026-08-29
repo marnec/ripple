@@ -1,7 +1,10 @@
 import { describe, it, expect, vi } from "vitest";
 import type { ActionCtx } from "../convex/_generated/server";
 import type { Id } from "../convex/_generated/dataModel";
-import { ensureMeetingForChannel } from "../convex/callSessions";
+import {
+  ensureMeetingForChannel,
+  findLiveMeetingForChannel,
+} from "../convex/callSessions";
 import { internal } from "../convex/_generated/api";
 import type {
   RealtimeKitClient,
@@ -41,6 +44,23 @@ async function makeChannel(t: T): Promise<Id<"channels">> {
       ...channelFields("open"),
     }),
   );
+}
+
+/**
+ * Run `fn` with the clock advanced past `SESSION_JOIN_GRACE_MS`.
+ *
+ * A row seeded by a test is created "now", and a session younger than the join
+ * grace is presumed live without asking Cloudflare — so every stranded-row case
+ * has to age its row first, exactly as a real one would have.
+ */
+async function afterJoinGrace<R>(fn: () => Promise<R>): Promise<R> {
+  vi.useFakeTimers();
+  try {
+    vi.setSystemTime(Date.now() + 60_000);
+    return await fn();
+  } finally {
+    vi.useRealTimers();
+  }
 }
 
 function countActiveSessions(t: T, channelId: Id<"channels">): Promise<number> {
@@ -198,12 +218,8 @@ describe("ensureMeetingForChannel — stranded session rows", () => {
       deleteMeeting: vi.fn(async () => {}),
     };
 
-    const result = await ensureMeetingForChannel(
-      actionCtx(t),
-      channelId,
-      rtk,
-      true,
-      "it",
+    const result = await afterJoinGrace(() =>
+      ensureMeetingForChannel(actionCtx(t), channelId, rtk, true, "it"),
     );
 
     // The whole point: the caller's transcription choice is honoured rather
@@ -232,6 +248,34 @@ describe("ensureMeetingForChannel — stranded session rows", () => {
       deleteMeeting: vi.fn(async () => {}),
     };
 
+    const result = await afterJoinGrace(() =>
+      ensureMeetingForChannel(actionCtx(t), channelId, rtk, false),
+    );
+
+    expect(result.meetingId).toBe("new-meeting");
+    expect(await countActiveSessions(t, channelId)).toBe(1);
+  });
+
+  it("reuses a just-created session even though nobody has connected yet", async () => {
+    // The regression. Minting a token is not joining: the starter still has to
+    // fetch the RealtimeKit bundle, initialise it and open a socket, and for
+    // that whole window Cloudflare reports zero participants. Treating that as
+    // stranded is what put two users in two meetings in the same channel, with
+    // rows 1.3s apart and opposite transcription modes.
+    const t = createTestContext();
+    const channelId = await makeChannel(t);
+    await seedActiveSession(t, channelId, true);
+
+    const rtk: RealtimeKitClient = {
+      createMeeting: vi.fn(async () => ({ id: "second-meeting" })),
+      addParticipant: vi.fn(async () => ({ token: "tok" })),
+      // Cloudflare, truthfully: nobody is connected. The starter is still
+      // loading the SDK.
+      getLiveParticipants: vi.fn(async () => 0),
+      deleteMeeting: vi.fn(async () => {}),
+    };
+
+    // The second user presses Start and asks for no transcription.
     const result = await ensureMeetingForChannel(
       actionCtx(t),
       channelId,
@@ -239,7 +283,12 @@ describe("ensureMeetingForChannel — stranded session rows", () => {
       false,
     );
 
-    expect(result.meetingId).toBe("new-meeting");
+    // They land in the starter's call, on the starter's terms.
+    expect(result).toEqual({
+      meetingId: "stranded-meeting",
+      transcribe: true,
+    });
+    expect(rtk.createMeeting).not.toHaveBeenCalled();
     expect(await countActiveSessions(t, channelId)).toBe(1);
   });
 
@@ -301,13 +350,180 @@ describe("ensureMeetingForChannel — stranded session rows", () => {
       deleteMeeting: vi.fn(async () => {}),
     };
 
-    await ensureMeetingForChannel(actionCtx(t), channelId, rtk, false);
+    await afterJoinGrace(() =>
+      ensureMeetingForChannel(actionCtx(t), channelId, rtk, false),
+    );
 
     const successor = await t.run((ctx) =>
       ctx.db.get(successorId as unknown as Id<"callSessions">),
     );
     expect(successor?.active).toBe(true);
     expect(await countActiveSessions(t, channelId)).toBe(1);
+  });
+});
+
+describe("findLiveMeetingForChannel", () => {
+  /**
+   * The join-only counterpart to `ensureMeetingForChannel`, used by guests on a
+   * public share link. The property that matters is negative: it must never
+   * create a meeting. A guest who could start a call would also be fixing its
+   * transcription mode — the one decision reserved for whoever starts it — in a
+   * workspace they are not a member of.
+   */
+
+  it("returns null without creating anything when no call exists", async () => {
+    const t = createTestContext();
+    const channelId = await makeChannel(t);
+
+    const rtk: RealtimeKitClient = {
+      createMeeting: vi.fn(async () => ({ id: "must-not-exist" })),
+      addParticipant: vi.fn(async () => ({ token: "tok" })),
+      getLiveParticipants: vi.fn(async () => null),
+      deleteMeeting: vi.fn(async () => {}),
+    };
+
+    expect(await findLiveMeetingForChannel(actionCtx(t), channelId, rtk)).toBe(
+      null,
+    );
+    expect(rtk.createMeeting).not.toHaveBeenCalled();
+    expect(await countActiveSessions(t, channelId)).toBe(0);
+  });
+
+  it("returns null without creating anything when the row is stranded", async () => {
+    const t = createTestContext();
+    const channelId = await makeChannel(t);
+    await t.run((ctx) =>
+      ctx.db.insert("callSessions", {
+        channelId,
+        cloudflareMeetingId: "stranded-meeting",
+        active: true,
+        transcribe: true,
+      }),
+    );
+
+    const rtk: RealtimeKitClient = {
+      createMeeting: vi.fn(async () => ({ id: "must-not-exist" })),
+      addParticipant: vi.fn(async () => ({ token: "tok" })),
+      // Cloudflare: that meeting has nobody in it.
+      getLiveParticipants: vi.fn(async () => 0),
+      deleteMeeting: vi.fn(async () => {}),
+    };
+
+    expect(
+      await afterJoinGrace(() =>
+        findLiveMeetingForChannel(actionCtx(t), channelId, rtk),
+      ),
+    ).toBe(null);
+    expect(rtk.createMeeting).not.toHaveBeenCalled();
+  });
+
+  it("admits a guest to a call whose starter has not connected yet", async () => {
+    // Same window as the member-side regression: without the join grace a
+    // guest clicking a share link seconds after the call started would be told
+    // there is no call in progress.
+    const t = createTestContext();
+    const channelId = await makeChannel(t);
+    await t.run((ctx) =>
+      ctx.db.insert("callSessions", {
+        channelId,
+        cloudflareMeetingId: "brand-new-meeting",
+        active: true,
+        transcribe: true,
+      }),
+    );
+
+    const rtk: RealtimeKitClient = {
+      createMeeting: vi.fn(async () => ({ id: "must-not-exist" })),
+      addParticipant: vi.fn(async () => ({ token: "tok" })),
+      getLiveParticipants: vi.fn(async () => 0),
+      deleteMeeting: vi.fn(async () => {}),
+    };
+
+    expect(
+      await findLiveMeetingForChannel(actionCtx(t), channelId, rtk),
+    ).toEqual({ meetingId: "brand-new-meeting", transcribe: true });
+    expect(rtk.createMeeting).not.toHaveBeenCalled();
+  });
+
+  it("returns the live meeting and the mode it was started with", async () => {
+    const t = createTestContext();
+    const channelId = await makeChannel(t);
+    await t.run((ctx) =>
+      ctx.db.insert("callSessions", {
+        channelId,
+        cloudflareMeetingId: "live-meeting",
+        active: true,
+        transcribe: true,
+      }),
+    );
+
+    const rtk: RealtimeKitClient = {
+      createMeeting: vi.fn(async () => ({ id: "must-not-exist" })),
+      addParticipant: vi.fn(async () => ({ token: "tok" })),
+      getLiveParticipants: vi.fn(async () => 2),
+      deleteMeeting: vi.fn(async () => {}),
+    };
+
+    expect(
+      await findLiveMeetingForChannel(actionCtx(t), channelId, rtk),
+    ).toEqual({ meetingId: "live-meeting", transcribe: true });
+    expect(rtk.createMeeting).not.toHaveBeenCalled();
+  });
+
+  it("fails open like the join-or-start path when Cloudflare is unreachable", async () => {
+    const t = createTestContext();
+    const channelId = await makeChannel(t);
+    await t.run((ctx) =>
+      ctx.db.insert("callSessions", {
+        channelId,
+        cloudflareMeetingId: "live-meeting",
+        active: true,
+      }),
+    );
+
+    const rtk: RealtimeKitClient = {
+      createMeeting: vi.fn(async () => ({ id: "must-not-exist" })),
+      addParticipant: vi.fn(async () => ({ token: "tok" })),
+      getLiveParticipants: vi.fn(async () => {
+        throw new Error("Cloudflare is having a day");
+      }),
+      deleteMeeting: vi.fn(async () => {}),
+    };
+
+    // Turning a guest away during an RTK blip is worse than letting the
+    // subsequent addParticipant be the thing that fails.
+    expect(
+      await findLiveMeetingForChannel(actionCtx(t), channelId, rtk),
+    ).toEqual({ meetingId: "live-meeting", transcribe: false });
+  });
+
+  it("leaves a stranded row for the member path to retire", async () => {
+    const t = createTestContext();
+    const channelId = await makeChannel(t);
+    const strandedId = await t.run((ctx) =>
+      ctx.db.insert("callSessions", {
+        channelId,
+        cloudflareMeetingId: "stranded-meeting",
+        active: true,
+      }),
+    );
+
+    const rtk: RealtimeKitClient = {
+      createMeeting: vi.fn(async () => ({ id: "must-not-exist" })),
+      addParticipant: vi.fn(async () => ({ token: "tok" })),
+      getLiveParticipants: vi.fn(async () => null),
+      deleteMeeting: vi.fn(async () => {}),
+    };
+
+    await afterJoinGrace(() =>
+      findLiveMeetingForChannel(actionCtx(t), channelId, rtk),
+    );
+
+    // Read-only on purpose: the cleanup belongs to `ensureMeetingForChannel`,
+    // which runs for an authenticated member and starts the replacement call in
+    // the same breath.
+    const stranded = await t.run((ctx) => ctx.db.get(strandedId));
+    expect(stranded?.active).toBe(true);
   });
 });
 

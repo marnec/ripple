@@ -32,14 +32,21 @@ export function useChannelCallSource(
       homePath: `/workspaces/${workspaceId}/channels/${channelId}/videocall`,
       leaveDestination: `/workspaces/${workspaceId}/channels/${channelId}`,
     },
-    acquireToken: ({ userName, userImage, transcribe, transcriptionLanguage }) =>
-      joinChannelCall({
+    acquireToken: async ({
+      userName,
+      userImage,
+      transcribe,
+      transcriptionLanguage,
+    }) => ({
+      ...(await joinChannelCall({
         channelId,
         userName,
         userImage,
         transcribe,
         transcriptionLanguage,
-      }),
+      })),
+      channelId,
+    }),
     onAfterLeave: async ({ remainingParticipants }) => {
       // Last participant out → end the channel session so the next call
       // starts fresh. Multi-occupant rooms keep the meeting alive.

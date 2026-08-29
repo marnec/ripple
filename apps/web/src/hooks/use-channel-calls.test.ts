@@ -28,8 +28,11 @@ describe("groupCallsByChannel", () => {
       entry("dave"),
     ]);
 
-    expect(calls.get("ch1")?.map((p) => p.userId)).toEqual(["alice", "bob"]);
-    expect(calls.get("ch2")?.map((p) => p.userId)).toEqual(["carol"]);
+    expect(calls.get("ch1")?.participants.map((p) => p.userId)).toEqual([
+      "alice",
+      "bob",
+    ]);
+    expect(calls.get("ch2")?.participants.map((p) => p.userId)).toEqual(["carol"]);
     expect(calls.has("ch3")).toBe(false);
   });
 
@@ -45,7 +48,7 @@ describe("groupCallsByChannel", () => {
       }),
     ]);
 
-    expect(calls.get("ch1")?.map((p) => p.userId)).toEqual(["alice"]);
+    expect(calls.get("ch1")?.participants.map((p) => p.userId)).toEqual(["alice"]);
   });
 
   it("orders participants deterministically", () => {
@@ -59,5 +62,39 @@ describe("groupCallsByChannel", () => {
     ]);
 
     expect(forward.get("ch1")).toEqual(reverse.get("ch1"));
+  });
+
+  it("reports the transcription mode when a participant knows it", () => {
+    const calls = groupCallsByChannel([
+      entry("alice", { callChannelId: "ch1", callTranscribing: true }),
+      entry("bob", { callChannelId: "ch1", callTranscribing: true }),
+    ]);
+
+    expect(calls.get("ch1")?.transcribing).toBe(true);
+  });
+
+  it("distinguishes transcription off from unknown", () => {
+    const off = groupCallsByChannel([
+      entry("alice", { callChannelId: "ch1", callTranscribing: false }),
+    ]);
+    const unknown = groupCallsByChannel([
+      entry("alice", { callChannelId: "ch1" }),
+    ]);
+
+    // `false` and `undefined` mean different things to the lobby: one shows
+    // "not being transcribed", the other refuses to claim either way.
+    expect(off.get("ch1")?.transcribing).toBe(false);
+    expect(unknown.get("ch1")?.transcribing).toBeUndefined();
+  });
+
+  it("takes the mode from a knowing participant when a peer reports none", () => {
+    // A peer on a client predating `callTranscribing` publishes the channel but
+    // not the mode. It must not shadow a participant who does know.
+    const calls = groupCallsByChannel([
+      entry("alice", { callChannelId: "ch1" }),
+      entry("bob", { callChannelId: "ch1", callTranscribing: true }),
+    ]);
+
+    expect(calls.get("ch1")?.transcribing).toBe(true);
   });
 });

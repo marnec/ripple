@@ -12,6 +12,7 @@ import { useEffect, useRef, useState } from "react";
 import { api } from "@convex/_generated/api";
 import { Button } from "@ripple/ui/components/button";
 import { RippleSpinner } from "@/components/RippleSpinner";
+import { TranscriptionPill } from "@/components/call/GuestTranscriptionNotice";
 import { CameraToggle, MicToggle } from "@/pages/App/GroupVideoCall/MediaToggle";
 import { VideoTile } from "@/pages/App/GroupVideoCall/VideoTile";
 
@@ -39,6 +40,8 @@ export function GuestEventCall({ shareId, guestSub, guestName, onLeave }: Props)
     "joining",
   );
   const [error, setError] = useState<string | null>(null);
+  // Authoritative for this meeting, resolved server-side by the token action.
+  const [transcribe, setTranscribe] = useState(false);
   const meetingRef = useRef(meeting);
 
   useEffect(() => {
@@ -53,8 +56,13 @@ export function GuestEventCall({ shareId, guestSub, guestName, onLeave }: Props)
 
     void (async () => {
       try {
-        const { authToken } = await getToken({ shareId, guestSub, guestName });
+        const { authToken, transcribe: isTranscribed } = await getToken({
+          shareId,
+          guestSub,
+          guestName,
+        });
         if (cancelled) return;
+        setTranscribe(isTranscribed);
         const m = await initMeeting({
           authToken,
           defaults: { audio: false, video: false },
@@ -116,7 +124,10 @@ export function GuestEventCall({ shareId, guestSub, guestName, onLeave }: Props)
     <div className="h-full w-full overflow-hidden">
       <RealtimeKitProvider value={meeting}>
         <RtkParticipantsAudio meeting={meeting} />
-        <GuestMeetingRoom onLeave={() => setStatus("left")} />
+        <GuestMeetingRoom
+          transcribe={transcribe}
+          onLeave={() => setStatus("left")}
+        />
       </RealtimeKitProvider>
     </div>
   );
@@ -125,7 +136,13 @@ export function GuestEventCall({ shareId, guestSub, guestName, onLeave }: Props)
 // ── Same room/tile helpers as GuestCallView (intentionally duplicated; the
 //    two surfaces are likely to diverge as event-specific affordances land).
 
-function GuestMeetingRoom({ onLeave }: { onLeave: () => void }) {
+function GuestMeetingRoom({
+  transcribe,
+  onLeave,
+}: {
+  transcribe: boolean;
+  onLeave: () => void;
+}) {
   const { meeting } = useRealtimeKitMeeting();
   const participants = useRealtimeKitSelector((m) => m.participants.joined.toArray());
 
@@ -154,7 +171,10 @@ function GuestMeetingRoom({ onLeave }: { onLeave: () => void }) {
           ))}
         </div>
       </div>
-      <GuestControlsBar onLeave={() => void handleLeave()} />
+      <GuestControlsBar
+        transcribe={transcribe}
+        onLeave={() => void handleLeave()}
+      />
     </div>
   );
 }
@@ -227,7 +247,13 @@ function GuestParticipantTile({
   );
 }
 
-function GuestControlsBar({ onLeave }: { onLeave: () => void }) {
+function GuestControlsBar({
+  transcribe,
+  onLeave,
+}: {
+  transcribe: boolean;
+  onLeave: () => void;
+}) {
   const { meeting } = useRealtimeKitMeeting();
   const audioEnabled = useRealtimeKitSelector((m) => m.self.audioEnabled);
   const videoEnabled = useRealtimeKitSelector((m) => m.self.videoEnabled);
@@ -248,6 +274,7 @@ function GuestControlsBar({ onLeave }: { onLeave: () => void }) {
 
   return (
     <div className="flex items-center justify-center gap-3 border-t bg-background px-4 py-3 pb-[calc(0.75rem+var(--safe-area-bottom))]">
+      <TranscriptionPill transcribe={transcribe} />
       <MicToggle enabled={audioEnabled} onToggle={() => void toggleAudio()} />
       <CameraToggle enabled={videoEnabled} onToggle={() => void toggleVideo()} />
       <Button

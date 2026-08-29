@@ -11,6 +11,10 @@ import { useEffect, useRef, useState } from "react";
 import { api } from "@convex/_generated/api";
 import { Button } from "@ripple/ui/components/button";
 import { RippleSpinner } from "@/components/RippleSpinner";
+import {
+  TranscriptionNotice,
+  TranscriptionPill,
+} from "@/components/call/GuestTranscriptionNotice";
 import { CameraToggle, MicToggle } from "@/pages/App/GroupVideoCall/MediaToggle";
 import { VideoTile } from "@/pages/App/GroupVideoCall/VideoTile";
 
@@ -29,36 +33,47 @@ interface GuestCallViewProps {
  * Deliberately minimal: no lobby with device pickers, no "follow another
  * participant" affordance, no floating PIP. Leaving the call closes the tab
  * or navigates back.
+ *
+ * The one thing it does gate is joining. This surface used to auto-join on
+ * mount, which left nowhere to disclose that the call may be transcribed —
+ * guests get none of the app chrome that carries the "Transcribing" pill for
+ * members. The `prejoin` step is that disclosure, and nothing else: one notice
+ * and one button, not the members' device-picker lobby.
  */
 export function GuestCallView({ shareId, guestSub, guestName }: GuestCallViewProps) {
   const getGuestCallToken = useAction(api.shares.getGuestCallToken);
   const [meeting, initMeeting] = useRealtimeKitClient();
-  const [status, setStatus] = useState<"joining" | "joined" | "error" | "left">(
-    "joining",
-  );
+  const [status, setStatus] = useState<
+    "prejoin" | "joining" | "joined" | "error" | "left"
+  >("prejoin");
   const [error, setError] = useState<string | null>(null);
+  // Authoritative for this meeting, resolved server-side by the token action.
+  const [transcribe, setTranscribe] = useState(false);
   const meetingRef = useRef(meeting);
 
   useEffect(() => {
     meetingRef.current = meeting;
   }, [meeting]);
 
-  // Fetch guest token + join the meeting once per guest session.
+  // Fetch guest token + join the meeting once per guest session, after the
+  // guest presses Join on the prejoin step.
   // useRef prevents React 19 StrictMode double-invoke from issuing two tokens.
   const bootstrappedRef = useRef(false);
   useEffect(() => {
+    if (status !== "joining") return;
     if (bootstrappedRef.current) return;
     bootstrappedRef.current = true;
     let cancelled = false;
 
     void (async () => {
       try {
-        const { authToken } = await getGuestCallToken({
+        const { authToken, transcribe: isTranscribed } = await getGuestCallToken({
           shareId,
           guestSub,
           guestName,
         });
         if (cancelled) return;
+        setTranscribe(isTranscribed);
         const m = await initMeeting({
           authToken,
           defaults: { audio: false, video: false },
@@ -80,7 +95,7 @@ export function GuestCallView({ shareId, guestSub, guestName }: GuestCallViewPro
     return () => {
       cancelled = true;
     };
-  }, [getGuestCallToken, initMeeting, shareId, guestSub, guestName]);
+  }, [status, getGuestCallToken, initMeeting, shareId, guestSub, guestName]);
 
   // Leave the meeting if the component unmounts
   useEffect(() => {
@@ -89,6 +104,25 @@ export function GuestCallView({ shareId, guestSub, guestName }: GuestCallViewPro
       if (m) void m.leave();
     };
   }, []);
+
+  if (status === "prejoin") {
+    return (
+      <div className="flex h-full flex-col items-center justify-center px-6 py-8">
+        <div className="w-full max-w-md space-y-4 rounded-lg border bg-card p-6 text-center shadow-sm">
+          <div className="space-y-1">
+            <h1 className="text-xl font-semibold">Ready to join?</h1>
+            <p className="text-sm text-muted-foreground">
+              You'll join as {guestName} with your microphone and camera off.
+            </p>
+          </div>
+          <TranscriptionNotice />
+          <Button className="w-full" onClick={() => setStatus("joining")}>
+            Join call
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   if (status === "error") {
     return (
@@ -119,13 +153,22 @@ export function GuestCallView({ shareId, guestSub, guestName }: GuestCallViewPro
     <div className="h-full w-full overflow-hidden">
       <RealtimeKitProvider value={meeting}>
         <RtkParticipantsAudio meeting={meeting} />
-        <GuestMeetingRoom onLeave={() => setStatus("left")} />
+        <GuestMeetingRoom
+          transcribe={transcribe}
+          onLeave={() => setStatus("left")}
+        />
       </RealtimeKitProvider>
     </div>
   );
 }
 
-function GuestMeetingRoom({ onLeave }: { onLeave: () => void }) {
+function GuestMeetingRoom({
+  transcribe,
+  onLeave,
+}: {
+  transcribe: boolean;
+  onLeave: () => void;
+}) {
   const { meeting } = useRealtimeKitMeeting();
   const participants = useRealtimeKitSelector((m) => m.participants.joined.toArray());
 
@@ -154,7 +197,10 @@ function GuestMeetingRoom({ onLeave }: { onLeave: () => void }) {
           ))}
         </div>
       </div>
-      <GuestControlsBar onLeave={() => void handleLeave()} />
+      <GuestControlsBar
+        transcribe={transcribe}
+        onLeave={() => void handleLeave()}
+      />
     </div>
   );
 }
@@ -227,7 +273,13 @@ function GuestParticipantTile({
   );
 }
 
-function GuestControlsBar({ onLeave }: { onLeave: () => void }) {
+function GuestControlsBar({
+  transcribe,
+  onLeave,
+}: {
+  transcribe: boolean;
+  onLeave: () => void;
+}) {
   const { meeting } = useRealtimeKitMeeting();
   const audioEnabled = useRealtimeKitSelector((m) => m.self.audioEnabled);
   const videoEnabled = useRealtimeKitSelector((m) => m.self.videoEnabled);
@@ -248,6 +300,7 @@ function GuestControlsBar({ onLeave }: { onLeave: () => void }) {
 
   return (
     <div className="flex items-center justify-center gap-3 border-t bg-background px-4 py-3 pb-[calc(0.75rem+var(--safe-area-bottom))]">
+      <TranscriptionPill transcribe={transcribe} />
       <MicToggle enabled={audioEnabled} onToggle={() => void toggleAudio()} />
       <CameraToggle enabled={videoEnabled} onToggle={() => void toggleVideo()} />
       <Button

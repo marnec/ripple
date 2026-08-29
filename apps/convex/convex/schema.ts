@@ -712,6 +712,10 @@ export default defineSchema({
     // joiner (who creates the Cloudflare meeting with `transcribe_on_end`) and
     // reused by everyone who joins the same call. Drives the meeting's
     // transcribe_on_end flag and the participant preset.
+    //
+    // "Decided by the first joiner" is our rule, not Cloudflare's: the flag is
+    // patchable on a live meeting. See `ensureMeetingForChannel` for why we
+    // don't.
     transcribe: v.optional(v.boolean()),
     // Cloudflare session id, learned from the `meeting.transcript` webhook.
     cloudflareSessionId: v.optional(v.string()),

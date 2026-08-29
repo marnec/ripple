@@ -432,13 +432,23 @@ export declare const api: {
       "action",
       "public",
       { guestName: string; guestSub: string; shareId: string },
-      { authToken: string; guestSub: string; meetingId: string }
+      {
+        authToken: string;
+        guestSub: string;
+        meetingId: string;
+        transcribe: boolean;
+      }
     >;
     joinEventCall: FunctionReference<
       "action",
       "public",
       { eventId: Id<"calendarEvents">; userImage?: string; userName: string },
-      { authToken: string; meetingId: string }
+      {
+        authToken: string;
+        channelId: Id<"channels"> | null;
+        meetingId: string;
+        transcribe: boolean;
+      }
     >;
     listForMembersInRange: FunctionReference<
       "query",
@@ -2380,6 +2390,7 @@ export declare const api: {
         channelId: Id<"channels">;
         guestSub: string;
         meetingId: string;
+        transcribe: boolean;
       }
     >;
     getGuestCollaborationToken: FunctionReference<

@@ -9,7 +9,7 @@ import { logActivity } from "./auditLog";
 import { generateShareId, sanitizeGuestName } from "./utils/shareIds";
 import { signToken } from "./tokenSigning";
 import { rateLimiter } from "./rateLimits";
-import { ensureMeetingForChannel } from "./callSessions";
+import { findLiveMeetingForChannel } from "./callSessions";
 import { realtimeKitFromEnv } from "./lib/realtimeKit";
 import { WorkspaceRole } from "@ripple/shared/enums";
 import {
@@ -562,6 +562,10 @@ export const getGuestCallToken = action({
     meetingId: v.string(),
     guestSub: v.string(),
     channelId: v.id("channels"),
+    // The call's authoritative transcription mode, so the guest surface can
+    // say whether this call is being transcribed rather than only that it
+    // might be. Free — the live-meeting lookup already resolved it.
+    transcribe: v.boolean(),
   }),
   handler: async (ctx, { shareId, guestName, guestSub }) => {
     const name = sanitizeGuestName(guestName);
@@ -590,15 +594,21 @@ export const getGuestCallToken = action({
 
     const channelId = share.resourceId as Id<"channels">;
 
-    // Guests join via a public share link — they don't start calls in
-    // practice, so inherit the active call's transcription mode (this `false`
-    // only applies if the guest somehow opens a brand-new call).
-    const { meetingId } = await ensureMeetingForChannel(
-      ctx,
-      channelId,
-      rtk,
-      false,
-    );
+    // Join-only. A share link grants access to a call, not the power to
+    // conjure one: a guest who could start a call would also be choosing its
+    // transcription mode — the one decision reserved for whoever starts it —
+    // in a workspace they are not a member of. This previously called
+    // `ensureMeetingForChannel`, which creates when nothing is live.
+    //
+    // The cost is real: a guest who clicks the link before any member has
+    // joined is turned away rather than opening the room for them.
+    const live = await findLiveMeetingForChannel(ctx, channelId, rtk);
+    if (!live) {
+      throw new ConvexError(
+        "No call in progress. Wait for someone to start one, then try again.",
+      );
+    }
+    const { meetingId, transcribe } = live;
 
     const fullSub = `${GUEST_SUB_PREFIX}${sub}`;
     let authToken: string;
@@ -620,6 +630,7 @@ export const getGuestCallToken = action({
       meetingId,
       guestSub: sub,
       channelId,
+      transcribe,
     };
   },
 });

@@ -28,6 +28,12 @@ export interface PresenceEntry {
    * navigate away while staying in the call.
    */
   callChannelId?: string;
+  /**
+   * Whether that call is being transcribed. `undefined` means unknown — the
+   * user is in no call, or is on a client that predates this field. The lobby
+   * treats unknown as its own state rather than folding it into "off".
+   */
+  callTranscribing?: boolean;
 }
 
 const CONNECTION_TIMEOUT = 4000;
@@ -59,11 +65,22 @@ export function useWorkspacePresence() {
   // `callSessions` row: that row is only cleared by a clean last-participant
   // leave, so a closed tab strands it as `active` forever. A presence entry is
   // connection-scoped and self-heals on disconnect.
-  const { status: callStatus, descriptor: callDescriptor } = useActiveCall();
+  const {
+    status: callStatus,
+    callChannelId: activeCallChannelId,
+    isTranscribing,
+  } = useActiveCall();
+  // The channel the call's *meeting* belongs to, resolved server-side. This was
+  // read off the descriptor (`kind === "channel"` → its resource id), which
+  // missed channel-tied event calls entirely: they run in the channel's own
+  // meeting, so the channel had a call in progress that presence never
+  // reported — no sidebar indicator, and a joiner's lobby offering to start the
+  // call they were about to walk into.
   const callChannelId =
-    callStatus === "joined" && callDescriptor?.kind === "channel"
-      ? callDescriptor.resourceId
-      : undefined;
+    callStatus === "joined" ? (activeCallChannelId ?? undefined) : undefined;
+  // Only meaningful alongside a channel id, and published with it so a peer's
+  // lobby can show the mode it would inherit instead of an inert toggle.
+  const callTranscribing = callChannelId ? isTranscribing : undefined;
 
   const [presenceMap, setPresenceMap] = useState<Map<string, PresenceEntry>>(
     new Map(),
@@ -89,11 +106,13 @@ export function useWorkspacePresence() {
   const paramsRef = useRef(params);
   const getTokenRef = useRef(getToken);
   const callChannelIdRef = useRef(callChannelId);
+  const callTranscribingRef = useRef(callTranscribing);
   useEffect(() => {
     pathnameRef.current = pathname;
     paramsRef.current = params;
     getTokenRef.current = getToken;
     callChannelIdRef.current = callChannelId;
+    callTranscribingRef.current = callTranscribing;
   });
 
   // Connect to presence party
@@ -279,6 +298,7 @@ export function useWorkspacePresence() {
         resourceType,
         resourceId,
         callChannelId: callChannelIdRef.current,
+        callTranscribing: callTranscribingRef.current,
       }),
     );
   };
@@ -298,6 +318,9 @@ export function useWorkspacePresence() {
     // at all. Without this dep the indicator would stick until the participant
     // happened to navigate.
     callChannelId,
+    // Mode is resolved server-side and lands after the join, so it can change
+    // while `callChannelId` holds steady.
+    callTranscribing,
   ]);
 
   // Browser offline/online detection

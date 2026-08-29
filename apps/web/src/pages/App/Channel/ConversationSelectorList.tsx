@@ -278,7 +278,7 @@ export const ConversationSelectorList = memo(function ConversationSelectorList({
                       channel={conversation}
                       channelId={channelId}
                       hasUnread={unreadSet.has(conversation._id)}
-                      callParticipants={channelCalls.get(conversation._id)}
+                      callParticipants={channelCalls.get(conversation._id)?.participants}
                       onChannelSelect={(id) => {
                         if (id) acknowledgeOne(id, byId.get(id)?.name ?? "");
                         handleSelect(id);

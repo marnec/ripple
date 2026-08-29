@@ -35,7 +35,16 @@ export function useEventCallSource(
       homePath: `/workspaces/${workspaceId}/events/${eventId}/videocall`,
       leaveDestination: `/workspaces/${workspaceId}/dashboard/calendar`,
     },
-    acquireToken: ({ userName, userImage }) =>
-      joinEventCall({ eventId, userName, userImage }),
+    acquireToken: async ({ userName, userImage }) => {
+      const { channelId, ...token } = await joinEventCall({
+        eventId,
+        userName,
+        userImage,
+      });
+      // A channel-tied event runs in the channel's meeting, so presence should
+      // report the channel — the same signal a direct channel join publishes.
+      // A standalone event has its own room and reports nothing.
+      return { ...token, channelId: channelId ?? undefined };
+    },
   };
 }

@@ -107,7 +107,12 @@ export function useCallSession(): UseCallSessionResult {
     dispatch({ type: "JOIN_REQUESTED" });
 
     let mintedToken:
-      | { authToken: string; meetingId: string; transcribe?: boolean }
+      | {
+          authToken: string;
+          meetingId: string;
+          transcribe?: boolean;
+          channelId?: string;
+        }
       | null = null;
     try {
       mintedToken = await port.acquireToken(prefs);

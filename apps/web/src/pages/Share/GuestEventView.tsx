@@ -6,6 +6,7 @@ import { toast } from "sonner";
 
 import { Button } from "@ripple/ui/components/button";
 import { RippleSpinner } from "@/components/RippleSpinner";
+import { TranscriptionNotice } from "@/components/call/GuestTranscriptionNotice";
 import { joinWindowStatus } from "../App/Dashboard/dashboard-calendar-utils";
 import { useJoinStatusTick } from "../App/Calendar/useJoinStatusTick";
 import { api } from "@convex/_generated/api";
@@ -158,10 +159,13 @@ export function GuestEventView({ shareId, guestSub, guestName }: Props) {
 
         <div className="mt-5 border-t pt-4">
           {callStatus === "open" ? (
-            <Button className="w-full" onClick={() => setInCall(true)}>
-              <Video className="h-4 w-4 mr-1.5" />
-              Join call
-            </Button>
+            <div className="space-y-3">
+              <TranscriptionNotice />
+              <Button className="w-full" onClick={() => setInCall(true)}>
+                <Video className="h-4 w-4 mr-1.5" />
+                Join call
+              </Button>
+            </div>
           ) : callStatus === "pending" ? (
             <p className="text-xs text-center text-muted-foreground">
               The call opens 5 minutes before the start time.

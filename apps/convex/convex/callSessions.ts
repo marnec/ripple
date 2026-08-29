@@ -39,6 +39,40 @@ async function isMeetingLive(
 }
 
 /**
+ * How long a freshly-created session is presumed live regardless of what
+ * Cloudflare says about its participant count.
+ *
+ * `isMeetingLive` answers "is anyone connected right now", which is not the
+ * same question as "is this call real". Minting a token is only the first step
+ * of joining: the client then lazy-imports the ~1.5MB RealtimeKit bundle,
+ * initialises it, and opens a WebSocket. For that whole window the starter
+ * holds a token and is connected to nothing, so their session is
+ * indistinguishable from one stranded by a crash — and the next person to press
+ * Start retires it and opens a second meeting. Two users, two rooms, one
+ * channel; observed with the rows 1.3s apart.
+ *
+ * 30s is ~20x the observed gap and still bounds the opposite error: a starter
+ * who abandons immediately leaves a joinable-but-empty meeting for at most this
+ * long. Sitting alone in the room someone just left is a far better failure
+ * than being silently split from them.
+ */
+const SESSION_JOIN_GRACE_MS = 30_000;
+
+/**
+ * Whether an active session row should be treated as a real, joinable call.
+ *
+ * The grace check comes first so the common case — someone joining moments
+ * after the call started — skips the Cloudflare round trip entirely.
+ */
+async function isSessionUsable(
+  rtk: RealtimeKitClient,
+  session: { cloudflareMeetingId: string; _creationTime: number },
+): Promise<boolean> {
+  if (Date.now() - session._creationTime < SESSION_JOIN_GRACE_MS) return true;
+  return await isMeetingLive(rtk, session.cloudflareMeetingId);
+}
+
+/**
  * Race-safe wrapper that returns the Cloudflare meetingId for a channel.
  *
  * The race: two parallel callers both see `getActiveSession` return null,
@@ -73,10 +107,16 @@ export async function ensureMeetingForChannel(
   // row with nobody in the meeting. Reusing a stranded row is what pinned a
   // channel's transcription mode to whatever its first-ever call chose, and
   // fed every later call's transcript into the first call's document. So ask
-  // Cloudflare, which knows.
-  if (session && (await isMeetingLive(rtk, session.cloudflareMeetingId))) {
+  // Cloudflare, which knows — but not about a row younger than the join grace,
+  // which Cloudflare cannot answer for yet (see `SESSION_JOIN_GRACE_MS`).
+  if (session && (await isSessionUsable(rtk, session))) {
     // A live call: its transcription mode was fixed when the first joiner
-    // created the meeting, and a late joiner can't flip it.
+    // created the meeting. Nothing here lets a late joiner flip it, and that
+    // is a product decision rather than a platform limit — Cloudflare will
+    // accept `transcribe_on_end` on `PATCH /meetings/{id}` at any time. We
+    // don't, because the preset that decides *whose* audio is transcribed
+    // binds at join: flipping mid-call would produce a transcript silently
+    // missing everyone already in the room.
     return {
       meetingId: session.cloudflareMeetingId,
       transcribe: session.transcribe ?? false,
@@ -120,6 +160,37 @@ export async function ensureMeetingForChannel(
     return { meetingId: winner.cloudflareMeetingId, transcribe: winner.transcribe };
   }
   return { meetingId: ourMeetingId, transcribe };
+}
+
+/**
+ * The live meeting for a channel, or null — never creating one.
+ *
+ * `ensureMeetingForChannel` is the join-*or*-start path. Callers who may only
+ * join an existing call use this instead: guests arriving on a public share
+ * link, who must not be able to mint a call (nor, therefore, choose its
+ * transcription mode) in a workspace they are not members of.
+ *
+ * Like `ensureMeetingForChannel` it trusts Cloudflare over the `active` flag —
+ * subject to the same join grace, so a guest arriving seconds after a member
+ * started is not told there is no call — and inherits `isMeetingLive`'s
+ * fail-open: an RTK outage reports the call as live, and the subsequent
+ * `addParticipant` is what fails.
+ */
+export async function findLiveMeetingForChannel(
+  ctx: ActionCtx,
+  channelId: Id<"channels">,
+  rtk: RealtimeKitClient,
+): Promise<{ meetingId: string; transcribe: boolean } | null> {
+  const session = await ctx.runQuery(internal.callSessions.getActiveSession, {
+    channelId,
+  });
+  if (!session) return null;
+  if (!(await isSessionUsable(rtk, session))) return null;
+
+  return {
+    meetingId: session.cloudflareMeetingId,
+    transcribe: session.transcribe ?? false,
+  };
 }
 
 const callSessionFields = {
@@ -305,8 +376,8 @@ export const expireStaleCallSessions = internalMutation({
  * toggle picks between them; the end-of-call transcript doc is driven
  * separately by `transcribe_on_end` on the meeting.
  */
-const PRESET_TRANSCRIBE = "group_call_host";
-const PRESET_NO_TRANSCRIBE = "group_call_host_notranscript";
+export const PRESET_TRANSCRIBE = "group_call_host";
+export const PRESET_NO_TRANSCRIBE = "group_call_host_notranscript";
 
 export const joinCall = action({
   args: {

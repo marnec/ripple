@@ -30,9 +30,14 @@ export interface PresenceLocation {
    * Channel whose call this *connection* is joined to, if any.
    *
    * Unlike the rest of the location, this is not derived from the winning
-   * connection — see `callChannelIdFor`.
+   * connection — see `callFor`.
    */
   callChannelId?: string;
+  /**
+   * Whether that call is being transcribed. Travels with `callChannelId` and
+   * is only ever read together with it. `undefined` means unknown, not off.
+   */
+  callTranscribing?: boolean;
 }
 
 export type PresenceEntry = PresenceIdentity & PresenceLocation;
@@ -137,7 +142,7 @@ export class PresenceRegistry {
     return {
       ...record.identity,
       ...record.location,
-      callChannelId: this.callChannelIdFor(userId),
+      ...this.callFor(userId),
     };
   }
 
@@ -150,16 +155,28 @@ export class PresenceRegistry {
    * would drop them from the indicator the moment they switched tabs. A user
    * can only hold one call at a time (joining elsewhere leaves the first), so
    * any connection reporting one is authoritative.
+   *
+   * Returns the channel and its transcription mode as a *pair*, read off the
+   * same connection. Sourcing them independently could pair one tab's channel
+   * with another tab's mode — which for a control whose whole job is to say
+   * whether you are being recorded is the one error worth designing out.
    */
-  private callChannelIdFor(userId: string): string | undefined {
+  private callFor(userId: string): {
+    callChannelId?: string;
+    callTranscribing?: boolean;
+  } {
     const conns = this.byUser.get(userId);
-    if (!conns) return undefined;
+    if (!conns) return {};
     for (const connectionId of conns) {
-      const callChannelId = this.connections.get(connectionId)?.location
-        ?.callChannelId;
-      if (callChannelId) return callChannelId;
+      const location = this.connections.get(connectionId)?.location;
+      if (location?.callChannelId) {
+        return {
+          callChannelId: location.callChannelId,
+          callTranscribing: location.callTranscribing,
+        };
+      }
     }
-    return undefined;
+    return {};
   }
 
   private winningConnectionId(userId: string): string | null {

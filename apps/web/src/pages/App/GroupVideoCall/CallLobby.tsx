@@ -71,18 +71,38 @@ function savePreferences(prefs: DevicePreferences) {
   }
 }
 
+/**
+ * What the lobby knows about a call already running in this resource.
+ *
+ * Three states, not two. Collapsing `unknown` into `none` is the one default
+ * that can tell someone they are starting a call when they are joining one —
+ * and so let them pick a transcription mode that is silently discarded, which
+ * is the whole reason this type exists. `unknown` covers a presence socket
+ * that has not connected yet and a resource presence does not report on.
+ */
+export type ExistingCall =
+  | { state: "none" }
+  | { state: "unknown" }
+  | { state: "present"; transcribing: boolean | undefined };
+
 export function CallLobby({
   userName,
+  existingCall,
   onJoin,
   onBack,
 }: {
   userName: string;
+  existingCall: ExistingCall;
   onJoin: (prefs: DevicePreferences) => void;
   onBack: () => void;
 }) {
   const [prefs, setPrefs] = useState<DevicePreferences>(loadPreferences);
   // Per-call, deliberately ephemeral (not in `prefs`, so never persisted).
   const [transcribe, setTranscribe] = useState(false);
+  // Transcription is fixed by whoever started the call, so it is only the
+  // starter's to choose. Anyone else gets the mode read-only — the control was
+  // previously live for them and its value went nowhere.
+  const isStarting = existingCall.state === "none";
   const [transcriptionLanguage, setTranscriptionLanguage] = useState(
     DEFAULT_TRANSCRIPTION_LANGUAGE,
   );
@@ -282,25 +302,44 @@ export function CallLobby({
           </div>
           )}
 
-          {/* Transcription toggle (per-call) */}
+          {/* Transcription (per-call, and only the starter's to set) */}
           <div className="flex flex-col gap-3 rounded-lg border bg-muted/30 p-3">
             <label className="flex items-center justify-between gap-3">
               <span className="flex items-center gap-2.5">
                 <Captions className="h-4 w-4 text-muted-foreground" />
                 <span className="flex flex-col">
                   <span className="text-sm font-medium">
-                    Transcribe this call
+                    {isStarting
+                      ? "Transcribe this call"
+                      : "Transcription for this call"}
                   </span>
                   <span className="text-xs text-muted-foreground">
-                    Saves a transcript document when the call ends
+                    {isStarting
+                      ? "Saves a transcript document when the call ends"
+                      : existingCall.state === "present" &&
+                          existingCall.transcribing === true
+                        ? "On — set by whoever started this call"
+                        : existingCall.state === "present" &&
+                            existingCall.transcribing === false
+                          ? "Off — set by whoever started this call"
+                          : "Set by whoever started this call"}
                   </span>
                 </span>
               </span>
-              <Switch checked={transcribe} onCheckedChange={setTranscribe} />
+              <Switch
+                checked={
+                  isStarting
+                    ? transcribe
+                    : existingCall.state === "present" &&
+                      existingCall.transcribing === true
+                }
+                onCheckedChange={setTranscribe}
+                disabled={!isStarting}
+              />
             </label>
 
             {/* Language picker — only relevant once transcription is on */}
-            {transcribe && (
+            {isStarting && transcribe && (
               <div className="flex flex-col gap-1 border-t pt-3">
                 <label className="text-xs font-medium text-muted-foreground">
                   Spoken language
@@ -341,16 +380,18 @@ export function CallLobby({
             onClick={() =>
               onJoin({
                 ...prefs,
-                transcribe,
-                transcriptionLanguage: transcribe
-                  ? transcriptionLanguage
-                  : undefined,
+                // Sent only when we believe we are starting the call. The
+                // server decides regardless — this just avoids shipping a
+                // preference we already know will be ignored.
+                transcribe: isStarting ? transcribe : undefined,
+                transcriptionLanguage:
+                  isStarting && transcribe ? transcriptionLanguage : undefined,
               })
             }
             className="gap-2"
           >
             <Phone className="h-4 w-4" />
-            Join Call
+            {isStarting ? "Start Call" : "Join Call"}
           </Button>
         </div>
       </div>

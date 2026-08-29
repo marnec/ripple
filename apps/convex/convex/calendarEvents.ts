@@ -17,7 +17,11 @@ import { assertOrganizer } from "./utils/eventAuth";
 import { loadInviteeRows } from "./utils/eventInvitees";
 import { dispatchEventNotifications } from "./utils/eventNotifications";
 import { rateLimiter } from "./rateLimits";
-import { ensureMeetingForChannel } from "./callSessions";
+import {
+  ensureMeetingForChannel,
+  PRESET_NO_TRANSCRIBE,
+  PRESET_TRANSCRIBE,
+} from "./callSessions";
 import {
   realtimeKitFromEnv,
   type RealtimeKitClient,
@@ -1517,6 +1521,15 @@ export const joinEventCall = action({
   returns: v.object({
     authToken: v.string(),
     meetingId: v.string(),
+    // The call's effective transcription mode, mirroring `callSessions.joinCall`.
+    transcribe: v.boolean(),
+    // The channel whose meeting this event call is using, when the event is
+    // tied to one. A channel-tied event call *is* that channel's call — same
+    // Cloudflare meeting — so reporting it lets the client publish the same
+    // presence signal a direct channel join does, which is what the sidebar
+    // indicator and the joiner's lobby both read. Null for a standalone event,
+    // which has a room of its own that presence does not track.
+    channelId: v.union(v.id("channels"), v.null()),
   }),
   handler: async (ctx, { eventId, userName, userImage }) => {
     const userId = await getAuthUserId(ctx);
@@ -1534,22 +1547,36 @@ export const joinEventCall = action({
     const rtk = realtimeKitFromEnv();
 
     let meetingId: string;
+    let transcribe: boolean;
     if (event.channelId) {
-      // Channel-tied event: reuse the channel's persistent meeting.
-      // Event calls don't expose a transcription toggle yet → off.
-      meetingId = (await ensureMeetingForChannel(ctx, event.channelId, rtk, false))
-        .meetingId;
+      // Channel-tied event: reuse the channel's persistent meeting. Event
+      // calls have no transcription toggle of their own, so this never starts
+      // a transcribed call — but it may *join* one the channel already has,
+      // and the mode that comes back is the meeting's, not this `false`.
+      ({ meetingId, transcribe } = await ensureMeetingForChannel(
+        ctx,
+        event.channelId,
+        rtk,
+        false,
+      ));
     } else {
       meetingId = await ensureMeetingForEvent(ctx, eventId, rtk);
+      // `ensureMeetingForEvent` never sets `transcribeOnEnd`.
+      transcribe = false;
     }
 
+    // The preset must follow the meeting's mode. This used to hardcode
+    // `group_call_host` — the transcribe-enabled preset — so an event joiner
+    // landing in a channel's non-transcribing call arrived flagged for
+    // transcription anyway. Selected the same way `callSessions.joinCall`
+    // does, from the value the meeting actually reported.
     const { token: authToken } = await rtk.addParticipant(meetingId, {
       name: userName,
       picture: userImage,
-      presetName: "group_call_host",
+      presetName: transcribe ? PRESET_TRANSCRIBE : PRESET_NO_TRANSCRIBE,
       customParticipantId: userId,
     });
-    return { authToken, meetingId };
+    return { authToken, meetingId, transcribe, channelId: event.channelId ?? null };
   },
 });
 
@@ -1563,6 +1590,10 @@ export const getGuestEventCallToken = action({
     authToken: v.string(),
     meetingId: v.string(),
     guestSub: v.string(),
+    // See the note on `shares.getGuestCallToken`. A channel-tied event shares
+    // the channel's meeting and so inherits its mode; a standalone event's
+    // meeting is created without `transcribeOnEnd` and is always false.
+    transcribe: v.boolean(),
   }),
   handler: async (ctx, { shareId, guestName, guestSub }) => {
     const name = sanitizeGuestName(guestName);
@@ -1596,11 +1627,17 @@ export const getGuestEventCallToken = action({
     const rtk = realtimeKitFromEnv();
 
     let meetingId: string;
+    let transcribe: boolean;
     if (data.channelId) {
-      meetingId = (await ensureMeetingForChannel(ctx, data.channelId, rtk, false))
-        .meetingId;
+      ({ meetingId, transcribe } = await ensureMeetingForChannel(
+        ctx,
+        data.channelId,
+        rtk,
+        false,
+      ));
     } else {
       meetingId = await ensureMeetingForEvent(ctx, data.eventId, rtk);
+      transcribe = false;
     }
 
     // Stable Cloudflare custom_participant_id: prefer the per-invitee guestSub
@@ -1619,7 +1656,7 @@ export const getGuestEventCallToken = action({
       console.error("Cloudflare add-participant failed:", e);
       throw new ConvexError("Could not join the call");
     }
-    return { authToken, meetingId, guestSub: sub };
+    return { authToken, meetingId, guestSub: sub, transcribe };
   },
 });
 

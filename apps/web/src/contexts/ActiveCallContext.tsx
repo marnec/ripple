@@ -39,6 +39,15 @@ interface ActiveCallContextValue {
   /** True while the active call is being transcribed (end-of-call document). */
   isTranscribing: boolean;
   /**
+   * Channel whose meeting the active call is using, or `null`.
+   *
+   * Not derivable from `descriptor`: an event call tied to a channel runs in
+   * that channel's meeting, and only the server knows which. Presence reports
+   * this so a channel-tied event call lights up its channel exactly as a direct
+   * join does.
+   */
+  callChannelId: string | null;
+  /**
    * True during the leave transition (after the user hit Leave, before the
    * navigation away lands). `status` reports `idle` here so other consumers
    * stay "joined-ish", but surfaces use this to avoid flashing the lobby on
@@ -162,6 +171,8 @@ export function ActiveCallProvider({
         status: publicStatus,
         error: session.state.error?.message ?? null,
         isTranscribing: publicStatus === "joined" && session.state.transcribe,
+        callChannelId:
+          publicStatus === "joined" ? session.state.callChannelId : null,
         isLeaving: session.state.status === "leaving",
         isFloating,
         isPipDismissed,

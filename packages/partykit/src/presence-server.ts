@@ -127,6 +127,10 @@ export default class PresenceServer extends Server {
         resourceId: data.resourceId,
         callChannelId:
           typeof data.callChannelId === "string" ? data.callChannelId : undefined,
+        callTranscribing:
+          typeof data.callTranscribing === "boolean"
+            ? data.callTranscribing
+            : undefined,
       });
       if (!entry) return;
 
