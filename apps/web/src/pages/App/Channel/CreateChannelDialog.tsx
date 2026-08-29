@@ -91,10 +91,14 @@ export function CreateChannelDialog({
       form.reset();
       onOpenChange(false);
       // A public channel is ready to use; a private one is not until somebody
-      // has been invited to it, so that lands on its settings instead.
+      // has been invited to it, so that lands on its settings instead — on the
+      // Members tab, which is the thing it was sent there to do. General only
+      // repeats the name and visibility just chosen in this dialog.
       void navigate(
         `/workspaces/${workspaceId}/channels/${newChannelId}${
-          values.visibility === ChannelVisibility.PUBLIC ? "" : "/settings"
+          values.visibility === ChannelVisibility.PUBLIC
+            ? ""
+            : "/settings?tab=members"
         }`,
       );
     } catch {

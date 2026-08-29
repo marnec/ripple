@@ -8,7 +8,7 @@ import { MobileHeaderTitle } from "@/contexts/HeaderSlotContext";
 import { ResourceDeleted } from "@/pages/ResourceDeleted";
 import SomethingWentWrong from "@/pages/SomethingWentWrong";
 import { ChannelRole } from "@ripple/shared/enums";
-import { Bell, SlidersHorizontal, Trash2, Users } from "lucide-react";
+import { Bell, EyeOff, LogOut, SlidersHorizontal, Trash2, Users } from "lucide-react";
 import {
   CHAT_NOTIFICATION_CATEGORIES,
   NOTIFICATION_CATEGORY_LABELS,
@@ -26,6 +26,8 @@ import { isDirectMessage, isPublicChannel } from "@ripple/shared/channel";
 import type { Id } from "@convex/_generated/dataModel";
 import { ChannelDangerZone } from "./ChannelDangerZone";
 import { ChannelDetailsSection } from "./ChannelDetailsSection";
+import { ChannelDismissSection } from "./ChannelDismissSection";
+import { ChannelLeaveSection } from "./ChannelLeaveSection";
 import { ChannelMembersSection } from "./ChannelMembersSection";
 
 function ChannelSettingsContent({
@@ -103,6 +105,10 @@ function ChannelSettingsContent({
   );
 
   const isDm = isDirectMessage(channel);
+  const canDismiss = isDm || isPublicChannel(channel);
+  // A private channel is left rather than dismissed, and only a member has
+  // anything to leave.
+  const canLeave = !isDm && !isPublicChannel(channel) && currentMembership !== undefined;
 
   const sections: SettingsSection[] = [
     ...(isDm
@@ -127,6 +133,30 @@ function ChannelSettingsContent({
       icon: Bell,
       description: "Control which chat notifications you receive for this channel.",
     },
+    // Dismissal is per-user view state, and only these two can be dismissed:
+    // a private channel is *left* (the Leave section below), not hidden, and
+    // the backend rejects dismissing one.
+    ...(canDismiss
+      ? [
+          {
+            value: "dismiss",
+            label: isDm ? "Close" : "Hide",
+            icon: EyeOff,
+            title: isDm ? "Close conversation" : "Hide from sidebar",
+          } satisfies SettingsSection,
+        ]
+      : []),
+    ...(canLeave
+      ? [
+          {
+            value: "leave",
+            label: "Leave",
+            icon: LogOut,
+            title: "Leave channel",
+            destructive: true,
+          } satisfies SettingsSection,
+        ]
+      : []),
     ...(canDelete && !isDm
       ? [
           {
@@ -178,6 +208,22 @@ function ChannelSettingsContent({
 
         {active.value === "notifications" && (
           <ChannelNotificationSettings channelId={channelId} />
+        )}
+
+        {active.value === "dismiss" && canDismiss && (
+          <ChannelDismissSection
+            channelId={channelId}
+            workspaceId={workspaceId}
+            isDm={isDm}
+          />
+        )}
+
+        {active.value === "leave" && canLeave && (
+          <ChannelLeaveSection
+            channelId={channelId}
+            channelName={channel.name}
+            workspaceId={workspaceId}
+          />
         )}
 
         {active.value === "danger" && canDelete && !isDm && (

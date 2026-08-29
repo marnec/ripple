@@ -4,14 +4,17 @@ import { useMutation } from "convex/react";
 import { ConvexError } from "convex/values";
 import {
   ChevronRight,
+  Cog,
   Eye,
   EyeOff,
   MessageCircle,
   MoreHorizontal,
   Plus,
   User,
+  Video,
 } from "lucide-react";
 import { memo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
@@ -19,6 +22,7 @@ import {
   ResponsiveDropdownMenu,
   ResponsiveDropdownMenuContent,
   ResponsiveDropdownMenuItem,
+  ResponsiveDropdownMenuSeparator,
   ResponsiveDropdownMenuTrigger,
 } from "../../../components/ui/responsive-dropdown-menu";
 import {
@@ -63,6 +67,7 @@ export const DmSelectorList = memo(function DmSelectorList({
   onToggle,
 }: DmSelectorListProps) {
   const { isMobile, setOpen } = useSidebar();
+  const navigate = useNavigate();
   const dismissChannel = useMutation(api.channelDismissal.dismissChannel);
   const restoreChannel = useMutation(api.channelDismissal.restoreChannel);
   // A DM is a channel, so its call reports through the same presence field.
@@ -78,6 +83,18 @@ export const DmSelectorList = memo(function DmSelectorList({
   const handleSelect = (id: string) => {
     if (isMobile) setOpen(false);
     onChannelSelect(id);
+  };
+
+  // A DM is a channel, so it has the same settings page and the same call
+  // route — the menu offers them under the words a conversation uses.
+  const navigateToDmSettings = (dmId: string) => {
+    if (isMobile) setOpen(false);
+    void navigate(`/workspaces/${workspaceId}/channels/${dmId}/settings`);
+  };
+
+  const navigateToVideoCall = (dmId: string) => {
+    if (isMobile) setOpen(false);
+    void navigate(`/workspaces/${workspaceId}/channels/${dmId}/videocall`);
   };
 
   const handleClose = (dmId: Id<"channels">) => {
@@ -169,6 +186,15 @@ export const DmSelectorList = memo(function DmSelectorList({
                   <MoreHorizontal className="size-3.5" />
                 </ResponsiveDropdownMenuTrigger>
                 <ResponsiveDropdownMenuContent className="w-52 rounded-lg">
+                  <ResponsiveDropdownMenuItem onSelect={() => navigateToVideoCall(dm._id)}>
+                    <Video className="text-muted-foreground" />
+                    <span>Join call</span>
+                  </ResponsiveDropdownMenuItem>
+                  <ResponsiveDropdownMenuItem onSelect={() => navigateToDmSettings(dm._id)}>
+                    <Cog className="text-muted-foreground" />
+                    <span>Manage conversation</span>
+                  </ResponsiveDropdownMenuItem>
+                  <ResponsiveDropdownMenuSeparator />
                   {dm.isHidden ? (
                     <ResponsiveDropdownMenuItem onSelect={() => handleReopen(dm._id as Id<"channels">)}>
                       <Eye className="text-muted-foreground" />
