@@ -35,6 +35,11 @@ function asHeadingLevel(value: unknown): HeadingLevel {
   return 1;
 }
 
+function asPositiveNumber(value: unknown): number | undefined {
+  const n = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(n) && n > 0 ? n : undefined;
+}
+
 function asRecord(value: unknown): Record<string, unknown> {
   return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
 }
@@ -184,6 +189,9 @@ function parseBlock(raw: IncomingBlock): ExportBlock {
         kind: "image",
         url: asString(props.url),
         caption: asString(props.caption),
+        // BlockNote's resize handle writes `previewWidth` in CSS pixels; it is
+        // the only record of how wide the author wanted the image.
+        previewWidth: asPositiveNumber(props.previewWidth),
       };
     case "diagram":
       return { kind: "diagram", diagramId: asString(props.diagramId) };

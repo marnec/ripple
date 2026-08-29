@@ -11,13 +11,14 @@ import type { ConvexReactClient } from "convex/react";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 import { sanitizeFilename, triggerDownload } from "@/lib/download-blob";
-import { fetchCellGrid, resolveDiagramEmbed } from "./embeds";
+import { fetchCellGrid, resolveDiagramEmbed, resolveImageEmbed } from "./embeds";
 import { parseBlocks } from "./parse";
 import type {
   DiagramEmbed,
   ExportBlock,
   ExportContext,
   ExportInline,
+  ImageEmbed,
   IncomingBlock,
   InlineStyles,
   TextAlign,
@@ -676,11 +677,9 @@ function blockToDocx(
     case "table":
       result.push(...nativeTableToDocx(block.rows, docx, inline, ctx));
       break;
-    case "image": {
-      const text = block.caption || "[image]";
-      result.push(new docx.Paragraph({ children: [new docx.TextRun({ text, italics: true })] }));
+    case "image":
+      result.push(...imageToDocx(block, docx, ctx, align));
       break;
-    }
     case "diagram":
       result.push(...diagramToDocx(block.diagramId, docx, ctx, align));
       break;
@@ -787,6 +786,53 @@ function spreadsheetRangeToDocx(
   ];
 }
 
+// Widest an embedded picture may render: the page width minus its margins,
+// ~6 inches at 96 DPI.
+const MAX_IMAGE_WIDTH_PX = 576;
+
+function imageToDocx(
+  block: Extract<ExportBlock, { kind: "image" }>,
+  docx: DocxModule,
+  ctx: ExportContext,
+  align: ReturnType<typeof docxAlign>,
+): DocxNode[] {
+  const embed: ImageEmbed | undefined = block.url ? ctx.image(block.url) : undefined;
+
+  if (!embed) {
+    // Unreadable image (no CORS, dead URL, undecodable format) — a caption
+    // line is still better than dropping the block silently.
+    const text = block.caption || "[image]";
+    return [new docx.Paragraph({
+      alignment: align,
+      children: [new docx.TextRun({ text, italics: true })],
+    })];
+  }
+
+  // The author's resize wins over the intrinsic size, both capped to the page.
+  const ratio = embed.width > 0 ? embed.height / embed.width : 1;
+  const width = Math.round(Math.min(block.previewWidth ?? embed.width, MAX_IMAGE_WIDTH_PX));
+  const nodes: DocxNode[] = [
+    new docx.Paragraph({
+      alignment: align,
+      children: [
+        new docx.ImageRun({
+          type: embed.type,
+          data: embed.bytes,
+          transformation: { width, height: Math.round(width * ratio) },
+        }),
+      ],
+    }),
+  ];
+  if (block.caption) {
+    nodes.push(new docx.Paragraph({
+      style: "caption",
+      alignment: align,
+      children: [new docx.TextRun({ text: block.caption })],
+    }));
+  }
+  return nodes;
+}
+
 function diagramToDocx(
   diagramId: string,
   docx: DocxModule,
@@ -803,10 +849,8 @@ function diagramToDocx(
     })];
   }
 
-  // Constrain max display width to ~6 inches (page width minus margins) at 96 DPI.
-  const MAX_DISPLAY_PX = 576;
   const ratio = embed.png.width > 0 ? embed.png.height / embed.png.width : 1;
-  const displayWidth = Math.min(embed.png.width, MAX_DISPLAY_PX);
+  const displayWidth = Math.min(embed.png.width, MAX_IMAGE_WIDTH_PX);
   const displayHeight = Math.round(displayWidth * ratio);
 
   return [
@@ -863,6 +907,7 @@ interface CollectedRefs {
   spreadsheetIds: Set<string>;
   documentIds: Set<string>;
   userIds: Set<string>;
+  imageUrls: Set<string>;
   /** stableRef → spreadsheetId — covers both spreadsheetRange blocks and inline cellRefs. */
   rangeRefs: Map<string, string>;
 }
@@ -872,6 +917,9 @@ function collectRefs(blocks: ExportBlock[], acc: CollectedRefs): void {
     switch (block.kind) {
       case "diagram":
         if (block.diagramId) acc.diagramIds.add(block.diagramId);
+        break;
+      case "image":
+        if (block.url) acc.imageUrls.add(block.url);
         break;
       case "spreadsheetRange":
         if (block.spreadsheetId) acc.spreadsheetIds.add(block.spreadsheetId);
@@ -912,6 +960,9 @@ function collectInlineRefs(items: ExportInline[], acc: CollectedRefs): void {
 
 interface BuildContextOptions {
   isDark?: boolean;
+  /** Download every image block's bytes. Only DOCX needs them — Markdown and
+   *  HTML keep the URL — and they are the heaviest thing the context fetches. */
+  imageBytes?: boolean;
 }
 
 /** Pre-fetch every embedded resource referenced in the document. Failed
@@ -928,6 +979,7 @@ export async function buildExportContext(
     spreadsheetIds: new Set(),
     documentIds: new Set(),
     userIds: new Set(),
+    imageUrls: new Set(),
     rangeRefs: new Map(),
   };
   collectRefs(blocks, refs);
@@ -937,6 +989,7 @@ export async function buildExportContext(
   const documentNames = new Map<string, string>();
   const userNames = new Map<string, string>();
   const diagramEmbeds = new Map<string, DiagramEmbed>();
+  const imageEmbeds = new Map<string, ImageEmbed>();
   const cellGrids = new Map<string, string[][]>();
 
   const fetchName = async <T extends { name?: string } | null>(
@@ -955,6 +1008,11 @@ export async function buildExportContext(
       isDark: options.isDark ?? false,
     });
     if (embed) diagramEmbeds.set(id, embed);
+  };
+
+  const fetchImage = async (url: string) => {
+    const embed = await resolveImageEmbed(url);
+    if (embed) imageEmbeds.set(url, embed);
   };
 
   const fetchCells = async (stableRef: string, spreadsheetId: string) => {
@@ -976,6 +1034,7 @@ export async function buildExportContext(
       fetchName(convex.query(api.users.get, { id: id as Id<"users"> }), userNames, id),
     ),
     ...Array.from(refs.diagramIds).map(fetchDiagram),
+    ...(options.imageBytes ? Array.from(refs.imageUrls).map(fetchImage) : []),
     ...Array.from(refs.rangeRefs.entries()).map(([stableRef, sheetId]) => fetchCells(stableRef, sheetId)),
   ]);
 
@@ -985,6 +1044,7 @@ export async function buildExportContext(
     documentName: (id) => documentNames.get(id),
     userName: (id) => userNames.get(id),
     diagram: (id) => diagramEmbeds.get(id),
+    image: (url) => imageEmbeds.get(url),
     cells: (stableRef) => cellGrids.get(stableRef),
   };
 }

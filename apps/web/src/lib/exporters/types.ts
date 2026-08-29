@@ -30,7 +30,7 @@ export type ExportBlock =
   | { kind: "codeBlock"; language: string; text: string }
   | BaseBlock<"quote">
   | { kind: "table"; rows: ExportInline[][][] }
-  | { kind: "image"; url: string; caption: string }
+  | { kind: "image"; url: string; caption: string; previewWidth?: number }
   | { kind: "diagram"; diagramId: string }
   | {
     kind: "spreadsheetRange";
@@ -64,6 +64,16 @@ export interface DiagramEmbed {
   png?: { bytes: Uint8Array; width: number; height: number };
 }
 
+/** A raster image in a format Word accepts, resolved from an image block's URL. */
+export interface ImageEmbed {
+  bytes: Uint8Array;
+  /** One of the four types `docx`'s ImageRun takes without a fallback. */
+  type: "png" | "jpg" | "gif" | "bmp";
+  /** Intrinsic pixel dimensions of the decoded image. */
+  width: number;
+  height: number;
+}
+
 export interface ExportContext {
   diagramName(id: string): string | undefined;
   spreadsheetName(id: string): string | undefined;
@@ -71,6 +81,10 @@ export interface ExportContext {
   userName(id: string): string | undefined;
   /** Diagram render data keyed by diagramId. */
   diagram(id: string): DiagramEmbed | undefined;
+  /** Image bytes keyed by the block's URL. Only DOCX needs these — Markdown
+   *  and HTML reference the URL directly — so the context only carries them
+   *  when built with `imageBytes`. */
+  image(url: string): ImageEmbed | undefined;
   /** Resolved 2D cell values, keyed by stableRef. Used both by spreadsheetRange
    *  blocks (full grid) and inline spreadsheetCellRef items (single cell at [0][0]). */
   cells(stableRef: string): string[][] | undefined;
@@ -82,6 +96,7 @@ export const NULL_EXPORT_CONTEXT: ExportContext = {
   documentName: () => undefined,
   userName: () => undefined,
   diagram: () => undefined,
+  image: () => undefined,
   cells: () => undefined,
 };
 

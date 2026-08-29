@@ -57,7 +57,8 @@ export function DocumentActionsMenu({
       icon: <FileType2 className="text-muted-foreground" />,
       onSelect: guarded(async (e) => {
         const m = await loadExporters();
-        const ctx = await m.buildExportContext(convex, e, { isDark: false });
+        // DOCX is the one format that embeds image bytes rather than URLs.
+        const ctx = await m.buildExportContext(convex, e, { isDark: false, imageBytes: true });
         await m.exportDocumentDocx(e, documentName, ctx);
       }, "Failed to export DOCX."),
     },

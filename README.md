@@ -12,7 +12,7 @@ NEXT STEPS:
 - consider introducing document snapshots
 
 - export excalidraw presentation to pptx
-- images and equations are not exported correctly in docx format
+- equations are not exported as native Word equations in docx format (LaTeX source is emitted instead — needs LaTeX → MathML → OMML)
 
 - [ ] link previews in chat
 
