@@ -74,12 +74,19 @@ export function ChannelSelectorItem({
     // Flag the upcoming list change as self-initiated so the acknowledged
     // channels hook doesn't show a pending "-1" badge.
     onSelfChangeIntent?.();
-    dismissChannel({ channelId: channel._id }).catch((error: unknown) => {
-      toast.error("Couldn't hide channel", {
-        description:
-          error instanceof ConvexError ? String(error.data) : "Please try again",
+    dismissChannel({ channelId: channel._id })
+      .then(() => {
+        // You cannot be left sitting in a channel you just took out of your
+        // own sidebar — the page would show a channel the sidebar says you
+        // do not have. Only on success: a rejected dismissal changes nothing.
+        if (channel._id === channelId) onChannelSelect(null);
+      })
+      .catch((error: unknown) => {
+        toast.error("Couldn't hide channel", {
+          description:
+            error instanceof ConvexError ? String(error.data) : "Please try again",
+        });
       });
-    });
   };
 
   const handleUnhide = () => {

@@ -424,3 +424,103 @@ describe("amILastAdmin", () => {
     ).resolves.toBe(false);
   });
 });
+
+describe("restoring a dismissed conversation", () => {
+  // These DMs carry no messages on purpose. A dismissed DM auto-restores when a
+  // message arrives newer than `hiddenAt`, and under fake timers the harness's
+  // `_creationTime` runs ahead of the frozen `Date.now()` that `dismissChannel`
+  // stamps — so a seeded message would auto-restore the conversation and the
+  // test would pass without the code under test doing anything. With no
+  // messages, `!latestMessage` keeps it dismissed and only an explicit restore
+  // can bring it back.
+  async function dismissedDm(t: ReturnType<typeof createTestContext>) {
+    const { userId, workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
+    const { userId: otherId } = await setupAuthenticatedUser(t, {
+      name: "Other", email: "o@x.io",
+    });
+    await t.run(async (ctx) =>
+      ctx.db.insert("workspaceMembers", { userId: otherId, workspaceId, role: "member" }),
+    );
+    const channelId = await asUser.mutation(api.channels.createDm, {
+      workspaceId, otherUserId: otherId,
+    });
+    await asUser.mutation(api.channelDismissal.dismissChannel, { channelId });
+
+    const after = await asUser.query(api.workspaceSidebarData.get, { workspaceId });
+    expect(after.channels.map((c) => c._id)).not.toContain(channelId);
+    expect(after.hiddenChannelCount).toBe(1);
+
+    return { channelId, otherId, workspaceId, asUser };
+  }
+
+  it("puts a DM back in the default sidebar", async () => {
+    const t = createTestContext();
+    const { channelId, workspaceId, asUser } = await dismissedDm(t);
+
+    await asUser.mutation(api.channelDismissal.restoreChannel, { channelId });
+
+    const restored = await asUser.query(api.workspaceSidebarData.get, { workspaceId });
+    expect(restored.channels.map((c) => c._id)).toContain(channelId);
+    expect(restored.hiddenChannelCount).toBe(0);
+  });
+
+  it("puts a dismissed public channel back", async () => {
+    const t = createTestContext();
+    const { workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
+    const channelId = await setupOpenChannel(t, { workspaceId, name: "general" });
+
+    await asUser.mutation(api.channelDismissal.dismissChannel, { channelId });
+    expect(
+      (await asUser.query(api.workspaceSidebarData.get, { workspaceId })).channels
+        .map((c) => c._id),
+    ).not.toContain(channelId);
+
+    await asUser.mutation(api.channelDismissal.restoreChannel, { channelId });
+    expect(
+      (await asUser.query(api.workspaceSidebarData.get, { workspaceId })).channels
+        .map((c) => c._id),
+    ).toContain(channelId);
+  });
+
+  it("brings a dismissed DM back when the conversation is started again", async () => {
+    const t = createTestContext();
+    const { channelId, otherId, workspaceId, asUser } = await dismissedDm(t);
+
+    // Picking the same person from the DMs "+" returns the existing
+    // conversation and navigates into it. Deliberately asking for a
+    // conversation is as explicit as reopening one, so the sidebar has to agree
+    // with where the member now is — otherwise they sit in a conversation their
+    // own sidebar says they do not have.
+    const again = await asUser.mutation(api.channels.createDm, {
+      workspaceId, otherUserId: otherId,
+    });
+    expect(again).toBe(channelId);
+
+    const sidebar = await asUser.query(api.workspaceSidebarData.get, { workspaceId });
+    expect(sidebar.channels.map((c) => c._id)).toContain(channelId);
+    expect(sidebar.hiddenChannelCount).toBe(0);
+  });
+
+  it("leaves the other participant's dismissal alone", async () => {
+    const t = createTestContext();
+    const { channelId, otherId, workspaceId } = await dismissedDm(t);
+
+    // The other person dismissed it too. The caller starting the conversation
+    // again speaks only for the caller.
+    await t.run(async (ctx) =>
+      ctx.db.insert("userChannelState", {
+        userId: otherId, channelId, workspaceId, hiddenAt: Date.now() + 10000,
+      }),
+    );
+
+    const stillDismissed = await t.run(async (ctx) =>
+      ctx.db
+        .query("userChannelState")
+        .withIndex("by_channel_user", (q) =>
+          q.eq("channelId", channelId).eq("userId", otherId),
+        )
+        .unique(),
+    );
+    expect(stillDismissed?.hiddenAt).toBeDefined();
+  });
+});

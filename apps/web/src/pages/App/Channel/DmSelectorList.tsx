@@ -81,12 +81,19 @@ export const DmSelectorList = memo(function DmSelectorList({
   };
 
   const handleClose = (dmId: Id<"channels">) => {
-    dismissChannel({ channelId: dmId }).catch((error: unknown) => {
-      toast.error("Couldn't close conversation", {
-        description:
-          error instanceof ConvexError ? String(error.data) : "Please try again",
+    dismissChannel({ channelId: dmId })
+      .then(() => {
+        // Closing the conversation you are reading has to take you out of it,
+        // or the page shows a conversation the sidebar says you do not have.
+        // Only on success: a rejected dismissal changes nothing.
+        if (dmId === channelId) onChannelSelect(null);
+      })
+      .catch((error: unknown) => {
+        toast.error("Couldn't close conversation", {
+          description:
+            error instanceof ConvexError ? String(error.data) : "Please try again",
+        });
       });
-    });
   };
 
   const handleReopen = (dmId: Id<"channels">) => {

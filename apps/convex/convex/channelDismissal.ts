@@ -1,6 +1,8 @@
 import { ConvexError, v } from "convex/values";
 import { mutation } from "./functions";
 import { requireWorkspaceMember } from "./authHelpers";
+import type { MutationCtx } from "./_generated/server";
+import type { Id } from "./_generated/dataModel";
 
 import { isPrivateChannel } from "@ripple/shared/channel";
 /**
@@ -62,11 +64,40 @@ export const dismissChannel = mutation({
 });
 
 /**
- * Clear `hiddenAt` so the conversation returns to the sidebar. Idempotent — a
- * no-op if there is no state row, or it was never dismissed.
+ * Undo one user's dismissal, if there is one. Idempotent — a no-op when there
+ * is no state row or the conversation was never dismissed.
  *
- * Uses `replace` because Convex `patch` cannot remove an optional field.
+ * Shared with `channels.createDm`, because deliberately opening a conversation
+ * is as clear a statement of intent as picking "Reopen conversation" from a
+ * menu: without this, a member who dismissed a DM and then started it again
+ * from the sidebar's "+" would land in a conversation their sidebar says they
+ * do not have.
+ *
+ * Uses `replace` because Convex `patch` cannot remove an optional field — so
+ * every column `userChannelState` gains has to be listed here, or this quietly
+ * deletes it.
  */
+export async function clearDismissal(
+  ctx: MutationCtx,
+  channelId: Id<"channels">,
+  userId: Id<"users">,
+): Promise<void> {
+  const existing = await ctx.db
+    .query("userChannelState")
+    .withIndex("by_channel_user", (q) => q.eq("channelId", channelId).eq("userId", userId))
+    .unique();
+  if (!existing || existing.hiddenAt === undefined) return;
+
+  await ctx.db.replace(existing._id, {
+    userId: existing.userId,
+    channelId: existing.channelId,
+    workspaceId: existing.workspaceId,
+    lastReadAt: existing.lastReadAt,
+    // hiddenAt omitted — cleared
+  });
+}
+
+/** Clear `hiddenAt` so the conversation returns to the caller's sidebar. */
 export const restoreChannel = mutation({
   args: { channelId: v.id("channels") },
   returns: v.null(),
@@ -75,20 +106,7 @@ export const restoreChannel = mutation({
     if (!channel) throw new ConvexError("Channel not found");
 
     const { userId } = await requireWorkspaceMember(ctx, channel.workspaceId);
-
-    const existing = await ctx.db
-      .query("userChannelState")
-      .withIndex("by_channel_user", (q) => q.eq("channelId", channelId).eq("userId", userId))
-      .unique();
-    if (!existing || existing.hiddenAt === undefined) return null;
-
-    await ctx.db.replace(existing._id, {
-      userId: existing.userId,
-      channelId: existing.channelId,
-      workspaceId: existing.workspaceId,
-      lastReadAt: existing.lastReadAt,
-      // hiddenAt omitted — cleared
-    });
+    await clearDismissal(ctx, channelId, userId);
     return null;
   },
 });

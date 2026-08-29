@@ -12,6 +12,7 @@ import schema from "./schema";
 import { internal } from "./_generated/api";
 import { cascadeDelete } from "./cascadeDelete";
 import { requireWorkspaceMember, checkWorkspaceMember, requireChannelAccess, requireUser } from "./authHelpers";
+import { clearDismissal } from "./channelDismissal";
 import { notify } from "./utils/notify";
 import { channelKindSchema, channelVisibilitySchema } from "./schema";
 import type { Doc } from "./_generated/dataModel";
@@ -395,10 +396,17 @@ export const createDm = mutation({
 
       for (const m of allMembers) {
         if (m.userId === userId) continue;
-        if (m.userId === otherUserId) return cm.channelId;
+        if (m.userId === otherUserId) {
+          // Asking for this conversation is asking for it back. Only the
+          // caller's dismissal is cleared — the other participant did not ask
+          // for anything, and dismissal is per-user.
+          await clearDismissal(ctx, cm.channelId, userId);
+          return cm.channelId;
+        }
         if (otherEmail && m.email === otherEmail) {
           // Reinstate: point the stale membership at the current userId
           await ctx.db.patch(m._id, { userId: otherUserId });
+          await clearDismissal(ctx, cm.channelId, userId);
           return cm.channelId;
         }
       }
