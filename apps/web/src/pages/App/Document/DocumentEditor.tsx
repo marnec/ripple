@@ -68,6 +68,7 @@ import {
 } from "./CommentsRail";
 import { richTextDictionary } from "@/lib/blocknote/rich-text-schema";
 import { getRichSlashMenuItems } from "@/lib/blocknote/slash-menu";
+import { SUGGESTION_MENU_FLOATING_OPTIONS } from "@/lib/blocknote/floating";
 import { useMediaDropGuard } from "@/hooks/use-media-drop-guard";
 import { documentSchema as schema } from "./schema";
 import { useDocumentSuggestions } from "./useDocumentSuggestions";
@@ -517,9 +518,18 @@ function DocumentBody({
       <SuggestionMenuController
         triggerCharacter={"/"}
         getItems={(query) => getRichSlashMenuItems(editor, query)}
+        floatingUIOptions={SUGGESTION_MENU_FLOATING_OPTIONS}
       />
-      <SuggestionMenuController triggerCharacter={"#"} getItems={getHashItems} />
-      <SuggestionMenuController triggerCharacter={"@"} getItems={getAtMentionItems} />
+      <SuggestionMenuController
+        triggerCharacter={"#"}
+        getItems={getHashItems}
+        floatingUIOptions={SUGGESTION_MENU_FLOATING_OPTIONS}
+      />
+      <SuggestionMenuController
+        triggerCharacter={"@"}
+        getItems={getAtMentionItems}
+        floatingUIOptions={SUGGESTION_MENU_FLOATING_OPTIONS}
+      />
       {commentsEnabled && <CommentCountReporter />}
       {commentsEnabled && <CommentPendingWatcher editor={editor} />}
       {commentsEnabled && isMobile && <CommentsDrawer editor={editor} />}

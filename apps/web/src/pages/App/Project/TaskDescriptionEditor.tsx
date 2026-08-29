@@ -13,11 +13,13 @@ import { useTheme } from "next-themes";
 import { useMemberSuggestions } from "../../../hooks/use-member-suggestions";
 import { useEventSuggestions } from "../../../hooks/use-event-suggestions";
 import { getRichSlashMenuItems } from "@/lib/blocknote/slash-menu";
+import { SUGGESTION_MENU_FLOATING_OPTIONS } from "@/lib/blocknote/floating";
 import { useMediaDropGuard } from "@/hooks/use-media-drop-guard";
 import { BlockPickerDialog } from "../Document/BlockPickerDialog";
 import { CellRefDialog } from "../Document/CellRefDialog";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
+import { BODY_PORTAL_ELEMENTS } from "@/lib/blocknote/portal";
 
 type TaskDescriptionEditorProps = {
   editor: any;
@@ -288,17 +290,24 @@ export function TaskDescriptionEditor({
           editor={editor}
           theme={resolvedTheme === "dark" ? "dark" : "light"}
           sideMenu={false}
+          portalElements={BODY_PORTAL_ELEMENTS}
           /* Replaced below so the math items can join the defaults. */
           slashMenu={false}
         >
           <SuggestionMenuController
             triggerCharacter={"/"}
             getItems={(query) => getRichSlashMenuItems(editor, query)}
+            floatingUIOptions={SUGGESTION_MENU_FLOATING_OPTIONS}
           />
-          <SuggestionMenuController triggerCharacter={"#"} getItems={getResourceItems} />
+          <SuggestionMenuController
+            triggerCharacter={"#"}
+            getItems={getResourceItems}
+            floatingUIOptions={SUGGESTION_MENU_FLOATING_OPTIONS}
+          />
           <SuggestionMenuController
             triggerCharacter={"@"}
             getItems={getAtMentionItems}
+            floatingUIOptions={SUGGESTION_MENU_FLOATING_OPTIONS}
           />
         </BlockNoteView>
       </div>

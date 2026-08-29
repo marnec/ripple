@@ -10,6 +10,7 @@ import {
 import type { BlockNoteEditor } from "@blocknote/core";
 import type { ThreadData } from "@blocknote/core/comments";
 import {
+  SuggestionMenuController,
   Thread,
   getReferenceText,
   useCreateBlockNote,
@@ -29,6 +30,9 @@ import {
   DrawerHeader,
   DrawerTitle,
 } from "@/components/ui/drawer";
+import { BODY_PORTAL_ELEMENTS } from "@/lib/blocknote/portal";
+import { SUGGESTION_MENU_FLOATING_OPTIONS } from "@/lib/blocknote/floating";
+import { getRichSlashMenuItems } from "@/lib/blocknote/slash-menu";
 import { documentCommentSchema } from "./comment-schema";
 import {
   countOpenThreads,
@@ -525,10 +529,23 @@ function CommentComposer({ editor }: { editor: AnyEditor }) {
                   editor={composerEditor}
                   theme={resolvedTheme === "dark" ? "dark" : "light"}
                   sideMenu={false}
+                  portalElements={BODY_PORTAL_ELEMENTS}
+                  /* Replaced to fix the menu's placement — the composer sits
+                     ~60px from the bottom of the viewport, which is where
+                     BlockNote's default positioning collapses. */
+                  slashMenu={false}
                   onChange={() =>
                     setIsEmpty(isBlocksEmpty(composerEditor.document))
                   }
-                />
+                >
+                  <SuggestionMenuController
+                    triggerCharacter={"/"}
+                    getItems={(query) =>
+                      getRichSlashMenuItems(composerEditor, query)
+                    }
+                    floatingUIOptions={SUGGESTION_MENU_FLOATING_OPTIONS}
+                  />
+                </BlockNoteView>
               </div>
               <div className="flex items-center justify-end gap-2">
                 <Button variant="ghost" size="sm" onClick={cancel}>

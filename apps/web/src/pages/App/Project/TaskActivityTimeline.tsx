@@ -40,13 +40,14 @@ import { useTheme } from "next-themes";
 
 import "@blocknote/core/fonts/inter.css";
 import "@blocknote/shadcn/style.css";
-import { useUploadFile } from "../../../hooks/use-upload-file";
 import { useMemberSuggestions } from "../../../hooks/use-member-suggestions";
 import { StaticCommentBody } from "./StaticCommentBody";
 import { GithubMark } from "@/components/GithubMark";
 import { GitlabMark } from "@/components/GitlabMark";
 import { cn } from "@/lib/utils";
 import type { EditCommentEditorProps, WorkspaceMemberSummary } from "./comment-types";
+import { BODY_PORTAL_ELEMENTS } from "@/lib/blocknote/portal";
+import { SUGGESTION_MENU_FLOATING_OPTIONS } from "@/lib/blocknote/floating";
 
 type TimelineFilter = "all" | "comments" | "integration";
 
@@ -225,18 +226,17 @@ export function TaskActivityTimeline({ taskId, currentUserId, workspaceId, membe
   const updateComment = useMutation(api.taskComments.update);
   const removeComment = useMutation(api.taskComments.remove);
 
-  const fileUpload = useUploadFile(workspaceId);
-  const uploadFile = fileUpload?.uploadFile;
-
   const [filter, setFilter] = useState<TimelineFilter>("comments");
   const [editingCommentId, setEditingCommentId] = useState<Id<"taskComments"> | null>(null);
   const [isEmpty, setIsEmpty] = useState(true);
 
   const { resolvedTheme } = useTheme();
 
+  // No `uploadFile`: the short-form schema has no media blocks for an upload
+  // to land in, and without it BlockNote's file-drop handler returns before
+  // inserting anything.
   const editor = useCreateBlockNote({
     schema: taskCommentSchema,
-    uploadFile,
   });
 
   const getMemberItems = useMemberSuggestions({
@@ -397,7 +397,6 @@ export function TaskActivityTimeline({ taskId, currentUserId, workspaceId, membe
                     editingCommentId={editingCommentId}
                     workspaceMembers={workspaceMembers}
                     workspaceId={workspaceId}
-                    uploadFile={uploadFile}
                     onEdit={setEditingCommentId}
                     onDelete={handleDelete}
                     onSave={(id, body, bodyMarkdown) => {
@@ -430,6 +429,7 @@ export function TaskActivityTimeline({ taskId, currentUserId, workspaceId, membe
             editor={editor}
             theme={resolvedTheme === "dark" ? "dark" : "light"}
             sideMenu={false}
+            portalElements={BODY_PORTAL_ELEMENTS}
             onChange={() => {
               setIsEmpty(isBlocksEmpty(editor.document));
             }}
@@ -437,6 +437,7 @@ export function TaskActivityTimeline({ taskId, currentUserId, workspaceId, membe
             <SuggestionMenuController
               triggerCharacter="@"
               getItems={getMemberItems}
+              floatingUIOptions={SUGGESTION_MENU_FLOATING_OPTIONS}
             />
           </BlockNoteView>
         </div>
@@ -476,7 +477,6 @@ function CommentItem({
   editingCommentId,
   workspaceMembers,
   workspaceId,
-  uploadFile,
   onEdit,
   onDelete,
   onSave,
@@ -487,7 +487,6 @@ function CommentItem({
   editingCommentId: Id<"taskComments"> | null;
   workspaceMembers: WorkspaceMemberSummary[];
   workspaceId: Id<"workspaces">;
-  uploadFile?: (file: File) => Promise<string>;
   onEdit: (id: Id<"taskComments"> | null) => void;
   onDelete: (id: Id<"taskComments">) => void;
   onSave: (id: Id<"taskComments">, body: string, bodyMarkdown: string) => void;
@@ -535,7 +534,6 @@ function CommentItem({
             initialBody={item.body ?? ""}
             workspaceMembers={workspaceMembers}
             workspaceId={workspaceId}
-            uploadFile={uploadFile}
             onSave={onSave}
             onCancel={onCancelEdit}
           />
@@ -580,7 +578,6 @@ function EditCommentEditor({
   commentId,
   initialBody,
   workspaceMembers,
-  uploadFile,
   onSave,
   onCancel,
 }: EditCommentEditorProps) {
@@ -589,8 +586,7 @@ function EditCommentEditor({
   const editEditor = useCreateBlockNote({
     schema: taskCommentSchema,
     initialContent: parseCommentBody(initialBody),
-    uploadFile,
-  });
+    });
 
   const getMemberItems = useMemberSuggestions({
     members: workspaceMembers,
@@ -611,10 +607,12 @@ function EditCommentEditor({
           editor={editEditor}
           theme={resolvedTheme === "dark" ? "dark" : "light"}
           sideMenu={false}
+          portalElements={BODY_PORTAL_ELEMENTS}
         >
           <SuggestionMenuController
             triggerCharacter="@"
             getItems={getMemberItems}
+            floatingUIOptions={SUGGESTION_MENU_FLOATING_OPTIONS}
           />
         </BlockNoteView>
       </div>

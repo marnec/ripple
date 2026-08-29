@@ -1,4 +1,5 @@
-import { BlockNoteSchema, defaultBlockSpecs, defaultInlineContentSpecs } from "@blocknote/core";
+import { BlockNoteSchema, defaultInlineContentSpecs } from "@blocknote/core";
+import { shortFormBlockSpecs } from "@/lib/blocknote/short-form-schema";
 import "@blocknote/core/fonts/inter.css";
 import { en } from "@blocknote/core/locales";
 import { useCreateBlockNote, useEditorChange, SuggestionMenuController } from "@blocknote/react";
@@ -71,14 +72,8 @@ interface MessageComposerProps {
   showCallButton?: boolean;
 }
 
-const {
-  audio: _audio,
-  heading: _heading,
-  image: _image,
-  ...remainingBlockSpecs
-} = defaultBlockSpecs;
 const schema = BlockNoteSchema.create({
-  blockSpecs: { ...remainingBlockSpecs },
+  blockSpecs: { ...shortFormBlockSpecs() },
   inlineContentSpecs: {
     ...defaultInlineContentSpecs,
     taskMention: TaskMention,
