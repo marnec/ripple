@@ -14,6 +14,7 @@ const LazyFloatingCallWindow = React.lazy(() =>
   })),
 );
 import { FollowModeProvider } from "../../contexts/FollowModeContext";
+import { FocusModeProvider } from "../../contexts/FocusModeContext";
 import { WorkspacePresenceProvider } from "../../contexts/WorkspacePresenceContext";
 import { SidebarProvider } from "../../components/ui/sidebar";
 import { TooltipProvider } from "@ripple/ui/components/tooltip";
@@ -49,12 +50,14 @@ export default function App() {
           <ActiveCallProvider>
             <WorkspacePresenceProvider>
               <FollowModeProvider>
+                <FocusModeProvider>
                 <SidebarProvider>
                 <Layout />
                 <Suspense fallback={null}>
                   <LazyFloatingCallWindow />
                 </Suspense>
                 </SidebarProvider>
+                </FocusModeProvider>
               </FollowModeProvider>
             </WorkspacePresenceProvider>
           </ActiveCallProvider>

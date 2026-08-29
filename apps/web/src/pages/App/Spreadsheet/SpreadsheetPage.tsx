@@ -266,6 +266,7 @@ function SpreadsheetEditor({
             workspaceId={workspaceId}
             onTagsChange={(tags) => void updateTags({ id: spreadsheetId, tags })}
             settingsTitle="Spreadsheet settings"
+            focusable
             onBacklinksOpenChange={setShowRefHighlights}
             activeUsers={(awareness) => (
               <SurfaceActiveUsers awareness={awareness} viewer={viewer} />

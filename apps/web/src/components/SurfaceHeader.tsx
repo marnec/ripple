@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { Settings } from "lucide-react";
+import { Eye, Settings } from "lucide-react";
 import type { Awareness } from "y-protocols/awareness";
 import type { Id } from "@convex/_generated/dataModel";
 import { Button } from "@ripple/ui/components/button";
@@ -16,6 +16,7 @@ import { NAMED, type SurfaceResourceType } from "@/lib/collab/surface-resources"
 import { HeaderSlot, MobileHeaderTitle } from "@/contexts/HeaderSlotContext";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useRecordVisit } from "@/hooks/use-record-visit";
+import { useFocusMode } from "@/contexts/FocusModeContext";
 
 interface SurfaceHeaderProps<TMeta extends SurfaceMeta> {
   /** The open room, from the sequence this header is a child of. */
@@ -48,6 +49,12 @@ interface SurfaceHeaderProps<TMeta extends SurfaceMeta> {
    */
   activeUsers?: (awareness: Awareness) => ReactNode;
   onBacklinksOpenChange?: (open: boolean) => void;
+  /**
+   * Offer focus mode on this surface. Opt-in rather than automatic: hiding the
+   * chrome only works for a body that already fills its container, and each
+   * surface has to be checked against that before it is turned on.
+   */
+  focusable?: boolean;
 }
 
 /**
@@ -75,12 +82,25 @@ export function SurfaceHeader<TMeta extends SurfaceMeta>({
   actions,
   activeUsers,
   onBacklinksOpenChange,
+  focusable = false,
 }: SurfaceHeaderProps<TMeta>) {
   const isMobile = useIsMobile();
+  const { isFocused, isFocusAvailable, enterFocus } = useFocusMode();
   const { doc, meta, isLive, sync } = surface;
   const named = NAMED[resourceType];
 
   useRecordVisit(workspaceId, named, resourceId, meta?.name);
+
+  // Focus mode drops everything that identifies or changes the resource —
+  // including, deliberately, the sync indicator; `Layout` still owns the way
+  // back out. What survives is `centre`, which is not chrome: the spreadsheet's
+  // formula bar is where a cell's raw value is read and edited, so hiding it
+  // would not remove a distraction, it would remove the surface's main control.
+  if (isFocused) {
+    return centre ? (
+      <div className="flex items-center border-b py-1.5 pr-3">{centre}</div>
+    ) : null;
+  }
 
   return (
     <>
@@ -117,6 +137,19 @@ export function SurfaceHeader<TMeta extends SurfaceMeta>({
             />
           )}
           {tools}
+          {focusable && isFocusAvailable && (
+            // Not gated on `isLive`: hiding the chrome is a local view change,
+            // so it keeps working with no server — same rule as the tools slot.
+            <button
+              type="button"
+              onClick={enterFocus}
+              className="inline-flex items-center justify-center rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+              title="Focus mode"
+              aria-label="Enter focus mode"
+            >
+              <Eye className="size-4" />
+            </button>
+          )}
           {isLive && meta && actions?.(meta)}
           {isLive && meta && !isMobile && (
             <Link

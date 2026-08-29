@@ -137,6 +137,7 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
               workspaceId={workspaceId}
               onTagsChange={(tags) => void updateTags({ id: documentId, tags })}
               settingsTitle="Document settings"
+              focusable
               activeUsers={(awareness) => (
                 <SurfaceActiveUsers awareness={awareness} viewer={viewer} />
               )}

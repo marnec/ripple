@@ -137,6 +137,7 @@ function DiagramPageContent({
             workspaceId={workspaceId}
             onTagsChange={(tags) => void updateTags({ id: diagramId, tags })}
             settingsTitle="Diagram settings"
+            focusable
             activeUsers={(awareness) => (
               <DiagramActiveUsers
                 awareness={awareness}

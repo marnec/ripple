@@ -1,7 +1,7 @@
 import { SidebarInset, SidebarTrigger, useSidebar } from "./ui/sidebar";
 
 import type { QueryParams } from "@convex/types/routes";
-import { Captions, Phone } from "lucide-react";
+import { Captions, EyeClosed, Phone } from "lucide-react";
 import { Profiler, useEffect, useState } from "react";
 import { onRenderCallback } from "../lib/profiler-logger";
 import { Outlet, useLocation, useParams } from "react-router-dom";
@@ -25,6 +25,9 @@ import {
   TooltipTrigger,
 } from "@ripple/ui/components/tooltip";
 import { AppSidebar } from "@/pages/App/AppSidebar";
+import { useFocusMode } from "../contexts/FocusModeContext";
+import { cn } from "@/lib/utils";
+import { Button } from "@ripple/ui/components/button";
 
 function CallIndicator() {
   const { status, isTranscribing, returnToCall } = useActiveCall();
@@ -70,6 +73,7 @@ export function Layout() {
   const { workspaceId } = useParams<QueryParams>();
   const { isMobile, setOpen } = useSidebar();
   const { isFollowing, followColor } = useFollowMode();
+  const { isFocused, exitFocus, toggleFocus } = useFocusMode();
   const [commandOpen, setCommandOpen] = useState(false);
   const [headerSlotCallbackRef, headerSlotNode] = useHeaderSlotRef();
   const [headerTitleSlotCallbackRef, headerTitleSlotNode] = useHeaderTitleSlotRef();
@@ -84,10 +88,21 @@ export function Layout() {
         e.preventDefault();
         setCommandOpen((prev) => !prev);
       }
+      // Focus mode. Not Escape: on a diagram Escape cancels the active tool and
+      // clears the selection, and stealing it would make focus mode cost the
+      // user a canvas shortcut they use constantly. The visible exit control is
+      // the discoverable way out; this is the shortcut for people who want one.
+      if ((e.key === "f" || e.key === "F") && e.shiftKey && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        toggleFocus();
+      }
     };
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
-  }, []);
+    // Capture phase: editors that own their container (Excalidraw, BlockNote)
+    // stop propagation of key events, so a bubble-phase listener never sees
+    // them while the surface has focus.
+    document.addEventListener("keydown", onKeyDown, true);
+    return () => document.removeEventListener("keydown", onKeyDown, true);
+  }, [toggleFocus]);
 
   const inner = (
     <>
@@ -95,7 +110,15 @@ export function Layout() {
       <AppSidebar />
       </Profiler>
       <SidebarInset className="min-w-0">
-        <header className="flex shrink-0 sticky top-0 px-4 pt-(--safe-area-top) z-10 h-16 items-center justify-between border-b backdrop-blur bg-background/80">
+        <header
+          className={cn(
+            "flex shrink-0 sticky top-0 px-4 pt-(--safe-area-top) z-10 h-16 items-center justify-between border-b backdrop-blur bg-background/80",
+            // Hidden rather than unmounted: the header hosts the portal targets
+            // every page's HeaderSlot renders into, and tearing those down on
+            // entering focus mode would unmount their contents mid-flight.
+            isFocused && "hidden",
+          )}
+        >
           {isMobile ? (
             <>
               <SidebarTrigger className="-ml-1 shrink-0" />
@@ -129,12 +152,36 @@ export function Layout() {
           )}
         </header>
         <div
-          className="relative h-[calc(100svh-4rem-var(--safe-area-top))] w-full overflow-auto"
+          className={cn(
+            "w-full overflow-auto",
+            isFocused
+              // Promoted over the chrome instead of collapsing it: the sidebar
+              // keeps its own state and its queries stay warm, so leaving focus
+              // mode is instant and puts everything back exactly as it was.
+              ? "fixed inset-0 z-40 bg-background pt-(--safe-area-top)"
+              : "relative h-[calc(100svh-4rem-var(--safe-area-top))]",
+          )}
         >
           {isFollowing && followColor && (
             <div
               className={`pointer-events-none absolute inset-0 z-30 ring-2 ring-inset ${followColor.ring}`}
             />
+          )}
+          {isFocused && (
+            // Bottom centre, because every corner is spoken for by the surfaces
+            // themselves — Excalidraw's toolbars occupy all four. Dimmed until
+            // hovered so it reads as an escape hatch, not a control.
+            <div className="pointer-events-none fixed inset-x-0 bottom-4 z-50 flex justify-center">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={exitFocus}
+                className="pointer-events-auto gap-1.5 rounded-full border bg-background/80 px-3 opacity-40 shadow-sm backdrop-blur transition-opacity hover:opacity-100 focus-visible:opacity-100"
+              >
+                <EyeClosed className="size-4" />
+                Exit focus
+              </Button>
+            </div>
           )}
           <HeaderSlotContext value={headerSlotNode}>
             <HeaderTitleSlotContext value={headerTitleSlotNode}>

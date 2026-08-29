@@ -6,10 +6,7 @@ NEXT STEPS:
 
 - add a dependency view to tasks
 
-- explore pdf reading, annotation and embedding
 - consider introducing document snapshots
-
-- focus mode for docs and diagrams
 
 keyboard accessiblity
     - when pressing tab in a chat, it must focus the message composer
@@ -75,6 +72,9 @@ keyboard accessiblity
     - [ ] offline mutations are not queued for resources loaded cold offline —
       controls are hidden rather than offered and silently dropped. A write
       queue is the separate, larger project if that isn't good enough
+
+
+- explore pdf reading, annotation and embedding
 
 - evaluate cross-workspace aggregates to re-introduce admin overview
 
