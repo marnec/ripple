@@ -27,6 +27,7 @@ import {
 } from "@/components/CollaborativeSurface";
 import { SurfaceHeader } from "@/components/SurfaceHeader";
 import { useResourceDoc } from "@/hooks/use-collab-session";
+import { useFocusMode } from "@/contexts/FocusModeContext";
 import { SurfaceActiveUsers } from "@/components/SurfaceActiveUsers";
 import type { BlockNoteEditor } from "@blocknote/core";
 
@@ -185,6 +186,7 @@ function DocumentBody({
 }) {
   const { resolvedTheme } = useTheme();
   const isMobile = useIsMobile();
+  const { isFocused } = useFocusMode();
   const location = useLocation();
   const viewer = useViewer();
   const importedHTML = (location.state as { importedHTML?: string } | null)?.importedHTML;
@@ -468,6 +470,22 @@ function DocumentBody({
           editor.focus();
         }}
       >
+      <div
+        className={
+          isFocused
+            // Obsidian's readable-line-length rule, applied only here. 56rem
+            // (896px) minus the two paddings nested inside it — the spotlight
+            // frame's 46px and BlockNote's own 54px, per side — leaves a ~696px
+            // text column, the ~70-character measure typography settled on.
+            // `contents` outside focus mode so this wrapper is not merely
+            // unstyled but absent from layout: the sidebar and chrome already
+            // keep the column narrow there, and the click-to-place-caret
+            // whitelist below hit-tests the scroll container itself, which a
+            // box spanning it would intercept.
+            ? "mx-auto w-full max-w-4xl"
+            : "contents"
+        }
+      >
       <DocumentSpotlightFrame>
         <ReferencedBlocksHighlight blockIds={referencedBlockIds} />
         <BlockNoteViewEditor />
@@ -514,6 +532,7 @@ function DocumentBody({
           />
         )}
       </DocumentSpotlightFrame>
+      </div>
       </div>
       {commentsEnabled && !isMobile && <CommentsDockedRail editor={editor} />}
       <SuggestionMenuController
