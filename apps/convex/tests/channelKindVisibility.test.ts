@@ -74,78 +74,23 @@ describe("channels.createDm — populates kind and visibility", () => {
   });
 });
 
-describe("rows that predate the split", () => {
-  /** A channel as it exists in a deployment that has never been migrated. */
-  async function seedLegacy(
-    t: ReturnType<typeof createTestContext>,
-    opts: { workspaceId: Id<"workspaces">; name: string; type: "open" | "closed" | "dm" },
-  ) {
-    return t.run(async (ctx) =>
-      ctx.db.insert("channels", {
-        name: opts.name,
-        workspaceId: opts.workspaceId,
-        type: opts.type,
-      }),
-    );
-  }
-
-  const runMigration = (
-    t: ReturnType<typeof createTestContext>,
-    fn: typeof internal.migrations.backfillChannelKindVisibility,
-  ) => t.mutation(fn, { cursor: null, batchSize: 100 });
-
-  it("can exist at all — the schema has to accept them", async () => {
-    // This is the shape that broke a production deploy. `convex deploy` pushes
-    // the schema before `migrations:runAll` can run, and Convex validates every
-    // existing document at push time — so a schema requiring `kind` cannot
-    // reach a deployment whose rows lack it, because the migration that would
-    // add it ships in the very same push. If this test stops passing, that
-    // deploy is broken again.
-    const t = createTestContext();
-    const { workspaceId } = await setupWorkspaceWithAdmin(t);
-    const id = await seedLegacy(t, { workspaceId, name: "italia 1", type: "open" });
-
-    const row = await t.run(async (ctx) => ctx.db.get(id));
-    expect(row?.type).toBe("open");
-    expect(row?.kind).toBeUndefined();
-  });
-
-  it("backfills into kind and visibility", async () => {
-    const t = createTestContext();
-    const { workspaceId } = await setupWorkspaceWithAdmin(t);
-    const openId = await seedLegacy(t, { workspaceId, name: "general", type: "open" });
-    const closedId = await seedLegacy(t, { workspaceId, name: "leadership", type: "closed" });
-    const dmId = await seedLegacy(t, { workspaceId, name: "", type: "dm" });
-
-    await runMigration(t, internal.migrations.backfillChannelKindVisibility);
-
-    const [open, closed, dm] = await t.run(async (ctx) => [
-      await ctx.db.get(openId),
-      await ctx.db.get(closedId),
-      await ctx.db.get(dmId),
-    ]);
-    expect(open).toMatchObject({ kind: "channel", visibility: "public" });
-    expect(closed).toMatchObject({ kind: "channel", visibility: "private" });
-    // Inert, not a setting: a direct message has no visibility.
-    expect(dm).toMatchObject({ kind: "dm", visibility: "private" });
-  });
-
-  it("then strips the retired column, and both migrations are idempotent", async () => {
-    const t = createTestContext();
-    const { workspaceId } = await setupWorkspaceWithAdmin(t);
-    const id = await seedLegacy(t, { workspaceId, name: "general", type: "open" });
-
-    await runMigration(t, internal.migrations.backfillChannelKindVisibility);
-    await runMigration(t, internal.migrations.stripChannelType);
-    const once = await t.run(async (ctx) => ctx.db.get(id));
-    expect(once?.type).toBeUndefined();
-    expect(once).toMatchObject({ kind: "channel", visibility: "public" });
-
-    // `runAll` executes on every deploy, so a second pass must change nothing.
-    await runMigration(t, internal.migrations.backfillChannelKindVisibility);
-    await runMigration(t, internal.migrations.stripChannelType);
-    expect(await t.run(async (ctx) => ctx.db.get(id))).toEqual(once);
-  });
-});
-
-
+/**
+ * The pre-split-row tests lived here, and end with this change.
+ *
+ * They seeded a channel carrying only `type` and drove
+ * `backfillChannelKindVisibility` and `stripChannelType` over it. Now that
+ * `kind` and `visibility` are required, `convex-test` validates that fixture
+ * against the live schema and refuses it — `as never` silences the compiler,
+ * not the validator. The shape is no longer expressible, which is the whole
+ * point of the schema being strict.
+ *
+ * They were retired once before, in ticket 10, and that was one step too early:
+ * making the legacy shape unrepresentable is precisely what broke a production
+ * deploy, because `convex deploy` pushes the schema before `runAll` can migrate
+ * anything. This time the columns became required only *after* production was
+ * verified to hold no such row. That verification, not a test, is what makes it
+ * safe — and it has to be redone against any deployment that has not seen the
+ * migration, including one restored from an old backup.
+ *
+ * Both migrations stay in `runAll` as the repair path for exactly that case.
+ */

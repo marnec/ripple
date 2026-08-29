@@ -695,9 +695,9 @@ export declare const api: {
       {
         _creationTime: number;
         _id: Id<"channels">;
-        kind?: "channel" | "dm";
+        kind: "channel" | "dm";
         name: string;
-        visibility?: "public" | "private";
+        visibility: "public" | "private";
         workspaceId: Id<"workspaces">;
       } | null
     >;
@@ -733,9 +733,9 @@ export declare const api: {
       Array<{
         _creationTime: number;
         _id: Id<"channels">;
-        kind?: "channel" | "dm";
+        kind: "channel" | "dm";
         name: string;
-        visibility?: "public" | "private";
+        visibility: "public" | "private";
         workspaceId: Id<"workspaces">;
       }>
     >;
@@ -788,9 +788,9 @@ export declare const api: {
         isDone: boolean;
         page: Array<{
           _id: Id<"channels">;
-          kind?: "channel" | "dm";
+          kind: "channel" | "dm";
           name: string;
-          visibility?: "public" | "private";
+          visibility: "public" | "private";
         }>;
         pageStatus?: "SplitRecommended" | "SplitRequired" | null;
         splitCursor?: string | null;
@@ -3652,9 +3652,9 @@ export declare const api: {
           _creationTime: number;
           _id: Id<"channels">;
           isHidden: boolean;
-          kind?: "channel" | "dm";
+          kind: "channel" | "dm";
           name: string;
-          visibility?: "public" | "private";
+          visibility: "public" | "private";
           workspaceId: Id<"workspaces">;
         }>;
         hiddenChannelCount: number;
@@ -3992,9 +3992,9 @@ export declare const internal: {
       {
         _creationTime: number;
         _id: Id<"channels">;
-        kind?: "channel" | "dm";
+        kind: "channel" | "dm";
         name: string;
-        visibility?: "public" | "private";
+        visibility: "public" | "private";
         workspaceId: Id<"workspaces">;
       } | null
     >;

@@ -109,8 +109,8 @@ export const listHostable = query({
     _creationTime: v.number(),
     name: v.string(),
     workspaceId: v.id("workspaces"),
-    kind: v.optional(channelKindSchema),
-    visibility: v.optional(channelVisibilitySchema),
+    kind: channelKindSchema,
+    visibility: channelVisibilitySchema,
   })),
   handler: async (ctx, { workspaceId }) => {
     const auth = await checkWorkspaceMember(ctx, workspaceId);
@@ -142,8 +142,8 @@ export const get = query({
       _creationTime: v.number(),
       name: v.string(),
       workspaceId: v.id("workspaces"),
-      kind: v.optional(channelKindSchema),
-      visibility: v.optional(channelVisibilitySchema),
+      kind: channelKindSchema,
+      visibility: channelVisibilitySchema,
     }),
     v.null()
   ),
@@ -246,9 +246,10 @@ export const search = query({
   args: {
     workspaceId: v.id("workspaces"),
     searchText: v.optional(v.string()),
-    // A visibility, or nothing for "all". A direct message is not a browsable
-    // resource — its name is its roster — and it is now excluded by `kind`
-    // rather than by there being no value to name it with.
+    // A visibility, or nothing for "all" — this one stays optional, unlike the
+    // column: absence here means "do not filter", not "unknown". A direct
+    // message is not a browsable resource (its name is its roster) and is
+    // excluded by `kind`, not by there being no value to name it with.
     visibility: v.optional(channelVisibilitySchema),
     paginationOpts: paginationOptsValidator,
   },
@@ -257,8 +258,8 @@ export const search = query({
       v.object({
         _id: v.id("channels"),
         name: v.string(),
-        kind: v.optional(channelKindSchema),
-        visibility: v.optional(channelVisibilitySchema),
+        kind: channelKindSchema,
+        visibility: channelVisibilitySchema,
       }),
     ),
     isDone: v.boolean(),
@@ -324,8 +325,8 @@ const channelValidator = v.object({
   _creationTime: v.number(),
   name: v.string(),
   workspaceId: v.id("workspaces"),
-  kind: v.optional(channelKindSchema),
-  visibility: v.optional(channelVisibilitySchema),
+  kind: channelKindSchema,
+  visibility: channelVisibilitySchema,
 });
 
 export const getInternal = internalQuery({
