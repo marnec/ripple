@@ -165,7 +165,9 @@ describe("tasks.syncDescriptionToGitHub (outbound description push)", () => {
       (i) => i.kind === "activity" && i.type === "description_synced",
     );
     expect(synced).toBeDefined();
-    expect(synced?.source).toBe("integration");
+    // `.find` does not carry its predicate's narrowing to the result, and the
+    // timeline is a union of activity and comment items.
+    expect(synced && synced.kind === "activity" ? synced.source : null).toBe("integration");
   });
 
   it("non-workspace-member calling sync → rejected", async () => {

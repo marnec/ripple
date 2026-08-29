@@ -432,7 +432,7 @@ describe("integrations/core/install.listInstallations", () => {
     );
 
     await expect(
-      asUser.query(api.integrations.core.install.assertWizardInstallation, {
+      asUser.query(internal.integrations.core.install.assertWizardInstallation, {
         workspaceId,
         externalAccountId: "gl-only",
         provider: "github",

@@ -16,7 +16,6 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { createTestContext, setupWorkspaceWithAdmin, channelFields } from "./helpers";
-import { ChannelType } from "@ripple/shared/enums/roles";
 import type { Id } from "../convex/_generated/dataModel";
 
 const WEBHOOK_SECRET = "test-webhook-secret";

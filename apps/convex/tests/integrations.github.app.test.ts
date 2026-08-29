@@ -29,7 +29,7 @@ function derToPem(der: Uint8Array, label: string): string {
   return `-----BEGIN ${label}-----\n${lines.join("\n")}\n-----END ${label}-----\n`;
 }
 
-function b64UrlDecode(s: string): Uint8Array {
+function b64UrlDecode(s: string): Uint8Array<ArrayBuffer> {
   const pad = s.length % 4 === 0 ? "" : "=".repeat(4 - (s.length % 4));
   const b64 = s.replace(/-/g, "+").replace(/_/g, "/") + pad;
   const bin = atob(b64);
@@ -42,7 +42,10 @@ function parseJwt(jwt: string): {
   header: Record<string, unknown>;
   payload: Record<string, unknown>;
   signingInput: string;
-  signature: Uint8Array;
+  // `Uint8Array<ArrayBuffer>`, not bare `Uint8Array`: the latter widens to
+  // `ArrayBufferLike`, which `crypto.subtle.verify` will not take as a
+  // `BufferSource`. `b64UrlDecode` always allocates a plain ArrayBuffer.
+  signature: Uint8Array<ArrayBuffer>;
 } {
   const parts = jwt.split(".");
   if (parts.length !== 3) throw new Error("malformed JWT");

@@ -105,7 +105,7 @@ describe("integrations/gitlab/webhook.normalize — issue state", () => {
     const payload = issuePayload("open");
     delete (payload.user as { web_url?: string }).web_url;
     const event = normalize(payload);
-    expect(event?.externalAuthor).toEqual({
+    expect(event && "externalAuthor" in event ? event.externalAuthor : null).toEqual({
       login: "octocat",
       avatarUrl: "https://gitlab.com/octocat.png",
       url: "https://gitlab.com/octocat",

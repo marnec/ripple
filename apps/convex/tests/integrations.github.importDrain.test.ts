@@ -58,6 +58,10 @@ describe("integrations/github/importDrain.normalizeImportBatch", () => {
       rawIssue({ number: 2, pull_request: { url: "anything" } }) as any,
       rawIssue({ number: 3 }),
     ]);
-    expect(out.map((e) => e.issueNumber)).toEqual([1, 3]);
+    // `NormalizedIssueEvent` is a union that includes comment events, which
+    // carry no `issueNumber`. Narrow rather than assert the property exists:
+    // a comment event slipping into this batch now surfaces as a `null` and
+    // fails, instead of being read as `undefined`.
+    expect(out.map((e) => ("issueNumber" in e ? e.issueNumber : null))).toEqual([1, 3]);
   });
 });

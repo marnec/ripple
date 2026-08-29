@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ChannelType, ChannelVisibility } from "@ripple/shared/enums/roles";
+import { ChannelVisibility } from "@ripple/shared/enums/roles";
 import { api, internal } from "../convex/_generated/api";
 import { withTriggers } from "../convex/dbTriggers";
 import { createTestContext, setupWorkspaceWithAdmin } from "./helpers";

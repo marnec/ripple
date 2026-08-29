@@ -112,8 +112,9 @@ async function deliver(t: ReturnType<typeof createTestContext>, uuid: string) {
 }
 
 /** Ids of every stored (not-yet-expired) event, newest deliveries included. */
-async function liveEventIds(t: ReturnType<typeof createTestContext>) {
-  const events = await t.run((ctx) =>
+async function liveEventIds(t: ReturnType<typeof createTestContext>): Promise<string[]> {
+  // Same as `listDlq` in webhookDlqMirror: the component query is `any` here.
+  const events: Array<{ _id: string }> = await t.run((ctx) =>
     ctx.runQuery(components.webhookReceiver.event.queries.listEvents, {}),
   );
   return events.map((e) => e._id);

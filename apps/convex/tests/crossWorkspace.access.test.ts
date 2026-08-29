@@ -1544,17 +1544,21 @@ describe("unauthenticated public surface", () => {
       await ctx.db.patch(bob.userId, { isPlatformAdmin: true });
     });
 
-    const user = await t
-      .query(api.users.get, { id: bob.userId })
-      // convex/users.ts:20 — bare ctx.db.get returning the full userValidator
-      .catch(() => null);
+    const user = await t.query(api.users.get, { id: bob.userId }).catch(() => null);
+
+    // `users.get` projects through `toPublicUser` (convex/users.ts), so these
+    // fields are absent from its return validator and the assertions below no
+    // longer typecheck against the declared shape. Read through a record so
+    // they still assert what they were written to assert: widen that
+    // projection and these fail, which is the whole point of them.
+    const returned = user as Record<string, unknown> | null;
 
     expect(
-      user?.email ?? null,
+      returned?.email ?? null,
       "an unauthenticated caller must not read a user's email",
     ).toBeNull();
     expect(
-      user?.isPlatformAdmin ?? null,
+      returned?.isPlatformAdmin ?? null,
       "an unauthenticated caller must not learn who the platform admins are",
     ).toBeNull();
   });

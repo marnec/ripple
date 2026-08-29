@@ -454,7 +454,7 @@ describe("integrations/core/importJob.filterImportEvents", () => {
     const kept = filterImportEvents(events, config);
 
     expect(kept).toHaveLength(2);
-    expect(kept.map((e) => e.issueNumber)).toEqual([1, 3]);
+    expect(kept.map((e) => ("issueNumber" in e ? e.issueNumber : null))).toEqual([1, 3]);
   });
 
   it("keeps both issue.opened and issue.closed when includeClosed is true", () => {
@@ -468,7 +468,7 @@ describe("integrations/core/importJob.filterImportEvents", () => {
     const kept = filterImportEvents(events, config);
 
     expect(kept).toHaveLength(3);
-    expect(kept.map((e) => e.issueNumber)).toEqual([1, 2, 3]);
+    expect(kept.map((e) => ("issueNumber" in e ? e.issueNumber : null))).toEqual([1, 2, 3]);
   });
 });
 

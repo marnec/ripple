@@ -438,11 +438,31 @@ describe("issue.opened echo guard (self-authored)", () => {
   it("still ingests a bot-authored open during bulk import", async () => {
     const t = createTestContext();
     const { projectId, link } = await inboundFixtures(t);
+
+    // `ImportContext.importJobId` is required — the field is only optional on
+    // the stored row, where `importContext?.importJobId` reflects the context
+    // being absent, not the id being unknown. Seed a real job rather than
+    // handing the production type a shape it never sees.
+    const importJobId = await t.run(async (ctx) => {
+      const creatorId = await ctx.db.insert("users", { name: "Importer" });
+      return ctx.db.insert("taskImportJobs", {
+        projectId,
+        workspaceId: link.workspaceId,
+        creatorId,
+        status: "running",
+        rows: [],
+        numberRangeStart: 1,
+        totalRows: 1,
+        processedRows: 0,
+        failedRows: 0,
+      });
+    });
+
     await t.run((ctx) =>
       applyNormalizedEvent(ctx, {
         event: botEvent(),
         link,
-        importContext: { importJobId: undefined, taskNumber: 1 },
+        importContext: { importJobId, taskNumber: 1 },
       }),
     );
     expect(await countTasks(t, projectId)).toBe(1);

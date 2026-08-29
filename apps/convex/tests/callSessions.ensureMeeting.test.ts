@@ -1,5 +1,4 @@
 import { describe, it, expect, vi } from "vitest";
-import { ChannelType } from "@ripple/shared/enums/roles";
 import type { ActionCtx } from "../convex/_generated/server";
 import type { Id } from "../convex/_generated/dataModel";
 import { ensureMeetingForChannel } from "../convex/callSessions";

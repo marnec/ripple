@@ -126,6 +126,7 @@ function mergeEvent(
     baseRef,
     externalAuthor: author,
     closesExternalIssueIds: ["I_1"],
+    closesIssueNumbers: [],
     ...overrides,
   };
 }

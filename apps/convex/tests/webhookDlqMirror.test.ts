@@ -120,7 +120,9 @@ async function deliver(t: T, uuid: string) {
   return res;
 }
 
-async function listDlq(t: T) {
+// The component's query is typed `any` at this boundary, so name the shape the
+// assertions actually read rather than letting `any` leak into them.
+async function listDlq(t: T): Promise<Array<{ eventId: string }>> {
   return t.run((ctx) =>
     ctx.runQuery(components.webhookReceiver.event.queries.listDlq, {}),
   );

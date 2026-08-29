@@ -35,7 +35,7 @@ async function makeClient(fetchImpl: typeof fetch) {
 
 describe("integrations/github/client.request", () => {
   it("returns { status, body } for a 200 response", async () => {
-    const fakeFetch = vi.fn(async () =>
+    const fakeFetch = vi.fn(async (_url: string, _init?: RequestInit) =>
       new Response(JSON.stringify({ ok: true }), {
         status: 200,
         headers: { "Content-Type": "application/json" },
@@ -54,7 +54,7 @@ describe("integrations/github/client.request", () => {
   });
 
   it("captures Retry-After (seconds) on a 429 response", async () => {
-    const fakeFetch = vi.fn(async () =>
+    const fakeFetch = vi.fn(async (_url: string, _init?: RequestInit) =>
       new Response("rate limited", {
         status: 429,
         headers: { "Retry-After": "60" },
@@ -74,7 +74,7 @@ describe("integrations/github/client.request", () => {
   });
 
   it("returns status=null on network errors so the outbound classifier marks it 'retry'", async () => {
-    const fakeFetch = vi.fn(async () => {
+    const fakeFetch = vi.fn(async (_url: string, _init?: RequestInit) => {
       throw new TypeError("fetch failed");
     });
     const client = await makeClient(fakeFetch as unknown as typeof fetch);
@@ -92,7 +92,7 @@ describe("integrations/github/client.request", () => {
 
 describe("integrations/github/client.fetchClosingIssueNodeIds", () => {
   it("parses closingIssuesReferences node ids from a GraphQL response", async () => {
-    const fakeFetch = vi.fn(async () =>
+    const fakeFetch = vi.fn(async (_url: string, _init?: RequestInit) =>
       new Response(
         JSON.stringify({
           data: {
@@ -123,7 +123,7 @@ describe("integrations/github/client.fetchClosingIssueNodeIds", () => {
   });
 
   it("parses branch names from the REST branches endpoint", async () => {
-    const fakeFetch = vi.fn(async () =>
+    const fakeFetch = vi.fn(async (_url: string, _init?: RequestInit) =>
       new Response(JSON.stringify([{ name: "main" }, { name: "develop" }]), {
         status: 200,
         headers: { "Content-Type": "application/json" },
@@ -142,7 +142,7 @@ describe("integrations/github/client.fetchClosingIssueNodeIds", () => {
   });
 
   it("returns [] when the PR has no closing references", async () => {
-    const fakeFetch = vi.fn(async () =>
+    const fakeFetch = vi.fn(async (_url: string, _init?: RequestInit) =>
       new Response(
         JSON.stringify({
           data: {

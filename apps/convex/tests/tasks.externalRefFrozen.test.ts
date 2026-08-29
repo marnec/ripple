@@ -91,7 +91,9 @@ async function setupLinkedWorkspace(t: ReturnType<typeof createTestContext>) {
 /** Run the real disconnect cascade to completion. */
 async function unlink(
   t: ReturnType<typeof createTestContext>,
-  asUser: ReturnType<typeof createTestContext>,
+  // An identity-bound ctx, which is what `withIdentity` returns — not another
+  // test ctx. The two differ in their data model type parameter.
+  asUser: ReturnType<ReturnType<typeof createTestContext>["withIdentity"]>,
   linkId: Id<"projectIntegrationLinks">,
 ) {
   await asUser.mutation(api.integrations.core.links.unlinkLink, { linkId });

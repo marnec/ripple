@@ -114,6 +114,7 @@ describe("integrations/core/pullRequestLinks.listByTask", () => {
           baseRef: "main",
           externalAuthor: author,
           closesExternalIssueIds: ["I_1"],
+          closesIssueNumbers: [],
         },
         link,
       }),

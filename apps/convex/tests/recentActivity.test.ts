@@ -3,7 +3,7 @@ import { api } from "../convex/_generated/api";
 import {
   createTestContext,
   setupWorkspaceWithAdmin, channelFields } from "./helpers";
-import { WorkspaceRole, ChannelType } from "@ripple/shared/enums/roles";
+import { WorkspaceRole } from "@ripple/shared/enums/roles";
 import type { Id } from "../convex/_generated/dataModel";
 
 /**

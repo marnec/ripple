@@ -202,7 +202,6 @@ describe("inbound comment markdown → BlockNote JSON", () => {
       externalIssueId: "I_kwDOABC123",
       externalUpdatedAt: 1_700_000_020_000,
       body: "# edited heading",
-      externalAuthor: commentCreatedEvent().externalAuthor,
     };
     await t.run((ctx) => applyNormalizedEvent(ctx, { event: edited, link }));
     await t.finishAllScheduledFunctions(vi.runAllTimers);
@@ -256,7 +255,6 @@ describe("inbound comment bodies never keep the ripple-comment marker", () => {
       externalIssueId: "I_kwDOABC123",
       externalUpdatedAt: 1_700_000_020_000,
       body: `# edited heading\n\n${MARKER}`,
-      externalAuthor: commentCreatedEvent().externalAuthor,
     };
     await t.run((ctx) => applyNormalizedEvent(ctx, { event: edited, link }));
     await t.finishAllScheduledFunctions(vi.runAllTimers);

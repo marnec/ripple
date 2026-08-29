@@ -7,11 +7,12 @@ import {
   setupAuthenticatedUser,
   setupWorkspaceWithAdmin,
 } from "./helpers";
+import type { Id } from "../convex/_generated/dataModel";
 
 /** Add a second user to the workspace with the given role; returns their bound ctx. */
 async function addMember(
   t: ReturnType<typeof createTestContext>,
-  workspaceId: Parameters<typeof api.workspaceInvites.listByWorkspace>[0]["workspaceId"],
+  workspaceId: Id<"workspaces">,
   role: (typeof WorkspaceRole)[keyof typeof WorkspaceRole],
 ) {
   const { userId, asUser } = await setupAuthenticatedUser(t, {

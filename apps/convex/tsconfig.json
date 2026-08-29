@@ -13,6 +13,18 @@
     "esModuleInterop": true,
     "types": ["node"]
   },
-  "include": ["convex"],
+  // `tests` is in here on purpose. It used to be `["convex"]`, and this
+  // package's lint step is `tsc` plus an eslint pass scoped to `convex/**`,
+  // so nothing typechecked the test suite at all. What that cost: three
+  // assertions in `dmDiscovery.access.test.ts` filtered a query result on
+  // `c.type`, a column the kind/visibility split had deleted — `undefined
+  // === "dm"` is always false, so the headline "DMs are not workspace-
+  // discoverable" assertions passed unconditionally, and would have passed
+  // had the query returned every DM in the workspace.
+  //
+  // The Convex CLI typechecks a push with `convex/tsconfig.json`, a separate
+  // config one level down, so widening this one reaches lint without
+  // touching what `convex dev` and `convex deploy` compile.
+  "include": ["convex", "tests"],
   "exclude": ["convex/_generated"]
 }

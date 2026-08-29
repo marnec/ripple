@@ -3,6 +3,12 @@ import { api, internal } from "../convex/_generated/api";
 import { createTestContext, setupAuthenticatedUser, setupWorkspaceWithAdmin, channelFields } from "./helpers";
 import type { Id } from "../convex/_generated/dataModel";
 import { withTriggers } from "../convex/dbTriggers";
+// These assertions used to read `c.type` — a column the kind/visibility split
+// deleted. `undefined === "dm"` is always false, so all three passed
+// unconditionally and would have passed had `channels.search` returned every
+// DM in the workspace. Nothing typechecked this directory at the time; it does
+// now (see `tsconfig.json`).
+import { ChannelKind } from "@ripple/shared/enums/roles";
 
 /**
  * A DM's label *is* its roster — "Bob Bobson × Carol Carolson" names both
@@ -73,7 +79,7 @@ describe("channels.search — DMs are not workspace-wide discoverable", () => {
     });
 
     expect(
-      result.page.filter((c) => c.type === "dm"),
+      result.page.filter((c) => c.kind === ChannelKind.DM),
       "a DM label names both participants — it must not reach a non-participant",
     ).toEqual([]);
   });
@@ -125,7 +131,7 @@ describe("channels.search — DMs are not workspace-wide discoverable", () => {
       paginationOpts: { numItems: 20, cursor: null },
     });
 
-    expect(result.page.filter((c) => c.type === "dm")).toEqual([]);
+    expect(result.page.filter((c) => c.kind === ChannelKind.DM)).toEqual([]);
     expect(result.page.map((c) => c.name).sort()).toEqual(["General", "Leadership"]);
   });
 
@@ -148,7 +154,7 @@ describe("channels.search — DMs are not workspace-wide discoverable", () => {
     });
 
     expect(result.page, "the page must be filled from browsable rows, not padded with rejects").toHaveLength(5);
-    expect(result.page.every((c) => c.type !== "dm")).toBe(true);
+    expect(result.page.every((c) => c.kind !== ChannelKind.DM)).toBe(true);
   });
 });
 

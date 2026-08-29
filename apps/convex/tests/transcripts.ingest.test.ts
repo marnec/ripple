@@ -5,7 +5,6 @@ import { triggers } from "../convex/dbTriggers";
 import {
   createTestContext,
   setupWorkspaceWithAdmin, channelFields } from "./helpers";
-import { ChannelType } from "@ripple/shared/enums/roles";
 
 afterEach(() => {
   vi.restoreAllMocks();

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ChannelType, ChannelVisibility } from "@ripple/shared/enums/roles";
+import { ChannelVisibility } from "@ripple/shared/enums/roles";
 import { api } from "../convex/_generated/api";
 import {
   membersByWorkspace,

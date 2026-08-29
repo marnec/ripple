@@ -125,6 +125,7 @@ function prEvent(
     baseRef: "main",
     externalAuthor: author,
     closesExternalIssueIds: ["I_1"],
+    closesIssueNumbers: [],
     ...overrides,
   };
 }
