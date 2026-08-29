@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { useQuery } from "convex-helpers/react/cache";
 import {
   createBrowserRouter,
   Navigate,
@@ -6,10 +7,12 @@ import {
   useParams,
 } from "react-router-dom";
 import { RouteErrorFallback } from "./components/RouteErrorFallback";
+import { RippleSpinner } from "./components/RippleSpinner";
 import {
   getLastWorkspaceId,
   setLastWorkspaceId,
 } from "./lib/last-workspace";
+import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 import { IntegrationAccountPicker } from "@/components/IntegrationAccountPicker";
 
@@ -21,12 +24,26 @@ import { IntegrationAccountPicker } from "@/components/IntegrationAccountPicker"
  * stale (workspace deleted, access revoked) the landing query returns
  * `role === null` and bounces back to `/workspaces`.
  *
- * No stored id → fall back to the explicit list page.
+ * No stored id → the list is only a real choice when there is more than
+ * one workspace to choose from. A user who belongs to exactly one (the
+ * common case on a first sign-in, a new device, or after clearing site
+ * data) goes straight in; a one-card list page is a pointless click.
+ * The list query is the same one `AppSidebar` already subscribes to, so
+ * the wait here is normally the cache, not a round trip.
  */
 // eslint-disable-next-line react-refresh/only-export-components -- routes.tsx exports `router` (non-component) by design; a local redirect component alongside it doesn't break runtime, only fast-refresh edit-the-route hot reload
 function RootIndexRedirect() {
   const last = getLastWorkspaceId();
-  return <Navigate to={last ? `/workspaces/${last}` : "/workspaces"} replace />;
+  // Hook order is stable: `last` is read synchronously from localStorage and
+  // cannot change while this component is mounted (it redirects immediately).
+  const workspaces = useQuery(api.workspaces.list, last ? "skip" : {});
+
+  if (last) return <Navigate to={`/workspaces/${last}`} replace />;
+  if (workspaces === undefined) return <RippleSpinner />;
+  if (workspaces.length === 1) {
+    return <Navigate to={`/workspaces/${workspaces[0]._id}`} replace />;
+  }
+  return <Navigate to="/workspaces" replace />;
 }
 
 /**
