@@ -9,6 +9,26 @@
   padding-inline: 46px;
 }
 
+/*
+ * Mobile: give the document the full screen width. Two paddings stack here —
+ * this frame's 46px and BlockNote core's own 54px on `.bn-editor` (the room it
+ * reserves for the drag handle, which is hover-only and so unreachable on
+ * touch anyway) — for a ~100px inset that ate a quarter of a 390px phone.
+ * Collapse both to a single 12px gutter. Scoped to `.document-spotlight-frame`
+ * on purpose: an unscoped `.bn-editor` rule from this global stylesheet would
+ * strip the padding from every BlockNote editor in the app (see the same note
+ * in `message-composer.css`).
+ */
+@media (max-width: 767px) {
+  .document-spotlight-frame {
+    padding-inline: 12px;
+  }
+
+  .document-spotlight-frame .bn-editor {
+    padding-inline: 0;
+  }
+}
+
 .document-spotlight-frame::after {
   content: "";
   position: absolute;

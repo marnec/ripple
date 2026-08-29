@@ -14,7 +14,9 @@ export function DocumentSpotlightFrame({ children }: { children: React.ReactNode
 
   return (
     <div
-      className="document-spotlight-frame px-2 sm:px-14 max-w-full"
+      /* Inline padding lives in `document-editor.css` — an unlayered rule there
+         outranks Tailwind utilities, so it cannot be set from here. */
+      className="document-spotlight-frame max-w-full"
       onMouseMove={handleMouseMove}
     >
       {children}
