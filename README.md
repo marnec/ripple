@@ -15,8 +15,11 @@ NEXT STEPS:
 
 - [ ] link previews in chat
 
+- sidebar in docs should close through x commands or comment btn toggle even without previously unfocusing the text to be commented
+
 keyboard accessiblity
     - when pressing tab in a chat, it must focus the message composer
+    - esc closes the comments sideba in docs
 
 - [ ] internationalization (i18n and localization)
 

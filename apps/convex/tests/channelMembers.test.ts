@@ -169,7 +169,7 @@ describe("channelMembers", () => {
       ).rejects.toThrow("not a member of this workspace");
     });
 
-    it("allows workspace member to add to public channel", async () => {
+    it("allows workspace admin to add to public channel", async () => {
       const t = createTestContext();
       const { workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
       const channelId = await setupPublicChannel(t, { workspaceId });
@@ -193,6 +193,35 @@ describe("channelMembers", () => {
       });
       expect(members).toHaveLength(1);
       expect(members[0].userId).toBe(targetId);
+    });
+
+    // The public branch of this mutation used to admit any workspace member,
+    // which was the only spelling of the channel rule more permissive than the
+    // rule itself. The test above reads as if it pinned that, but its fixture
+    // is a workspace *admin*, so it passed either way.
+    it("refuses a non-admin workspace member adding to a public channel", async () => {
+      const t = createTestContext();
+      const { workspaceId } = await setupWorkspaceWithAdmin(t);
+      const channelId = await setupPublicChannel(t, { workspaceId });
+
+      const { userId: callerId, asUser: asMember } = await setupAuthenticatedUser(t, {
+        name: "Plain Member",
+        email: "plain@example.com",
+      });
+      await addWorkspaceMember(t, { userId: callerId, workspaceId });
+
+      const { userId: targetId } = await setupAuthenticatedUser(t, {
+        name: "Target",
+        email: "target2@example.com",
+      });
+      await addWorkspaceMember(t, { userId: targetId, workspaceId });
+
+      await expect(
+        asMember.mutation(api.channelMembers.addToChannel, {
+          userId: targetId,
+          channelId,
+        }),
+      ).rejects.toThrow("Not authorized");
     });
   });
 

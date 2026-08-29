@@ -272,6 +272,22 @@ export async function removeMembershipCascade(
     await ctx.db.delete(cm._id);
   }
 
+  // `userChannelState` is keyed by (channel, user) and is not reachable from
+  // the `channelMembers` loop above — a public channel normally has no member
+  // row, so this user's read and dismissal state for one would outlive the
+  // workspace membership it was created under. Those rows were also what
+  // `channelReads.getUnreadStatus` used to accept as proof of access, which
+  // left a removed member with a live unread signal.
+  const channelStates = await ctx.db
+    .query("userChannelState")
+    .withIndex("by_workspace_user", (q) =>
+      q.eq("workspaceId", workspaceId).eq("userId", targetUserId),
+    )
+    .collect();
+  for (const state of channelStates) {
+    await ctx.db.delete(state._id);
+  }
+
   // Delete any lingering channel join requests by this user in this workspace
   const joinRequests = await ctx.db
     .query("channelJoinRequests")

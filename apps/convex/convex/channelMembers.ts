@@ -8,7 +8,7 @@ import { channelRoleSchema } from "./schema";
 import { logActivity } from "./auditLog";
 import { requireChannelAccess, requireUser } from "./authHelpers";
 
-import { isDirectMessage, isPublicChannel, isPrivateChannel } from "@ripple/shared/channel";
+import { isDirectMessage, isPrivateChannel } from "@ripple/shared/channel";
 // `byChannel` was removed: it had no callers anywhere in the monorepo, its
 // return validator omitted the `name`/`email` columns that `addToChannel`
 // writes (so it threw on any row created that way), and it carried the same
@@ -104,32 +104,24 @@ export const addToChannel = mutation({
   args: { userId: v.id("users"), channelId: v.id("channels") },
   returns: v.id("channelMembers"),
   handler: async (ctx, { userId, channelId }) => {
-    const callerId = await requireUser(ctx);
-
     const channel = await ctx.db.get(channelId);
     if (!channel) throw new ConvexError(`Channel ${channelId} does not exist`);
 
-    // Caller must be channel admin (closed/dm) or workspace member (open)
-    if (!isPublicChannel(channel)) {
-      if (isDirectMessage(channel)) {
-        throw new ConvexError("Cannot add members to a DM");
-      }
-      const callerMembership = await ctx.db
-        .query("channelMembers")
-        .withIndex("by_channel_user", (q) => q.eq("channelId", channelId).eq("userId", callerId))
-        .first();
-      if (callerMembership?.role !== ChannelRole.ADMIN) {
-        throw new ConvexError("Not authorized to add members to this channel");
-      }
-    } else {
-      const workspaceMembership = await ctx.db
-        .query("workspaceMembers")
-        .withIndex("by_workspace_user", (q) => q.eq("workspaceId", channel.workspaceId).eq("userId", callerId))
-        .first();
-      if (!workspaceMembership) {
-        throw new ConvexError("Not authorized to add members to this channel");
-      }
+    // A DM's roster is fixed at creation. The shape guard stays above the
+    // access check because it is the answer a participant should get, and a
+    // participant is never a channel admin.
+    if (isDirectMessage(channel)) {
+      throw new ConvexError("Cannot add members to a DM");
     }
+
+    // The channel rule with the admin option: channel admin on a private
+    // channel, workspace admin on a public one. The public branch used to
+    // admit any workspace member — the one spelling of this rule that was
+    // more permissive than the rule itself, unreachable from the UI (the
+    // add control renders only for a private channel) and pinned by no test.
+    const { userId: callerId } = await requireChannelAccess(ctx, channelId, {
+      role: ChannelRole.ADMIN,
+    });
 
     // Target user must be in the workspace
     const targetWorkspaceMembership = await ctx.db
@@ -201,30 +193,25 @@ export const removeFromChannel = mutation({
     const channel = await ctx.db.get(channelId);
     if (!channel) throw new ConvexError("Channel not found");
 
-    // Allow self-removal, otherwise require channel admin (closed) or workspace admin (open)
-    const isSelfRemoval = callerId === userId;
-    if (!isSelfRemoval) {
-      if (isDirectMessage(channel)) {
-        throw new ConvexError("Cannot remove members from a DM");
-      }
-      if (!isPublicChannel(channel)) {
-        const callerMembership = await ctx.db
-          .query("channelMembers")
-          .withIndex("by_channel_user", (q) => q.eq("channelId", channelId).eq("userId", callerId))
-          .first();
-        if (callerMembership?.role !== ChannelRole.ADMIN) {
-          throw new ConvexError("Not authorized to remove members from this channel");
-        }
-      } else {
-        const workspaceMembership = await ctx.db
-          .query("workspaceMembers")
-          .withIndex("by_workspace_user", (q) => q.eq("workspaceId", channel.workspaceId).eq("userId", callerId))
-          .first();
-        if (workspaceMembership?.role !== "admin") {
-          throw new ConvexError("Not authorized to remove members from this channel");
-        }
-      }
+    // A direct message can be neither left nor emptied, so the guard is about
+    // the channel and not about who is asking — it sits above the self/other
+    // split. It used to sit inside the `!isSelfRemoval` branch, which let a
+    // participant remove themselves: the DM was then a one-person row its
+    // label rendered as "Unknown", `createDm` would mint a second DM for the
+    // same pair rather than resolve back to it, and the leaver had no way in.
+    if (isDirectMessage(channel)) {
+      throw new ConvexError("Cannot remove members from a DM");
     }
+
+    // Removing someone else needs the admin role — channel admin on a private
+    // channel, workspace admin on a public one. Removing yourself needs only
+    // access to the channel.
+    const isSelfRemoval = callerId === userId;
+    await requireChannelAccess(
+      ctx,
+      channelId,
+      isSelfRemoval ? undefined : { role: ChannelRole.ADMIN },
+    );
 
     const channelMember = await ctx.db
       .query("channelMembers")
@@ -297,27 +284,15 @@ export const changeMemberRole = mutation({
     const channel = await ctx.db.get(channelMember.channelId);
     if (!channel) throw new ConvexError("Channel not found");
 
-    // Caller must be channel admin (closed) or workspace admin (open). DMs have no role changes.
+    // A DM has no roles to change; the shape guard answers a participant,
+    // who is never a channel admin and would otherwise be told only that
+    // they are not authorized.
     if (isDirectMessage(channel)) {
       throw new ConvexError("Cannot change roles in a DM");
     }
-    if (!isPublicChannel(channel)) {
-      const callerMembership = await ctx.db
-        .query("channelMembers")
-        .withIndex("by_channel_user", (q) => q.eq("channelId", channel._id).eq("userId", callerId))
-        .first();
-      if (callerMembership?.role !== ChannelRole.ADMIN) {
-        throw new ConvexError("Not authorized to change member roles");
-      }
-    } else {
-      const workspaceMembership = await ctx.db
-        .query("workspaceMembers")
-        .withIndex("by_workspace_user", (q) => q.eq("workspaceId", channel.workspaceId).eq("userId", callerId))
-        .first();
-      if (workspaceMembership?.role !== "admin") {
-        throw new ConvexError("Not authorized to change member roles");
-      }
-    }
+
+    // Channel admin on a private channel, workspace admin on a public one.
+    await requireChannelAccess(ctx, channel._id, { role: ChannelRole.ADMIN });
 
     if (channelMember.role === role) return null;
 

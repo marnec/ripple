@@ -2,6 +2,7 @@ import { expect, describe, it } from "vitest";
 import { api } from "../convex/_generated/api";
 import {
   createTestContext,
+  setupAuthenticatedUser,
   setupWorkspaceWithAdmin, channelFields } from "./helpers";
 import { ChannelRole } from "@ripple/shared/enums/roles";
 import type { Id } from "../convex/_generated/dataModel";
@@ -333,5 +334,84 @@ describe("channelReads", () => {
       });
       expect(state).toBeNull();
     });
+  });
+});
+
+
+// `getUnreadStatus` used to check membership only when the caller had no
+// `userChannelState` row, treating a surviving row as proof of access. Nothing
+// deleted those rows when a workspace membership went — the cascade walks
+// `channelMembers`, and a public channel has none — so a removed member kept a
+// live, pollable unread signal on a workspace they had been ejected from.
+describe("channelReads access after workspace removal", () => {
+  it("gives a removed workspace member no unread signal, and leaves no state row", async () => {
+    const t = createTestContext();
+    const { userId: adminId, workspaceId, asUser: asAdmin } = await setupWorkspaceWithAdmin(t);
+    const { userId: memberId, asUser: asMember } = await setupAuthenticatedUser(t, {
+      name: "Removed",
+      email: "removed@example.com",
+    });
+    await t.run(async (ctx) => {
+      await ctx.db.insert("workspaceMembers", {
+        userId: memberId, workspaceId, role: "member",
+      });
+    });
+
+    // A public channel: the member reads it without ever getting a
+    // `channelMembers` row, which is what puts the state row out of the
+    // cascade's reach.
+    const channelId = await t.run(async (ctx) =>
+      ctx.db.insert("channels", {
+        name: "public-channel",
+        workspaceId,
+        ...channelFields("open"),
+      }),
+    );
+
+    await asMember.mutation(api.channelReads.markRead, { channelId });
+    await insertMessage(t, { channelId, userId: adminId });
+
+    expect(
+      await asMember.query(api.channelReads.getUnreadStatus, { channelIds: [channelId] }),
+    ).toEqual([{ channelId, hasUnread: true }]);
+
+    await asAdmin.mutation(api.workspaceMembers.remove, {
+      workspaceId,
+      targetUserId: memberId,
+    });
+
+    expect(
+      await asMember.query(api.channelReads.getUnreadStatus, { channelIds: [channelId] }),
+      "a removed member learns nothing about the channel",
+    ).toEqual([{ channelId, hasUnread: false }]);
+
+    const leftovers = await t.run(async (ctx) =>
+      ctx.db
+        .query("userChannelState")
+        .withIndex("by_workspace_user", (q) =>
+          q.eq("workspaceId", workspaceId).eq("userId", memberId),
+        )
+        .collect(),
+    );
+    expect(leftovers, "the state rows go with the membership").toHaveLength(0);
+
+    // And the rule, not the cascade, is what refuses them. The assertion above
+    // passes even for the old cold-path-only check, because a deleted row sends
+    // it down the cold path. Plant a row the cascade never saw — a restored
+    // backup, a row written before the cascade learned about this table — and
+    // the answer must still be no.
+    await t.run(async (ctx) => {
+      await ctx.db.insert("userChannelState", {
+        userId: memberId,
+        channelId,
+        workspaceId,
+        lastReadAt: 1,
+      });
+    });
+
+    expect(
+      await asMember.query(api.channelReads.getUnreadStatus, { channelIds: [channelId] }),
+      "a surviving state row is not proof of access",
+    ).toEqual([{ channelId, hasUnread: false }]);
   });
 });

@@ -233,6 +233,46 @@ describe("channels.createDm", () => {
     );
     expect(dmNode, "a DM is not mirrored into the workspace-wide node index").toBeNull();
   });
+
+  // The DM guard used to sit inside `removeFromChannel`'s `!isSelfRemoval`
+  // branch, so a participant could remove themselves through the public
+  // mutation even though the UI never offers it. The DM was then a one-person
+  // row: its label renders "Unknown", `createDm` mints a second DM for the
+  // same pair rather than resolving back to it, and the leaver has no way in
+  // — `addToChannel` refuses a DM.
+  it("a participant cannot remove themselves from a DM", async () => {
+    const t = createTestContext();
+    const { userId: adminId, workspaceId, asUser: asAdmin } = await setupWorkspaceWithAdmin(t);
+    const { userId: memberId } = await setupAuthenticatedUser(t, { name: "Member", email: "leaver@test.com" });
+
+    await t.run(async (ctx) => {
+      await ctx.db.insert("workspaceMembers", {
+        userId: memberId,
+        workspaceId,
+        role: WorkspaceRole.MEMBER,
+      });
+    });
+
+    const channelId = await asAdmin.mutation(api.channels.createDm, {
+      workspaceId,
+      otherUserId: memberId,
+    });
+
+    await expect(
+      asAdmin.mutation(api.channelMembers.removeFromChannel, {
+        userId: adminId,
+        channelId,
+      }),
+    ).rejects.toThrow("Cannot remove members from a DM");
+
+    const members = await t.run(async (ctx) =>
+      ctx.db
+        .query("channelMembers")
+        .withIndex("by_channel", (q) => q.eq("channelId", channelId))
+        .collect(),
+    );
+    expect(members, "the DM still holds exactly two participants").toHaveLength(2);
+  });
 });
 
 // A test here used to assert that `channels.create` refuses `type: "dm"`. The

@@ -1,6 +1,6 @@
 import { ConvexError, v } from "convex/values";
 import { mutation } from "./functions";
-import { requireWorkspaceMember } from "./authHelpers";
+import { requireChannelAccess } from "./authHelpers";
 import type { MutationCtx } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 
@@ -35,13 +35,22 @@ export const dismissChannel = mutation({
   args: { channelId: v.id("channels") },
   returns: v.null(),
   handler: async (ctx, { channelId }) => {
-    const channel = await ctx.db.get(channelId);
-    if (!channel) throw new ConvexError("Channel not found");
+    // The channel rule, not the workspace rule. A public channel admits every
+    // workspace member, so dismissing one is unchanged; a DM is now dismissable
+    // only by a participant, where before any workspace member could write a
+    // `userChannelState` row for a conversation they cannot read.
+    //
+    // Access before shape, and deliberately so: the shape throw describes the
+    // channel, so running it first made this mutation an oracle for any id an
+    // authenticated caller cared to try. A non-member of a private channel now
+    // gets "Not a member of this channel" instead, and everyone the message
+    // below was written for — people who can actually see the channel — still
+    // reads it. Do not reorder these.
+    const { userId, channel } = await requireChannelAccess(ctx, channelId);
+
     if (isPrivateChannel(channel)) {
       throw new ConvexError("Private channels cannot be dismissed; leave the channel instead");
     }
-
-    const { userId } = await requireWorkspaceMember(ctx, channel.workspaceId);
 
     const existing = await ctx.db
       .query("userChannelState")
@@ -102,10 +111,9 @@ export const restoreChannel = mutation({
   args: { channelId: v.id("channels") },
   returns: v.null(),
   handler: async (ctx, { channelId }) => {
-    const channel = await ctx.db.get(channelId);
-    if (!channel) throw new ConvexError("Channel not found");
-
-    const { userId } = await requireWorkspaceMember(ctx, channel.workspaceId);
+    // Same rule as `dismissChannel` — restoring a conversation is reaching
+    // into the same per-user row, and needs the same access to it.
+    const { userId } = await requireChannelAccess(ctx, channelId);
     await clearDismissal(ctx, channelId, userId);
     return null;
   },

@@ -553,10 +553,16 @@ export const requestJoin = mutation({
   handler: async (ctx, { channelId }) => {
     const channel = await ctx.db.get(channelId);
     if (!channel) throw new ConvexError("Channel not found");
+
+    // Membership before shape. The two throws below describe the channel, so
+    // running them first let any authenticated caller — including someone with
+    // no membership of the owning workspace at all — probe ids and learn which
+    // of the three shapes each one is. The channel rule cannot be used here:
+    // the whole point of a join request is that the caller is not a member.
+    const { userId } = await requireWorkspaceMember(ctx, channel.workspaceId);
+
     if (isPublicChannel(channel)) throw new ConvexError("Channel is open — just join");
     if (isDirectMessage(channel)) throw new ConvexError("Cannot request to join a DM");
-
-    const { userId } = await requireWorkspaceMember(ctx, channel.workspaceId);
 
     const existing = await ctx.db
       .query("channelMembers")

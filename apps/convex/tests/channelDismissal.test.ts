@@ -523,4 +523,50 @@ describe("restoring a dismissed conversation", () => {
     );
     expect(stillDismissed?.hiddenAt).toBeDefined();
   });
+
+  // `dismissChannel` took the workspace rule, so any workspace member could
+  // write a `userChannelState` row for a DM they are not in — a per-conversation
+  // row for a conversation they cannot read, which nothing ever collected. It
+  // takes the channel rule now: a public channel still admits every workspace
+  // member, a DM only its participants.
+  it("a non-participant cannot dismiss someone else's DM", async () => {
+    const t = createTestContext();
+    const { workspaceId, asUser: asAdmin } = await setupWorkspaceWithAdmin(t);
+    const { userId: memberId } = await setupAuthenticatedUser(t, {
+      name: "Member",
+      email: "dm-member@test.com",
+    });
+    const { userId: outsiderId, asUser: asOutsider } = await setupAuthenticatedUser(t, {
+      name: "Outsider",
+      email: "dm-outsider@test.com",
+    });
+
+    await t.run(async (ctx) => {
+      await ctx.db.insert("workspaceMembers", {
+        userId: memberId, workspaceId, role: "member",
+      });
+      await ctx.db.insert("workspaceMembers", {
+        userId: outsiderId, workspaceId, role: "member",
+      });
+    });
+
+    const channelId = await asAdmin.mutation(api.channels.createDm, {
+      workspaceId,
+      otherUserId: memberId,
+    });
+
+    await expect(
+      asOutsider.mutation(api.channelDismissal.dismissChannel, { channelId }),
+    ).rejects.toThrow("Not a member of this channel");
+
+    const orphan = await t.run(async (ctx) =>
+      ctx.db
+        .query("userChannelState")
+        .withIndex("by_channel_user", (q) =>
+          q.eq("channelId", channelId).eq("userId", outsiderId),
+        )
+        .unique(),
+    );
+    expect(orphan, "no state row is written for a conversation the caller cannot read").toBeNull();
+  });
 });

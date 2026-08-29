@@ -272,16 +272,18 @@ export async function checkResourceMember<T extends WorkspaceResource>(
  *   - Closed/DM channel: requires ChannelRole.ADMIN in channelMembers
  *   - Open channel: requires WorkspaceRole.ADMIN in workspaceMembers
  */
+export interface ChannelAccess extends AuthIdentity {
+  channel: Doc<"channels">;
+  workspaceMembership: Doc<"workspaceMembers">;
+  /** Null exactly when the channel is public — the rule requires no row there. */
+  channelMembership: Doc<"channelMembers"> | null;
+}
+
 export async function requireChannelAccess(
   ctx: Ctx,
   channelId: Id<"channels">,
   opts?: { role?: typeof ChannelRole.ADMIN },
-): Promise<{
-  userId: Id<"users">;
-  channel: Doc<"channels">;
-  workspaceMembership: Doc<"workspaceMembers">;
-  channelMembership: Doc<"channelMembers"> | null;
-}> {
+): Promise<ChannelAccess> {
   const userId = await requireUser(ctx);
 
   const channel = await ctx.db.get(channelId);
@@ -326,12 +328,7 @@ export async function requireChannelAccess(
 export async function checkChannelAccess(
   ctx: Ctx,
   channelId: Id<"channels">,
-): Promise<{
-  userId: Id<"users">;
-  channel: Doc<"channels">;
-  workspaceMembership: Doc<"workspaceMembers">;
-  channelMembership: Doc<"channelMembers"> | null;
-} | null> {
+): Promise<ChannelAccess | null> {
   const userId = await getUser(ctx);
   if (!userId) return null;
 
@@ -353,6 +350,61 @@ export async function checkChannelAccess(
   }
 
   return { userId, channel, workspaceMembership, channelMembership };
+}
+
+/**
+ * The channel rule applied to a batch of channels, resolving the caller's
+ * workspace membership once per workspace rather than once per channel.
+ *
+ * Absence from the returned map means "no access" — there is no null to
+ * thread through the caller, and a repeated id cannot be answered twice.
+ *
+ * This exists so that a caller batching channel reads does not have to hold
+ * the membership cache itself. `channelReads.getUnreadStatus` did hold it,
+ * and that is precisely how it came to check membership only on its cold
+ * path: the cache was about the *baseline*, so the *rule* quietly moved
+ * inside the branch that computed one.
+ */
+export async function checkChannelAccessBatch(
+  ctx: Ctx,
+  channelIds: Id<"channels">[],
+): Promise<Map<Id<"channels">, ChannelAccess>> {
+  const access = new Map<Id<"channels">, ChannelAccess>();
+
+  const userId = await getUser(ctx);
+  if (!userId) return access;
+
+  const workspaceMemberships = new Map<Id<"workspaces">, Doc<"workspaceMembers"> | null>();
+  const membershipIn = async (workspaceId: Id<"workspaces">) => {
+    const cached = workspaceMemberships.get(workspaceId);
+    if (cached !== undefined) return cached;
+    const membership = await getWorkspaceMembership(ctx, workspaceId, userId);
+    workspaceMemberships.set(workspaceId, membership);
+    return membership;
+  };
+
+  for (const channelId of new Set(channelIds)) {
+    const channel = await ctx.db.get(channelId);
+    if (!channel) continue;
+
+    const workspaceMembership = await membershipIn(channel.workspaceId);
+    if (!workspaceMembership) continue;
+
+    let channelMembership: Doc<"channelMembers"> | null = null;
+    if (!isPublicChannel(channel)) {
+      channelMembership = await ctx.db
+        .query("channelMembers")
+        .withIndex("by_channel_user", (q) =>
+          q.eq("channelId", channelId).eq("userId", userId),
+        )
+        .first();
+      if (!channelMembership) continue;
+    }
+
+    access.set(channelId, { userId, channel, workspaceMembership, channelMembership });
+  }
+
+  return access;
 }
 
 /**
