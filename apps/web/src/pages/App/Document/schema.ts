@@ -1,9 +1,9 @@
-import {
-  BlockNoteSchema,
-  defaultBlockSpecs,
-  defaultInlineContentSpecs,
-} from "@blocknote/core";
+import { BlockNoteSchema } from "@blocknote/core";
 import type { BlockNoteEditor } from "@blocknote/core";
+import {
+  richTextBlockSpecs,
+  richTextInlineContentSpecs,
+} from "@/lib/blocknote/rich-text-schema";
 import { DiagramBlock } from "./CustomBlocks/DiagramBlock";
 import { SpreadsheetLink, SpreadsheetCellRef } from "./CustomBlocks/SpreadsheetRef";
 import { SpreadsheetRangeBlock } from "./CustomBlocks/SpreadsheetRangeBlock";
@@ -14,13 +14,13 @@ import { DocumentBlockEmbed } from "./CustomBlocks/DocumentBlockEmbed";
 /** BlockNote schema for the document editor. */
 export const documentSchema = BlockNoteSchema.create({
   blockSpecs: {
-    ...defaultBlockSpecs,
+    ...richTextBlockSpecs(),
     diagram: DiagramBlock(),
     spreadsheetRange: SpreadsheetRangeBlock(),
     documentBlockEmbed: DocumentBlockEmbed(),
   },
   inlineContentSpecs: {
-    ...defaultInlineContentSpecs,
+    ...richTextInlineContentSpecs(),
     mention: User,
     eventMention: EventBlock,
     spreadsheetLink: SpreadsheetLink,

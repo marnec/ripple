@@ -1,9 +1,11 @@
 import "@blocknote/core/fonts/inter.css";
 import "@blocknote/shadcn/style.css";
 import { withCollaboration } from "@blocknote/core/yjs";
-import { useCreateBlockNote } from "@blocknote/react";
+import { SuggestionMenuController, useCreateBlockNote } from "@blocknote/react";
 import { BlockNoteView } from "@blocknote/shadcn";
 import { useTheme } from "next-themes";
+import { richTextDictionary } from "@/lib/blocknote/rich-text-schema";
+import { getRichSlashMenuItems } from "@/lib/blocknote/slash-menu";
 import { documentSchema } from "@/pages/App/Document/schema";
 import {
   CollaborativeSurface,
@@ -72,6 +74,9 @@ function GuestDocumentBody({
   const editor = useCreateBlockNote(
     withCollaboration({
       schema: documentSchema,
+      // Same dictionary as the member editor, so the math block's strings come
+      // from the same place (see `richTextDictionary`).
+      dictionary: richTextDictionary,
       collaboration: {
         // `awareness` is the provider's once connected, and a local one before
         // that — the same expression the member path uses.
@@ -92,7 +97,14 @@ function GuestDocumentBody({
             // No `&& isHydrated` — the sequence above is what guarantees it.
             editable={accessLevel === "edit"}
             theme={resolvedTheme === "dark" ? "dark" : "light"}
-          />
+            /* Replaced so the math items join the defaults, as for members. */
+            slashMenu={false}
+          >
+            <SuggestionMenuController
+              triggerCharacter={"/"}
+              getItems={(query) => getRichSlashMenuItems(editor, query)}
+            />
+          </BlockNoteView>
         </div>
       </div>
     </div>

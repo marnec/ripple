@@ -8,7 +8,7 @@ import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 import { taskDescriptionSchema } from "./taskDescriptionSchema";
 import { createTaskPatch, taskDetailLoadState } from "./taskDetailModel";
-import { en as bnEn } from "@blocknote/core/locales";
+import { richTextDictionary } from "@/lib/blocknote/rich-text-schema";
 import { useDocumentCollaboration } from "../../../hooks/use-document-collaboration";
 import { useResourceDoc } from "../../../hooks/use-collab-session";
 import { syncState } from "@/lib/collab/connection-policy";
@@ -16,9 +16,9 @@ import { useTaskGithubLink } from "./useTaskGithubLink";
 import { useTaskEditTracking } from "./useTaskEditTracking";
 
 const taskDescriptionDictionary = {
-  ...bnEn,
+  ...richTextDictionary,
   placeholders: {
-    ...bnEn.placeholders,
+    ...richTextDictionary.placeholders,
     default: "Write a description… # refs, @ mentions, / commands",
     emptyDocument: "Write a description… # refs, @ mentions, / commands",
   },

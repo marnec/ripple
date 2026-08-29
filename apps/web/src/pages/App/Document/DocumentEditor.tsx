@@ -20,7 +20,6 @@ import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 import { useViewer } from "../UserContext";
 import { useLocalRecents } from "@/hooks/use-local-recents";
-import { en as bnEn } from "@blocknote/core/locales";
 import { useDocumentCollaboration } from "../../../hooks/use-document-collaboration";
 import {
   CollaborativeSurface,
@@ -39,9 +38,9 @@ import type { BlockNoteEditor } from "@blocknote/core";
 const SHOW_EDITOR_REVEAL_RIPPLE = false;
 
 const documentDictionary = {
-  ...bnEn,
+  ...richTextDictionary,
   placeholders: {
-    ...bnEn.placeholders,
+    ...richTextDictionary.placeholders,
     default: "Start writing… # refs, @ mentions, / commands",
     emptyDocument: "Start writing… # refs, @ mentions, / commands",
   },
@@ -67,6 +66,9 @@ import {
   CommentsDockedRail,
   CommentsDrawer,
 } from "./CommentsRail";
+import { richTextDictionary } from "@/lib/blocknote/rich-text-schema";
+import { getRichSlashMenuItems } from "@/lib/blocknote/slash-menu";
+import { useMediaDropGuard } from "@/hooks/use-media-drop-guard";
 import { documentSchema as schema } from "./schema";
 import { useDocumentSuggestions } from "./useDocumentSuggestions";
 
@@ -256,6 +258,13 @@ function DocumentBody({
   // Editor scroll container: scrollbar appears only while scrolling, then fades.
   const editorScrollRef = useAutoHideScrollbar<HTMLDivElement>();
 
+  // Documents take images, not attachments — see `rich-text-schema.ts`. The
+  // guard sits on the scroll container so it captures the drop before
+  // ProseMirror's own listener on the editor node sees it.
+  const mediaDropGuard = useMediaDropGuard(
+    "Documents take images only — files, audio and video can't be embedded.",
+  );
+
   // Inject imported content (from .docx import) once when the editor is ready
   useEffect(() => {
     if (!editor || !importedHTML || importInjectedRef.current) return;
@@ -422,12 +431,15 @@ function DocumentBody({
         theme={resolvedTheme === "dark" ? "dark" : "light"}
         renderEditor={false}
         comments={false}
+        /* Replaced below so the math items can join the defaults. */
+        slashMenu={false}
         className="flex-1 min-h-0 flex overflow-hidden"
       >
       <div
         ref={editorScrollRef}
         data-editor-scroll
         className="flex-1 min-w-0 scrollbar-autohide pt-4"
+        {...mediaDropGuard}
         onMouseDown={(e) => {
           // Clicking the empty editor padding (side margins / below the last
           // block) should drop the caret at the end of the document rather
@@ -502,6 +514,10 @@ function DocumentBody({
       </DocumentSpotlightFrame>
       </div>
       {commentsEnabled && !isMobile && <CommentsDockedRail editor={editor} />}
+      <SuggestionMenuController
+        triggerCharacter={"/"}
+        getItems={(query) => getRichSlashMenuItems(editor, query)}
+      />
       <SuggestionMenuController triggerCharacter={"#"} getItems={getHashItems} />
       <SuggestionMenuController triggerCharacter={"@"} getItems={getAtMentionItems} />
       {commentsEnabled && <CommentCountReporter />}

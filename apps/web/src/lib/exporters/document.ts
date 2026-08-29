@@ -6,6 +6,7 @@
 // switch lives in just one place.
 
 import type { BlockNoteEditor } from "@blocknote/core";
+import { latexToMathMLElement } from "@blocknote/math-block";
 import type { ConvexReactClient } from "convex/react";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
@@ -73,6 +74,7 @@ interface InlineRenderer<T> {
   sheetLink(name: string): T;
   /** value: cell value (undefined if unresolved); cellRef: like "A1"; sheetName: resolved name. */
   sheetCellRef(value: string | undefined, cellRef: string, sheetName: string): T;
+  math(latex: string): T;
 }
 
 function walkInline<T>(items: ExportInline[], ctx: ExportContext, r: InlineRenderer<T>): T[] {
@@ -98,6 +100,9 @@ function walkInline<T>(items: ExportInline[], ctx: ExportContext, r: InlineRende
         out.push(r.sheetCellRef(value, item.cellRef || "?", spreadsheetLabel(item.spreadsheetId, ctx)));
         break;
       }
+      case "math":
+        out.push(r.math(item.latex));
+        break;
     }
   }
   return out;
@@ -129,6 +134,12 @@ const mdInline: InlineRenderer<string> = {
     return value !== undefined
       ? `${escapeMd(value)} _(${escapeMd(cellRef)} @ ${escapeMd(sheetName)})_`
       : `\`${cellRef}\` _(${escapeMd(sheetName)})_`;
+  },
+  // `$...$` / `$$...$$` are what BlockNote's own markdown export emits, and
+  // what every markdown renderer with math support expects. The LaTeX is not
+  // escaped — escaping it would break the notation it is.
+  math(latex) {
+    return `$${latex}$`;
   },
 };
 
@@ -206,6 +217,9 @@ function blockToMarkdown(
       break;
     case "documentBlockEmbed":
       out = `> _Embedded block from ${escapeMd(documentLabel(block.documentId, ctx))}_\n\n`;
+      break;
+    case "mathBlock":
+      out = `$$\n${block.latex}\n$$\n\n`;
       break;
     case "unknown": {
       const text = inline(block.content);
@@ -295,7 +309,23 @@ const htmlInline: InlineRenderer<string> = {
       ? `${escapeHtml(value)} <em>(${escapeHtml(cellRef)} @ ${escapeHtml(sheetName)})</em>`
       : `<code>${escapeHtml(cellRef)}</code> <em>(${escapeHtml(sheetName)})</em>`;
   },
+  math(latex) {
+    return mathToHtml(latex, true);
+  },
 };
+
+/**
+ * Formulas export as native MathML, which every current browser renders
+ * without a stylesheet — the same conversion BlockNote's own HTML export uses,
+ * so a round-trip back into the editor is lossless. Invalid LaTeX (the source
+ * is user input) falls back to the source in a code span rather than emitting
+ * a broken element.
+ */
+function mathToHtml(latex: string, inline: boolean): string {
+  const { mathMLElement, error } = latexToMathMLElement(latex, inline);
+  if (error) return `<code>${escapeHtml(inline ? `$${latex}$` : `$$${latex}$$`)}</code>`;
+  return mathMLElement.outerHTML;
+}
 
 const HTML_STYLES = `
 body { font-family: system-ui, -apple-system, sans-serif; max-width: 820px; margin: 2rem auto; padding: 0 1rem; line-height: 1.6; color: #222; }
@@ -420,6 +450,9 @@ function blockToHtml(block: ExportBlock, ctx: ExportContext): string {
     case "documentBlockEmbed":
       out = `<blockquote class="embed"><em>Embedded block from ${escapeHtml(documentLabel(block.documentId, ctx))}</em></blockquote>`;
       break;
+    case "mathBlock":
+      out = `<p>${mathToHtml(block.latex, false)}</p>`;
+      break;
     case "unknown": {
       const inner = walkInline(block.content, ctx, htmlInline).join("");
       if (inner.trim()) out = `<p>${inner}</p>`;
@@ -521,6 +554,12 @@ function makeDocxInline(docx: DocxModule): InlineRenderer<DocxRun> {
         return new TextRun({ text: `${value} (${cellRef} @ ${sheetName})` });
       }
       return new TextRun({ text: `[${cellRef} @ ${sheetName}]`, italics: true });
+    },
+    // Word has native equations, but reaching them means LaTeX → MathML → OMML
+    // (`mathml2omml`) — a dependency this exporter does not carry. The LaTeX
+    // source in math delimiters is the lossless fallback.
+    math(latex) {
+      return new TextRun({ text: `$${latex}$`, font: "Consolas" });
     },
   };
 }
@@ -656,6 +695,13 @@ function blockToDocx(
       result.push(new docx.Paragraph({
         alignment: align,
         children: [new docx.TextRun({ text, italics: true })],
+      }));
+      break;
+    }
+    case "mathBlock": {
+      result.push(new docx.Paragraph({
+        alignment: align,
+        children: [inline.math(block.latex)],
       }));
       break;
     }

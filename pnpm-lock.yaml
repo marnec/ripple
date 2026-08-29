@@ -437,6 +437,9 @@ importers:
       '@blocknote/core':
         specifier: 0.54.0
         version: 0.54.0(@types/hast@3.0.5)(y-prosemirror@1.3.7(prosemirror-model@1.25.11)(prosemirror-state@1.4.4)(prosemirror-view@1.42.2)(y-protocols@1.0.7(yjs@13.6.32))(yjs@13.6.32))(y-protocols@1.0.7(yjs@13.6.32))(yjs@13.6.32)
+      '@blocknote/math-block':
+        specifier: 0.54.0
+        version: 0.54.0(@floating-ui/dom@1.8.0)(@types/hast@3.0.5)(@types/react-dom@19.2.5(@types/react@19.2.18))(@types/react@19.2.18)(docx@9.7.1)(prosemirror-view@1.42.2)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(y-prosemirror@1.3.7(prosemirror-model@1.25.11)(prosemirror-state@1.4.4)(prosemirror-view@1.42.2)(y-protocols@1.0.7(yjs@13.6.32))(yjs@13.6.32))(y-protocols@1.0.7(yjs@13.6.32))(yjs@13.6.32)
       '@blocknote/react':
         specifier: 0.54.0
         version: 0.54.0(@floating-ui/dom@1.8.0)(@types/hast@3.0.5)(@types/react-dom@19.2.5(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(y-prosemirror@1.3.7(prosemirror-model@1.25.11)(prosemirror-state@1.4.4)(prosemirror-view@1.42.2)(y-protocols@1.0.7(yjs@13.6.32))(yjs@13.6.32))(y-protocols@1.0.7(yjs@13.6.32))(yjs@13.6.32)
@@ -1473,6 +1476,43 @@ packages:
       y-protocols:
         optional: true
       yjs:
+        optional: true
+
+  '@blocknote/math-block@0.54.0':
+    resolution: {integrity: sha512-dguY+E2/Y51ZLE+ZJjkemSY1p16OvIpA7N56LJpT6gbNQAB9awRqWxsn64xTVwSpK5u9UVpdj18i2aBzf2Bfvg==}
+    peerDependencies:
+      '@blocknote/xl-docx-exporter': ^0.54.0
+      '@blocknote/xl-email-exporter': ^0.54.0
+      '@blocknote/xl-odt-exporter': ^0.54.0
+      '@blocknote/xl-pdf-exporter': ^0.54.0
+      '@react-email/components': ^1.0.12
+      '@react-pdf/math': ^2.0.0
+      '@react-pdf/renderer': ^4.5.1
+      docx: ^9.6.1
+      mathjax-full: ^3.2.2
+      mathml2omml: ^0.5.0
+      react: 19.2.8
+      react-dom: 19.2.8
+    peerDependenciesMeta:
+      '@blocknote/xl-docx-exporter':
+        optional: true
+      '@blocknote/xl-email-exporter':
+        optional: true
+      '@blocknote/xl-odt-exporter':
+        optional: true
+      '@blocknote/xl-pdf-exporter':
+        optional: true
+      '@react-email/components':
+        optional: true
+      '@react-pdf/math':
+        optional: true
+      '@react-pdf/renderer':
+        optional: true
+      docx:
+        optional: true
+      mathjax-full:
+        optional: true
+      mathml2omml:
         optional: true
 
   '@blocknote/react@0.54.0':
@@ -9631,6 +9671,37 @@ snapshots:
       - lowlight
       - refractor
       - sugar-high
+
+  '@blocknote/math-block@0.54.0(@floating-ui/dom@1.8.0)(@types/hast@3.0.5)(@types/react-dom@19.2.5(@types/react@19.2.18))(@types/react@19.2.18)(docx@9.7.1)(prosemirror-view@1.42.2)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(y-prosemirror@1.3.7(prosemirror-model@1.25.11)(prosemirror-state@1.4.4)(prosemirror-view@1.42.2)(y-protocols@1.0.7(yjs@13.6.32))(yjs@13.6.32))(y-protocols@1.0.7(yjs@13.6.32))(yjs@13.6.32)':
+    dependencies:
+      '@blocknote/core': 0.54.0(@types/hast@3.0.5)(y-prosemirror@1.3.7(prosemirror-model@1.25.11)(prosemirror-state@1.4.4)(prosemirror-view@1.42.2)(y-protocols@1.0.7(yjs@13.6.32))(yjs@13.6.32))(y-protocols@1.0.7(yjs@13.6.32))(yjs@13.6.32)
+      '@blocknote/react': 0.54.0(@floating-ui/dom@1.8.0)(@types/hast@3.0.5)(@types/react-dom@19.2.5(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(y-prosemirror@1.3.7(prosemirror-model@1.25.11)(prosemirror-state@1.4.4)(prosemirror-view@1.42.2)(y-protocols@1.0.7(yjs@13.6.32))(yjs@13.6.32))(y-protocols@1.0.7(yjs@13.6.32))(yjs@13.6.32)
+      '@handlewithcare/prosemirror-inputrules': 0.1.4(prosemirror-model@1.25.11)(prosemirror-state@1.4.4)(prosemirror-view@1.42.2)
+      katex: 0.16.45
+      prosemirror-model: 1.25.11
+      prosemirror-state: 1.4.4
+      react: 19.2.8
+      react-dom: 19.2.8(react@19.2.8)
+    optionalDependencies:
+      docx: 9.7.1
+    transitivePeerDependencies:
+      - '@floating-ui/dom'
+      - '@lezer/common'
+      - '@lezer/highlight'
+      - '@types/hast'
+      - '@types/react'
+      - '@types/react-dom'
+      - '@y/prosemirror'
+      - '@y/protocols'
+      - '@y/y'
+      - highlight.js
+      - lowlight
+      - prosemirror-view
+      - refractor
+      - sugar-high
+      - y-prosemirror
+      - y-protocols
+      - yjs
 
   '@blocknote/react@0.54.0(@floating-ui/dom@1.8.0)(@types/hast@3.0.5)(@types/react-dom@19.2.5(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(y-prosemirror@1.3.7(prosemirror-model@1.25.11)(prosemirror-state@1.4.4)(prosemirror-view@1.42.2)(y-protocols@1.0.7(yjs@13.6.32))(yjs@13.6.32))(y-protocols@1.0.7(yjs@13.6.32))(yjs@13.6.32)':
     dependencies:

@@ -88,6 +88,9 @@ export function parseInline(content: unknown): ExportInline[] {
       const props = asRecord(item.props);
       const userId = asString(props.userId) || asString(props.user);
       if (userId) out.push({ kind: "mention", userId });
+    } else if (type === "math") {
+      // "plain" content: the LaTeX source, carried as inlines like a code block.
+      out.push({ kind: "math", latex: inlineToPlainText(parseInline(item.content)) });
     } else if (type === "spreadsheetLink") {
       const props = asRecord(item.props);
       out.push({ kind: "sheetLink", spreadsheetId: asString(props.spreadsheetId) });
@@ -111,6 +114,7 @@ export function inlineToPlainText(inline: ExportInline[]): string {
   for (const item of inline) {
     if (item.kind === "text") out += item.text;
     else if (item.kind === "link") out += inlineToPlainText(item.children);
+    else if (item.kind === "math") out += item.latex;
   }
   return out;
 }
@@ -191,6 +195,11 @@ function parseBlock(raw: IncomingBlock): ExportBlock {
         stableRef: asString(props.stableRef),
         showHeaders: asBoolean(props.showHeaders, true),
       };
+    case "mathBlock": {
+      // Same "plain" content shape as a code block: the LaTeX source.
+      const latex = inlineToPlainText(parseInline(raw.content));
+      return { kind: "mathBlock", latex };
+    }
     case "documentBlockEmbed":
       return {
         kind: "documentBlockEmbed",

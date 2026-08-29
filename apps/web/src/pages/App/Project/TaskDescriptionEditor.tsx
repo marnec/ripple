@@ -12,6 +12,8 @@ import { useState } from "react";
 import { useTheme } from "next-themes";
 import { useMemberSuggestions } from "../../../hooks/use-member-suggestions";
 import { useEventSuggestions } from "../../../hooks/use-event-suggestions";
+import { getRichSlashMenuItems } from "@/lib/blocknote/slash-menu";
+import { useMediaDropGuard } from "@/hooks/use-media-drop-guard";
 import { BlockPickerDialog } from "../Document/BlockPickerDialog";
 import { CellRefDialog } from "../Document/CellRefDialog";
 import { api } from "@convex/_generated/api";
@@ -55,6 +57,11 @@ export function TaskDescriptionEditor({
   const ensureBlockRef = useMutation(api.documentBlockRefs.ensureBlockRef);
   const ensureCellRef = useMutation(api.spreadsheetCellRefs.ensureCellRef);
   const prepareStableRef = useAction(api.spreadsheetCellRefsNode.prepareStableRef);
+
+  // Descriptions take images, not attachments — see `rich-text-schema.ts`.
+  const mediaDropGuard = useMediaDropGuard(
+    "Descriptions take images only — files, audio and video can't be embedded.",
+  );
 
   const [blockPickerDialog, setBlockPickerDialog] = useState<{
     open: boolean;
@@ -264,6 +271,7 @@ export function TaskDescriptionEditor({
           "task-description-editor border rounded-md p-2 animate-fade-in",
           className
         )}
+        {...mediaDropGuard}
         onMouseDown={(e) => {
           const target = e.target as HTMLElement;
           if (target.closest(".bn-editor")) return;
@@ -280,7 +288,13 @@ export function TaskDescriptionEditor({
           editor={editor}
           theme={resolvedTheme === "dark" ? "dark" : "light"}
           sideMenu={false}
+          /* Replaced below so the math items can join the defaults. */
+          slashMenu={false}
         >
+          <SuggestionMenuController
+            triggerCharacter={"/"}
+            getItems={(query) => getRichSlashMenuItems(editor, query)}
+          />
           <SuggestionMenuController triggerCharacter={"#"} getItems={getResourceItems} />
           <SuggestionMenuController
             triggerCharacter={"@"}

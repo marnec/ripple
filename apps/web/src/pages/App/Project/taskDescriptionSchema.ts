@@ -1,4 +1,8 @@
-import { BlockNoteSchema, defaultBlockSpecs, defaultInlineContentSpecs } from "@blocknote/core";
+import { BlockNoteSchema } from "@blocknote/core";
+import {
+  richTextBlockSpecs,
+  richTextInlineContentSpecs,
+} from "@/lib/blocknote/rich-text-schema";
 import { DiagramBlock } from "../Document/CustomBlocks/DiagramBlock";
 import { DocumentBlockEmbed } from "../Document/CustomBlocks/DocumentBlockEmbed";
 import { SpreadsheetRangeBlock } from "../Document/CustomBlocks/SpreadsheetRangeBlock";
@@ -9,16 +13,18 @@ import { UserMention } from "./CustomInlineContent/UserMention";
 import { ProjectReference } from "./CustomInlineContent/ProjectReference";
 import { EventMention } from "../Chat/CustomInlineContent/EventMention";
 
-// Task descriptions are richer than chat messages. Keep all default block specs.
+// Task descriptions are richer than chat messages: they share the document
+// editor's block set (defaults minus the media blocks, plus math) and add the
+// task-flavoured embeds and mentions on top.
 export const taskDescriptionSchema = BlockNoteSchema.create({
   blockSpecs: {
-    ...defaultBlockSpecs,
+    ...richTextBlockSpecs(),
     diagram: DiagramBlock(),
     documentBlockEmbed: DocumentBlockEmbed(),
     spreadsheetRange: SpreadsheetRangeBlock(),
   },
   inlineContentSpecs: {
-    ...defaultInlineContentSpecs,
+    ...richTextInlineContentSpecs(),
     diagramEmbed: DiagramEmbed,
     documentLink: DocumentLink,
     userMention: UserMention,

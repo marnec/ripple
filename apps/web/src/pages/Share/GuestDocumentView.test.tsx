@@ -25,7 +25,14 @@ const useCreateBlockNote = vi.hoisted(() =>
 const BlockNoteView = vi.hoisted(() =>
   vi.fn((_props: { editable: boolean }) => <div data-testid="editor" />),
 );
-vi.mock("@blocknote/react", () => ({ useCreateBlockNote }));
+// Partial: the math block's spec is built from `@blocknote/react`'s
+// `createReactBlockSpec` at import time, so a bare mock breaks the schema
+// module before any test runs. Only the editor factory is intercepted.
+vi.mock("@blocknote/react", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@blocknote/react")>()),
+  useCreateBlockNote,
+  SuggestionMenuController: () => null,
+}));
 vi.mock("@blocknote/shadcn", () => ({ BlockNoteView }));
 
 afterEach(() => {

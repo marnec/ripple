@@ -18,7 +18,8 @@ export type ExportInline =
   | { kind: "link"; href: string; children: ExportInline[] }
   | { kind: "mention"; userId: string }
   | { kind: "sheetLink"; spreadsheetId: string }
-  | { kind: "sheetCellRef"; spreadsheetId: string; cellRef: string; stableRef: string };
+  | { kind: "sheetCellRef"; spreadsheetId: string; cellRef: string; stableRef: string }
+  | { kind: "math"; latex: string };
 
 export type ExportBlock =
   | BaseBlock<"paragraph">
@@ -39,6 +40,7 @@ export type ExportBlock =
     showHeaders: boolean;
   }
   | { kind: "documentBlockEmbed"; documentId: string; blockId: string }
+  | { kind: "mathBlock"; latex: string }
   | { kind: "unknown"; type: string; content: ExportInline[]; children: ExportBlock[] };
 
 interface BaseBlock<K extends string> {

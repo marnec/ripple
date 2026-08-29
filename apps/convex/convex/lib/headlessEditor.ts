@@ -40,10 +40,16 @@ type ParsedBlocks = Awaited<
  *     "Cannot find package 'y-prosemirror'" the moment anything imports
  *     `@blocknote/core/yjs`.
  *
- * Markdown import only yields default block types. Every client schema
- * (`taskDescriptionSchema`, `taskCommentSchema`, the document schema) is a
- * superset of the defaults, so the output loads cleanly without replicating the
- * custom blocks (diagram/spreadsheet/mentions/…) server-side.
+ * Markdown import only yields default block types, and every client schema
+ * (`taskDescriptionSchema`, `taskCommentSchema`, the document schema) carries
+ * the ones markdown can produce — so the output loads cleanly without
+ * replicating the custom blocks (diagram/spreadsheet/mentions/…) server-side.
+ * The writing schemas are no longer strict supersets of the defaults: they drop
+ * `file`/`audio`/`video` (see `rich-text-schema.ts`). That is safe *because*
+ * markdown has no notation for any of them — `image` is the only media block
+ * this parser can emit, and it is kept. Dropping a block markdown *can*
+ * produce would silently corrupt seeds, so check this pairing before removing
+ * another default block.
  *
  * `"use node"` because of the JSDOM dependency. Returns plain values (blocks /
  * bytes) and takes no Convex `ctx`: callers keep their own `ctx.storage.store`,

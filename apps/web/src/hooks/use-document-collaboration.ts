@@ -36,8 +36,13 @@ export interface UseDocumentCollaborationOptions<
   schema: BlockNoteSchema<BSchema, ISchema, SSchema>;
   resourceType?: "doc" | "diagram" | "task";
   uploadFile?: (file: File) => Promise<string>;
-  /** Optional BlockNote dictionary override (used for placeholder customization). */
-  dictionary?: typeof en;
+  /**
+   * Optional BlockNote dictionary override (used for placeholder
+   * customization). Wider than `typeof en` because optional block packages
+   * add keys of their own — `@blocknote/math-block` reads its strings from
+   * `math` (see `richTextDictionary`).
+   */
+  dictionary?: typeof en & Record<string, unknown>;
   /**
    * Task-only: GitHub description-seed signals. When present, the editor is held
    * back behind a spinner until the seed lands (or times out) so the user can't

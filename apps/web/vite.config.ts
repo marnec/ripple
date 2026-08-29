@@ -66,6 +66,15 @@ export default defineConfig({
     environment: "jsdom",
     setupFiles: ["./src/test/setup.ts"],
     exclude: ["**/node_modules/**", "**/dist/**"],
+    server: {
+      deps: {
+        // `@blocknote/math-block` imports `katex/dist/katex.min.css`. Node
+        // cannot load a `.css` file, and externalized deps bypass Vite's
+        // transform — inlining it puts the import back through Vite, which
+        // knows what to do with a stylesheet.
+        inline: ["@blocknote/math-block"],
+      },
+    },
   },
   css: { devSourcemap: true },
   build: { sourcemap: true },

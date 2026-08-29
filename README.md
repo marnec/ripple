@@ -11,6 +11,7 @@ NEXT STEPS:
 - explore pdf reading, annotation and embedding
 
 - export excalidraw presentation to pptx
+- images and equations are not exported correctly in docx format
 
 - [ ] link previews in chat
 
