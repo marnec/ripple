@@ -3,8 +3,7 @@ import { api } from "../convex/_generated/api";
 import {
   createTestContext,
   setupAuthenticatedUser,
-  setupWorkspaceWithAdmin,
-} from "./helpers";
+  setupWorkspaceWithAdmin, channelFields } from "./helpers";
 import { WorkspaceRole, ChannelRole } from "@ripple/shared/enums/roles";
 import { writerWithTriggers } from "convex-helpers/server/triggers";
 import { triggers } from "../convex/dbTriggers";
@@ -141,7 +140,7 @@ describe("workspaceMembers.remove", () => {
       const chId = await db.insert("channels", {
         name: "secret",
         workspaceId,
-        type: "closed" as const,
+        ...channelFields("closed"),
       });
 
       // Admin is regular channel member (inserted first = longest tenured)

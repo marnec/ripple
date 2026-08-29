@@ -4,8 +4,7 @@ import { WorkspaceRole } from "@ripple/shared/enums/roles";
 import {
   createTestContext,
   setupAuthenticatedUser,
-  setupWorkspaceWithAdmin,
-} from "./helpers";
+  setupWorkspaceWithAdmin, channelFields } from "./helpers";
 
 type TestContext = ReturnType<typeof createTestContext>;
 
@@ -84,7 +83,7 @@ describe("shares", () => {
         return ctx.db.insert("channels", {
           workspaceId: workspaceId as any,
           name: "general",
-          type: "open",
+          ...channelFields("open"),
         });
       });
 

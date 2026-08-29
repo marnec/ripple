@@ -6,6 +6,7 @@ import { WorkspaceRole, ChannelRole } from "@ripple/shared/enums";
 import type { YjsShareRoom } from "@ripple/shared/shareTypes";
 import { normalizeIds } from "./utils/ids";
 
+import { isPublicChannel } from "@ripple/shared/channel";
 // ─── Result types ────────────────────────────────────────────────────
 
 export interface AuthIdentity {
@@ -291,7 +292,7 @@ export async function requireChannelAccess(
 
   let channelMembership: Doc<"channelMembers"> | null = null;
 
-  if (channel.type !== "open") {
+  if (!isPublicChannel(channel)) {
     channelMembership = await ctx.db
       .query("channelMembers")
       .withIndex("by_channel_user", (q) =>
@@ -341,7 +342,7 @@ export async function checkChannelAccess(
   if (!workspaceMembership) return null;
 
   let channelMembership: Doc<"channelMembers"> | null = null;
-  if (channel.type !== "open") {
+  if (!isPublicChannel(channel)) {
     channelMembership = await ctx.db
       .query("channelMembers")
       .withIndex("by_channel_user", (q) =>
@@ -408,7 +409,7 @@ export async function filterChannelRecipients(
         userId,
       );
       if (!workspaceMembership) return null;
-      if (channel.type === "open") return userId;
+      if (isPublicChannel(channel)) return userId;
 
       const channelMembership = await ctx.db
         .query("channelMembers")

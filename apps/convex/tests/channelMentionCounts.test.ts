@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ChannelType } from "@ripple/shared/enums/roles";
+import { ChannelType, ChannelVisibility } from "@ripple/shared/enums/roles";
 import { api, internal } from "../convex/_generated/api";
 import { withTriggers } from "../convex/dbTriggers";
 import { createTestContext, setupWorkspaceWithAdmin } from "./helpers";
@@ -20,7 +20,7 @@ async function setup(t: ReturnType<typeof createTestContext>) {
   const channelId = await asUser.mutation(api.channels.create, {
     workspaceId,
     name: "general",
-    type: ChannelType.OPEN,
+    visibility: ChannelVisibility.PUBLIC,
   });
   const targetId = await t.run(async (ctx) =>
     ctx.db.insert("users", { name: "Alice", email: "alice@test.com" }),
@@ -135,7 +135,7 @@ describe("channel mention counts", () => {
     const other = await asUser.mutation(api.channels.create, {
       workspaceId,
       name: "random",
-      type: ChannelType.OPEN,
+      visibility: ChannelVisibility.PUBLIC,
     });
 
     await send(t, asUser, channelId, targetId, "x1");
@@ -181,7 +181,7 @@ describe("channel mention counts", () => {
     const other = await asUser.mutation(api.channels.create, {
       workspaceId,
       name: "second",
-      type: ChannelType.OPEN,
+      visibility: ChannelVisibility.PUBLIC,
     });
     await send(t, asUser, channelId, targetId, "c1");
     await send(t, asUser, other, targetId, "c2");

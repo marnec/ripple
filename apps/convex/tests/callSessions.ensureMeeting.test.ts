@@ -8,7 +8,7 @@ import type {
   RealtimeKitClient,
   CreateMeetingOptions,
 } from "../convex/lib/realtimeKit";
-import { createTestContext, setupWorkspaceWithAdmin } from "./helpers";
+import { createTestContext, setupWorkspaceWithAdmin, channelFields } from "./helpers";
 
 type T = ReturnType<typeof createTestContext>;
 
@@ -39,7 +39,7 @@ async function makeChannel(t: T): Promise<Id<"channels">> {
     ctx.db.insert("channels", {
       name: "general",
       workspaceId,
-      type: ChannelType.OPEN,
+      ...channelFields("open"),
     }),
   );
 }

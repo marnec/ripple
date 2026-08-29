@@ -4,8 +4,7 @@ import type { Id } from "../convex/_generated/dataModel";
 import {
   createTestContext,
   setupAuthenticatedUser,
-  setupWorkspaceWithAdmin,
-} from "./helpers";
+  setupWorkspaceWithAdmin, channelFields } from "./helpers";
 import { ChannelRole, WorkspaceRole } from "@ripple/shared/enums/roles";
 import {
   deliveredPushes,
@@ -61,7 +60,7 @@ async function setupClosedChannel(
     const channelId = await ctx.db.insert("channels", {
       name: "leadership",
       workspaceId: opts.workspaceId,
-      type: "closed" as const,
+      ...channelFields("closed"),
     });
     await ctx.db.insert("channelMembers", {
       channelId,
@@ -81,7 +80,7 @@ async function setupDmChannel(
     const channelId = await ctx.db.insert("channels", {
       name: "",
       workspaceId: opts.workspaceId,
-      type: "dm" as const,
+      ...channelFields("dm"),
     });
     for (const userId of opts.userIds) {
       await ctx.db.insert("channelMembers", {
@@ -103,7 +102,7 @@ async function setupOpenChannel(
     ctx.db.insert("channels", {
       name: "general",
       workspaceId,
-      type: "open" as const,
+      ...channelFields("open"),
     }),
   );
 }

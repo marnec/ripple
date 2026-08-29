@@ -18,6 +18,7 @@ import {
   unsubscribeNonChannelMembersPage,
 } from "./notificationSubscriptionSync";
 
+import { isPublicChannel } from "@ripple/shared/channel";
 export const memberJoined = internalMutation({
   args: {
     userId: v.id("users"),
@@ -67,7 +68,7 @@ export const subscribeMembersPage = internalMutation({
   returns: v.object({ cursor: v.union(v.string(), v.null()), isDone: v.boolean() }),
   handler: async (ctx, args) => {
     const channel = await ctx.db.get(args.channelId);
-    if (!channel || channel.type !== "open") {
+    if (!channel || !isPublicChannel(channel)) {
       return { cursor: null, isDone: true };
     }
     return subscribeChannelMembersPage(
@@ -124,7 +125,7 @@ export const unsubscribeNonMembersPage = internalMutation({
   returns: v.object({ cursor: v.union(v.string(), v.null()), isDone: v.boolean() }),
   handler: async (ctx, args) => {
     const channel = await ctx.db.get(args.channelId);
-    if (!channel || channel.type === "open") {
+    if (!channel || isPublicChannel(channel)) {
       return { cursor: null, isDone: true };
     }
     return unsubscribeNonChannelMembersPage(ctx, args.channelId, args.cursor);

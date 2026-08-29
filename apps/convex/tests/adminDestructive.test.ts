@@ -8,8 +8,7 @@ import {
   createTestContext,
   setupAuthenticatedUser,
   setupProject,
-  setupWorkspaceWithAdmin,
-} from "./helpers";
+  setupWorkspaceWithAdmin, channelFields } from "./helpers";
 
 type T = ReturnType<typeof createTestContext>;
 
@@ -51,7 +50,7 @@ describe("admin: workspace hard-delete", () => {
       const memberId = await ctx.db.insert("users", { name: "Member", email: "m@x.com" });
       await ctx.db.insert("workspaceMembers", { userId: memberId, workspaceId, role: WorkspaceRole.MEMBER });
       // channel + message
-      const channelId = await ctx.db.insert("channels", { name: "general", workspaceId, type: "open" });
+      const channelId = await ctx.db.insert("channels", { name: "general", workspaceId, ...channelFields("open")});
       await ctx.db.insert("messages", {
         userId: ownerId, isomorphicId: "iso1", body: "hi", plainText: "hi",
         channelId, deleted: false,

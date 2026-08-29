@@ -15,7 +15,7 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { createTestContext, setupWorkspaceWithAdmin } from "./helpers";
+import { createTestContext, setupWorkspaceWithAdmin, channelFields } from "./helpers";
 import { ChannelType } from "@ripple/shared/enums/roles";
 import type { Id } from "../convex/_generated/dataModel";
 
@@ -105,7 +105,7 @@ async function seedChannelWithSession(
     const channelId = await ctx.db.insert("channels", {
       name: "general",
       workspaceId,
-      type: ChannelType.OPEN,
+      ...channelFields("open"),
     });
     const sessionId = await ctx.db.insert("callSessions", {
       channelId,

@@ -850,7 +850,7 @@ describe("calendarEvents", () => {
       const channelId = await asUser.mutation(api.channels.create, {
         name: "engineering",
         workspaceId: workspaceId as any,
-        type: "open" as const,
+        visibility: "public" as const,
       });
       const eventId = await asUser.mutation(api.calendarEvents.create, {
         workspaceId: workspaceId as any,
@@ -904,12 +904,12 @@ describe("calendarEvents", () => {
       const channelA = await asUser.mutation(api.channels.create, {
         name: "alpha",
         workspaceId: workspaceId as any,
-        type: "open" as const,
+        visibility: "public" as const,
       });
       const channelB = await asUser.mutation(api.channels.create, {
         name: "beta",
         workspaceId: workspaceId as any,
-        type: "open" as const,
+        visibility: "public" as const,
       });
       const eventId = await asUser.mutation(api.calendarEvents.create, {
         workspaceId: workspaceId as any,
@@ -944,7 +944,7 @@ describe("calendarEvents", () => {
       const channelId = await asUser.mutation(api.channels.create, {
         name: "ephemeral",
         workspaceId: workspaceId as any,
-        type: "open" as const,
+        visibility: "public" as const,
       });
       const eventId = await asUser.mutation(api.calendarEvents.create, {
         workspaceId: workspaceId as any,

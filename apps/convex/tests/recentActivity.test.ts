@@ -2,8 +2,7 @@ import { expect, describe, it } from "vitest";
 import { api } from "../convex/_generated/api";
 import {
   createTestContext,
-  setupWorkspaceWithAdmin,
-} from "./helpers";
+  setupWorkspaceWithAdmin, channelFields } from "./helpers";
 import { WorkspaceRole, ChannelType } from "@ripple/shared/enums/roles";
 import type { Id } from "../convex/_generated/dataModel";
 
@@ -153,12 +152,12 @@ describe("recentActivity", () => {
         const openId = await ctx.db.insert("channels", {
           workspaceId,
           name: "general",
-          type: ChannelType.OPEN,
+          ...channelFields("open"),
         });
         const closedId = await ctx.db.insert("channels", {
           workspaceId,
           name: "secrets",
-          type: ChannelType.CLOSED,
+          ...channelFields("closed"),
         });
         return { openId, closedId };
       });

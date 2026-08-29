@@ -14,6 +14,7 @@ import {
 import { useState } from "react";
 import { toast } from "sonner";
 import { api } from "@convex/_generated/api";
+import { isPublicChannel } from "@ripple/shared/channel";
 import type { Doc, Id } from "@convex/_generated/dataModel";
 import {
   ResponsiveDropdownMenu,
@@ -66,14 +67,14 @@ export function ChannelSelectorItem({
   style,
 }: ChannelSelectorItemProps) {
   const [showLeaveDialog, setShowLeaveDialog] = useState(false);
-  const hideChannel = useMutation(api.channelVisibility.hideChannel);
-  const unhideChannel = useMutation(api.channelVisibility.unhideChannel);
+  const dismissChannel = useMutation(api.channelDismissal.dismissChannel);
+  const restoreChannel = useMutation(api.channelDismissal.restoreChannel);
 
   const handleHide = () => {
     // Flag the upcoming list change as self-initiated so the acknowledged
     // channels hook doesn't show a pending "-1" badge.
     onSelfChangeIntent?.();
-    hideChannel({ channelId: channel._id }).catch((error: unknown) => {
+    dismissChannel({ channelId: channel._id }).catch((error: unknown) => {
       toast.error("Couldn't hide channel", {
         description:
           error instanceof ConvexError ? String(error.data) : "Please try again",
@@ -83,7 +84,7 @@ export function ChannelSelectorItem({
 
   const handleUnhide = () => {
     onSelfChangeIntent?.();
-    unhideChannel({ channelId: channel._id }).catch((error: unknown) => {
+    restoreChannel({ channelId: channel._id }).catch((error: unknown) => {
       toast.error("Couldn't unhide channel", {
         description:
           error instanceof ConvexError ? String(error.data) : "Please try again",
@@ -110,7 +111,7 @@ export function ChannelSelectorItem({
       >
           <div className="flex items-end shrink-0">
             <Hash size={14} />
-            <Lock className={cn("size-2.5", "-ml-0.5", channel.type === "open" ? "invisible" : "")} />
+            <Lock className={cn("size-2.5", "-ml-0.5", isPublicChannel(channel) ? "invisible" : "")} />
           </div>
           <span className={cn(
             "truncate",
@@ -148,7 +149,7 @@ export function ChannelSelectorItem({
               <Eye className="text-muted-foreground" />
               <span>Show in sidebar</span>
             </ResponsiveDropdownMenuItem>
-          ) : channel.type === "open" ? (
+          ) : isPublicChannel(channel) ? (
             <ResponsiveDropdownMenuItem onSelect={handleHide}>
               <EyeOff className="text-muted-foreground" />
               <span>Hide from sidebar</span>

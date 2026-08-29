@@ -3,8 +3,7 @@ import { api } from "../convex/_generated/api";
 import {
   createTestContext,
   setupAuthenticatedUser,
-  setupWorkspaceWithAdmin,
-} from "./helpers";
+  setupWorkspaceWithAdmin, channelFields } from "./helpers";
 import { ChannelRole } from "@ripple/shared/enums/roles";
 import type { Id } from "../convex/_generated/dataModel";
 
@@ -18,7 +17,7 @@ async function setupPrivateChannel(
     const channelId = await ctx.db.insert("channels", {
       name,
       workspaceId,
-      type: "closed" as const,
+      ...channelFields("closed"),
     });
     await ctx.db.insert("channelMembers", {
       channelId,
@@ -40,7 +39,7 @@ async function setupPublicChannel(
     return ctx.db.insert("channels", {
       name,
       workspaceId,
-      type: "open" as const,
+      ...channelFields("open"),
     });
   });
 }

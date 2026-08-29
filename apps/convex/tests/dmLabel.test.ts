@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { api } from "../convex/_generated/api";
-import { createTestContext, setupAuthenticatedUser, setupWorkspaceWithAdmin } from "./helpers";
+import { createTestContext, setupAuthenticatedUser, setupWorkspaceWithAdmin, channelFields } from "./helpers";
 import { withTriggers } from "../convex/dbTriggers";
 
 /**
@@ -114,7 +114,7 @@ describe("channels.get", () => {
     const t = createTestContext();
     const { asAlice, workspaceId } = await setupDm(t);
     const openId = await t.run((ctx) =>
-      withTriggers(ctx).db.insert("channels", { name: "General", workspaceId, type: "open" }),
+      withTriggers(ctx).db.insert("channels", { name: "General", workspaceId, ...channelFields("open")}),
     );
 
     const channel = await asAlice.query(api.channels.get, { id: openId });

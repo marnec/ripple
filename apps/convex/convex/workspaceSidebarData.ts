@@ -3,8 +3,10 @@ import { dmLabelForViewer } from "./lib/dmLabel";
 import { v } from "convex/values";
 import { query } from "./_generated/server";
 import { requireWorkspaceMember } from "./authHelpers";
-import { channelTypeSchema } from "./schema";
+import { channelKindSchema, channelVisibilitySchema } from "./schema";
+import { ChannelKind, ChannelVisibility } from "@ripple/shared/enums";
 
+import { isDirectMessage, isPublicChannel } from "@ripple/shared/channel";
 export const get = query({
   args: {
     workspaceId: v.id("workspaces"),
@@ -21,7 +23,8 @@ export const get = query({
         _creationTime: v.number(),
         name: v.string(),
         workspaceId: v.id("workspaces"),
-        type: channelTypeSchema,
+        kind: channelKindSchema,
+        visibility: channelVisibilitySchema,
         isHidden: v.boolean(),
       }),
     ),
@@ -46,7 +49,12 @@ export const get = query({
         .collect(),
       ctx.db
         .query("channels")
-        .withIndex("by_type_workspace", (q) => q.eq("type", "open").eq("workspaceId", workspaceId))
+        .withIndex("by_kind_visibility_workspace", (q) =>
+          q
+            .eq("kind", ChannelKind.CHANNEL)
+            .eq("visibility", ChannelVisibility.PUBLIC)
+            .eq("workspaceId", workspaceId),
+        )
         .collect(),
       ctx.db
         .query("userChannelState")
@@ -85,9 +93,9 @@ export const get = query({
         const hiddenAt = hiddenAtByChannelId.get(c._id);
         let isHidden = false;
         if (hiddenAt !== undefined) {
-          if (c.type === "open") {
+          if (isPublicChannel(c)) {
             isHidden = true;
-          } else if (c.type === "dm") {
+          } else if (isDirectMessage(c)) {
             // Only DMs with a hide flag pay the latest-message lookup. Single
             // indexed read; bounded by the user's hidden-DM count.
             const latestMessage = await ctx.db
@@ -102,14 +110,15 @@ export const get = query({
 
         // A DM carries no stored label — it is derived from the participants,
         // and in a sidebar it is the *other* person, not "you × them".
-        const name = c.type === "dm" ? await dmLabelForViewer(ctx, c._id, userId) : c.name;
+        const name = isDirectMessage(c) ? await dmLabelForViewer(ctx, c._id, userId) : c.name;
 
         return {
           _id: c._id,
           _creationTime: c._creationTime,
           name,
           workspaceId: c.workspaceId,
-          type: c.type,
+          kind: c.kind,
+          visibility: c.visibility,
           isHidden,
         };
       }),

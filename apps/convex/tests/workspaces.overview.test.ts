@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ChannelType } from "@ripple/shared/enums/roles";
+import { ChannelType, ChannelVisibility } from "@ripple/shared/enums/roles";
 import { api } from "../convex/_generated/api";
 import {
   membersByWorkspace,
@@ -55,7 +55,7 @@ describe("workspaces.overview", () => {
     await asUser.mutation(api.channels.create, {
       workspaceId,
       name: "general",
-      type: ChannelType.OPEN,
+      visibility: ChannelVisibility.PUBLIC,
     });
     const projectId = await asUser.mutation(api.projects.create, {
       workspaceId,

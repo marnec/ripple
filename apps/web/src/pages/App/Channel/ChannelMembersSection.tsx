@@ -17,10 +17,13 @@ import { Shield, User, UserMinus, UserPlus } from "lucide-react";
 import { useState } from "react";
 import { api } from "@convex/_generated/api";
 import type { Doc, Id } from "@convex/_generated/dataModel";
+import { ChannelVisibility } from "@ripple/shared/enums";
+import type { ChannelVisibilityValue } from "@/lib/channel-visibility";
 
 interface ChannelMembersSectionProps {
   channelId: Id<"channels">;
-  channelType: "open" | "closed" | "dm";
+  /** Only a channel reaches this section, so it always has one. */
+  channelVisibility: ChannelVisibilityValue | undefined;
   isAdmin: boolean;
   currentUserId: Id<"users">;
   channelMembers: ChannelMember[];
@@ -29,7 +32,7 @@ interface ChannelMembersSectionProps {
 
 export function ChannelMembersSection({
   channelId,
-  channelType,
+  channelVisibility,
   isAdmin,
   currentUserId,
   channelMembers,
@@ -68,16 +71,16 @@ export function ChannelMembersSection({
 
   return (
     <div>
-      {channelType === "closed" && isAdmin && availableMembers.length > 0 && (
+      {channelVisibility === ChannelVisibility.PRIVATE && isAdmin && availableMembers.length > 0 && (
         <AddMemberSelect
           availableMembers={availableMembers}
           onAdd={handleAdd}
         />
       )}
 
-      {channelType === "open" && (
+      {channelVisibility === ChannelVisibility.PUBLIC && (
         <p className="text-sm text-muted-foreground mb-4">
-          All workspace members have access to this open channel.
+          All workspace members have access to this public channel.
         </p>
       )}
 
@@ -87,13 +90,13 @@ export function ChannelMembersSection({
             key={member._id}
             member={member}
             isAdmin={isAdmin}
-            isClosed={channelType === "closed"}
+            isClosed={channelVisibility === ChannelVisibility.PRIVATE}
             currentUserId={currentUserId}
             onRoleChange={handleRoleChange}
             onRemove={handleRemove}
           />
         ))}
-        {channelMembers.length === 0 && channelType !== "open" && (
+        {channelMembers.length === 0 && channelVisibility !== ChannelVisibility.PUBLIC && (
           <p className="text-sm text-muted-foreground py-3">
             No members yet. Add members above to get started.
           </p>

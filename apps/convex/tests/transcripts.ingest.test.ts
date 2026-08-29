@@ -4,8 +4,7 @@ import { internal } from "../convex/_generated/api";
 import { triggers } from "../convex/dbTriggers";
 import {
   createTestContext,
-  setupWorkspaceWithAdmin,
-} from "./helpers";
+  setupWorkspaceWithAdmin, channelFields } from "./helpers";
 import { ChannelType } from "@ripple/shared/enums/roles";
 
 afterEach(() => {
@@ -40,7 +39,7 @@ async function seedChannelWithSession(
     const channelId = await ctx.db.insert("channels", {
       name: "general",
       workspaceId: workspaceId as never,
-      type: ChannelType.OPEN,
+      ...channelFields("open"),
     });
     const sessionId = await ctx.db.insert("callSessions", {
       channelId,

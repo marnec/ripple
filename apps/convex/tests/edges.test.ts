@@ -2,8 +2,7 @@ import { expect, describe, it, vi, beforeEach, afterEach } from "vitest";
 import { api } from "../convex/_generated/api";
 import {
   createTestContext,
-  setupWorkspaceWithAdmin,
-} from "./helpers";
+  setupWorkspaceWithAdmin, channelFields } from "./helpers";
 import type { Id } from "../convex/_generated/dataModel";
 import { writerWithTriggers } from "convex-helpers/server/triggers";
 import { triggers } from "../convex/dbTriggers";
@@ -1033,7 +1032,7 @@ describe("channel mention edges (via messages trigger)", () => {
       return await db.insert("channels", {
         name: opts.name ?? "test-channel",
         workspaceId: opts.workspaceId,
-        type: "open" as const,
+        ...channelFields("open"),
       });
     });
   }

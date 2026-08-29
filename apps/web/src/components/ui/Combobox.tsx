@@ -44,6 +44,9 @@ type ComboboxProps = {
   align?: Align;
   popoverContentClassName?: string;
   total?: number;
+  /** Focuses the trigger. React 19 passes `ref` as an ordinary prop, and
+   *  base-ui merges it with the one PopoverTrigger attaches. */
+  ref?: React.Ref<HTMLButtonElement>;
 };
 
 const EMPTY_SELECTED: string[] = [];
@@ -70,6 +73,7 @@ export function Combobox({
   align,
   popoverContentClassName,
   total,
+  ref,
 }: ComboboxProps) {
   const [open, setOpenState] = React.useState(false);
   const listboxId = React.useId();
@@ -90,6 +94,7 @@ export function Combobox({
       <PopoverTrigger
         render={
           <Button
+            ref={ref}
             variant="outline"
             role="combobox"
             aria-expanded={open}

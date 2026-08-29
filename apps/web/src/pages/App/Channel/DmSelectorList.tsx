@@ -8,9 +8,10 @@ import {
   EyeOff,
   MessageCircle,
   MoreHorizontal,
+  Plus,
   User,
 } from "lucide-react";
-import { memo } from "react";
+import { memo, useState } from "react";
 import { toast } from "sonner";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
@@ -21,6 +22,7 @@ import {
   ResponsiveDropdownMenuTrigger,
 } from "../../../components/ui/responsive-dropdown-menu";
 import {
+  SidebarMenuAction,
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarMenuSub,
@@ -30,6 +32,7 @@ import {
 } from "../../../components/ui/sidebar";
 import { preloadChatContainer } from "../preload";
 import { ChannelCallIndicator } from "./ChannelCallIndicator";
+import { CreateDmDialog } from "./CreateDmDialog";
 import { useChannelCalls } from "@/hooks/use-channel-calls";
 
 type DmChannel = {
@@ -37,7 +40,8 @@ type DmChannel = {
   _creationTime: number;
   name: string;
   workspaceId: string;
-  type: string;
+  kind: string;
+  visibility: string;
   isHidden: boolean;
 };
 
@@ -51,6 +55,7 @@ export interface DmSelectorListProps {
 }
 
 export const DmSelectorList = memo(function DmSelectorList({
+  workspaceId,
   channelId,
   onChannelSelect,
   channels,
@@ -58,12 +63,17 @@ export const DmSelectorList = memo(function DmSelectorList({
   onToggle,
 }: DmSelectorListProps) {
   const { isMobile, setOpen } = useSidebar();
-  const hideChannel = useMutation(api.channelVisibility.hideChannel);
-  const unhideChannel = useMutation(api.channelVisibility.unhideChannel);
+  const dismissChannel = useMutation(api.channelDismissal.dismissChannel);
+  const restoreChannel = useMutation(api.channelDismissal.restoreChannel);
   // A DM is a channel, so its call reports through the same presence field.
   const channelCalls = useChannelCalls();
+  const [showCreateDm, setShowCreateDm] = useState(false);
 
-  if (!channels || channels.length === 0) return null;
+  // The section renders whether or not the viewer has any conversations. It
+  // used to disappear at zero, which hid the only entry point from precisely
+  // the person who has never started one.
+  const dms = channels ?? [];
+  const isLoading = channels === undefined;
 
   const handleSelect = (id: string) => {
     if (isMobile) setOpen(false);
@@ -71,7 +81,7 @@ export const DmSelectorList = memo(function DmSelectorList({
   };
 
   const handleClose = (dmId: Id<"channels">) => {
-    hideChannel({ channelId: dmId }).catch((error: unknown) => {
+    dismissChannel({ channelId: dmId }).catch((error: unknown) => {
       toast.error("Couldn't close conversation", {
         description:
           error instanceof ConvexError ? String(error.data) : "Please try again",
@@ -80,7 +90,7 @@ export const DmSelectorList = memo(function DmSelectorList({
   };
 
   const handleReopen = (dmId: Id<"channels">) => {
-    unhideChannel({ channelId: dmId }).catch((error: unknown) => {
+    restoreChannel({ channelId: dmId }).catch((error: unknown) => {
       toast.error("Couldn't reopen conversation", {
         description:
           error instanceof ConvexError ? String(error.data) : "Please try again",
@@ -103,9 +113,20 @@ export const DmSelectorList = memo(function DmSelectorList({
         <MessageCircle className="size-4" />
         <span className="font-medium">DMs</span>
       </SidebarMenuButton>
+      {/* Reveal-on-hover matches the Channels section — except with no
+          conversations, where the action is the only thing in the section and
+          hiding it would restore the problem this section's always-rendering
+          was meant to fix. */}
+      <SidebarMenuAction showOnHover={dms.length > 0} onClick={() => setShowCreateDm(true)}>
+        <Plus />
+        <span className="sr-only">New Direct Message</span>
+      </SidebarMenuAction>
       <CollapsibleContent>
         <SidebarMenuSub>
-          {channels.map((dm) => (
+          {!isLoading && dms.length === 0 && (
+            <p className="px-2 py-1 text-xs text-muted-foreground">No conversations yet</p>
+          )}
+          {dms.map((dm) => (
             <SidebarMenuSubItem key={dm._id} className="group/subitem relative">
               <SidebarMenuSubButton
                 render={
@@ -158,6 +179,12 @@ export const DmSelectorList = memo(function DmSelectorList({
           ))}
         </SidebarMenuSub>
       </CollapsibleContent>
+      <CreateDmDialog
+        workspaceId={workspaceId}
+        open={showCreateDm}
+        onOpenChange={setShowCreateDm}
+        existingConversationLabels={new Set(dms.map((dm) => dm.name))}
+      />
     </Collapsible>
   );
 });

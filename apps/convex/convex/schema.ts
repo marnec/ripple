@@ -1,6 +1,11 @@
 import { authTables } from "@convex-dev/auth/server";
 import { InviteStatus } from "@ripple/shared/enums/inviteStatus";
-import { ChannelRole, ChannelType, WorkspaceRole } from "@ripple/shared/enums/roles";
+import {
+  ChannelKind,
+  ChannelRole,
+  ChannelVisibility,
+  WorkspaceRole,
+} from "@ripple/shared/enums/roles";
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 
@@ -8,8 +13,12 @@ export const channelRoleSchema = v.union(
   ...Object.values(ChannelRole).map((role) => v.literal(role)),
 );
 
-export const channelTypeSchema = v.union(
-  ...Object.values(ChannelType).map((type) => v.literal(type)),
+export const channelKindSchema = v.union(
+  ...Object.values(ChannelKind).map((kind) => v.literal(kind)),
+);
+
+export const channelVisibilitySchema = v.union(
+  ...Object.values(ChannelVisibility).map((visibility) => v.literal(visibility)),
 );
 
 /**
@@ -197,11 +206,33 @@ export default defineSchema({
   channels: defineTable({
     name: v.string(),
     workspaceId: v.id("workspaces"),
-    type: channelTypeSchema,
+    // Two axes, two columns (docs/adr/0001). `kind` says what the row is —
+    // a channel, or a direct message. `visibility` says who may enter a
+    // channel; on a direct message it is an inert derived constant, never a
+    // setting. The single `type` column that conflated them is gone, along
+    // with the index that could not express "everything except a DM".
+    //
+    // `stripChannelType` removed it from existing rows and stays in `runAll`,
+    // because a restored backup can reintroduce the old shape.
+    kind: channelKindSchema,
+    visibility: channelVisibilitySchema,
   })
   .index("by_workspace", ["workspaceId"])
-  .index("by_type_workspace", ["type", "workspaceId"])
-  .searchIndex("by_name", { searchField: "name", filterFields: ["workspaceId", "type"] }),
+  // These two replaced `by_type_workspace`. Two rather
+  // than one triple `["kind", "workspaceId", "visibility"]`: querying that by
+  // its two-field prefix leaves `visibility` as the leading sort key, so
+  // "every channel in this workspace" would come back grouped public-then-
+  // private instead of in creation order — a visible change to the browse
+  // list. Neither of these is a prefix of the other, and each answers its
+  // question as one range ordered by `_creationTime`.
+  .index("by_kind_workspace", ["kind", "workspaceId"])
+  .index("by_kind_visibility_workspace", ["kind", "visibility", "workspaceId"])
+  .searchIndex("by_name", {
+    searchField: "name",
+    // `kind` is what lets the browse search exclude direct messages with an
+    // equality filter instead of discarding them after the fact.
+    filterFields: ["workspaceId", "kind", "visibility"],
+  }),
 
 
   channelMembers: defineTable({

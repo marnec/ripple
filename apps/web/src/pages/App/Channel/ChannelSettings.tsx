@@ -22,6 +22,7 @@ import { useWorkspaceMembers } from "@/contexts/WorkspaceMembersContext";
 import { useViewer } from "../UserContext";
 import { useParams, useSearchParams } from "react-router-dom";
 import { api } from "@convex/_generated/api";
+import { isDirectMessage, isPublicChannel } from "@ripple/shared/channel";
 import type { Id } from "@convex/_generated/dataModel";
 import { ChannelDangerZone } from "./ChannelDangerZone";
 import { ChannelDetailsSection } from "./ChannelDetailsSection";
@@ -81,18 +82,18 @@ function ChannelSettingsContent({
   const currentMembership = channelMembers.find(
     (m) => m.userId === currentUser._id,
   );
-  const isAdmin = channel.type === "open"
+  const isAdmin = isPublicChannel(channel)
     ? true
     : currentMembership?.role === ChannelRole.ADMIN;
 
   // Deletion authority must mirror channels.remove on the backend:
-  // open channels → workspace admins; closed channels → channel admins.
+  // public channels → workspace admins; private channels → channel admins.
   // (Without this, regular workspace members would see a Danger Zone in any
-  // open channel and hit a server-side "Not authorized" error on click.)
+  // public channel and hit a server-side "Not authorized" error on click.)
   const workspaceRole = workspaceMembersWithRoles.find(
     (m) => m.userId === currentUser._id,
   )?.role;
-  const canDelete = channel.type === "open"
+  const canDelete = isPublicChannel(channel)
     ? workspaceRole === "admin"
     : currentMembership?.role === ChannelRole.ADMIN;
 
@@ -101,7 +102,7 @@ function ChannelSettingsContent({
     (m) => !channelMemberIds.has(m._id),
   );
 
-  const isDm = channel.type === "dm";
+  const isDm = isDirectMessage(channel);
 
   const sections: SettingsSection[] = [
     ...(isDm
@@ -159,7 +160,7 @@ function ChannelSettingsContent({
           <ChannelDetailsSection
             channelId={channelId}
             channelName={channel.name}
-            channelType={channel.type}
+            channelVisibility={channel.visibility}
             isAdmin={isAdmin}
           />
         )}
@@ -167,7 +168,7 @@ function ChannelSettingsContent({
         {active.value === "members" && !isDm && (
           <ChannelMembersSection
             channelId={channelId}
-            channelType={channel.type}
+            channelVisibility={channel.visibility}
             isAdmin={isAdmin}
             currentUserId={currentUser._id}
             channelMembers={channelMembers}

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { api, internal } from "../convex/_generated/api";
-import { createTestContext, setupAuthenticatedUser, setupWorkspaceWithAdmin } from "./helpers";
+import { createTestContext, setupAuthenticatedUser, setupWorkspaceWithAdmin, channelFields } from "./helpers";
 import type { Id } from "../convex/_generated/dataModel";
 import { withTriggers } from "../convex/dbTriggers";
 
@@ -37,7 +37,7 @@ async function setupWorkspaceWithDm(t: ReturnType<typeof createTestContext>) {
     const channelId = await withTriggers(ctx).db.insert("channels", {
       name: "Bob Bobson × Test User",
       workspaceId,
-      type: "dm",
+      ...channelFields("dm"),
     });
     for (const userId of [aliceId, bobId]) {
       await ctx.db.insert("channelMembers", { channelId, workspaceId, userId, role: "member" });
@@ -52,7 +52,13 @@ async function seedChannel(
   t: ReturnType<typeof createTestContext>,
   opts: { workspaceId: Id<"workspaces">; name: string; type: "open" | "closed" },
 ) {
-  return await t.run((ctx) => ctx.db.insert("channels", { ...opts }));
+  return await t.run((ctx) =>
+    ctx.db.insert("channels", {
+      workspaceId: opts.workspaceId,
+      name: opts.name,
+      ...channelFields(opts.type),
+    }),
+  );
 }
 
 describe("channels.search — DMs are not workspace-wide discoverable", () => {
@@ -83,8 +89,10 @@ describe("channels.search — DMs are not workspace-wide discoverable", () => {
     await expect(
       asOutsider.query(api.channels.search, {
         workspaceId,
-        // @ts-expect-error — "dm" is no longer an accepted browse type.
-        type: "dm",
+        // @ts-expect-error — the browse argument is a visibility, and a direct
+        // message has none. What used to be a runtime narrowing is now simply
+        // not expressible.
+        visibility: "dm",
         paginationOpts: { numItems: 10, cursor: null },
       }),
     ).rejects.toThrow();
@@ -102,7 +110,7 @@ describe("channels.search — DMs are not workspace-wide discoverable", () => {
       paginationOpts: { numItems: 10, cursor: null },
     });
 
-    expect(result.page.map((c) => c.type).sort()).toEqual(["closed", "open"]);
+    expect(result.page.map((c) => c.visibility).sort()).toEqual(["private", "public"]);
   });
 
   it("does not list DMs when browsing with no search text and no type", async () => {
@@ -126,10 +134,10 @@ describe("channels.search — DMs are not workspace-wide discoverable", () => {
     const { asOutsider, workspaceId } = await setupWorkspaceWithDm(t);
     await t.run(async (ctx) => {
       for (let i = 0; i < 40; i++) {
-        await ctx.db.insert("channels", { name: `dm-${i}`, workspaceId, type: "dm" });
+        await ctx.db.insert("channels", { name: `dm-${i}`, workspaceId, ...channelFields("dm")});
       }
       for (let i = 0; i < 5; i++) {
-        await ctx.db.insert("channels", { name: `open-${i}`, workspaceId, type: "open" });
+        await ctx.db.insert("channels", { name: `open-${i}`, workspaceId, ...channelFields("open")});
       }
     });
 
@@ -177,7 +185,7 @@ describe("graph.getWorkspaceGraph — DMs are not workspace-wide discoverable", 
     const t = createTestContext();
     const { asOutsider, workspaceId } = await setupWorkspaceWithDm(t);
     const openId = await t.run((ctx) =>
-      withTriggers(ctx).db.insert("channels", { name: "General", workspaceId, type: "open" }),
+      withTriggers(ctx).db.insert("channels", { name: "General", workspaceId, ...channelFields("open")}),
     );
 
     const graph = await asOutsider.query(api.graph.getWorkspaceGraph, { workspaceId });
@@ -243,7 +251,7 @@ describe("migrations.stripDmDiscoverability", () => {
     const t = createTestContext();
     const { asOutsider, workspaceId } = await setupWorkspaceWithDm(t);
     const openId = await t.run((ctx) =>
-      withTriggers(ctx).db.insert("channels", { name: "General", workspaceId, type: "open" }),
+      withTriggers(ctx).db.insert("channels", { name: "General", workspaceId, ...channelFields("open")}),
     );
 
     await t.mutation(internal.migrations.stripDmDiscoverability, { cursor: null, batchSize: 100 });

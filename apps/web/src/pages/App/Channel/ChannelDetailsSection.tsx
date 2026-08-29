@@ -7,20 +7,25 @@ import { Globe, Lock } from "lucide-react";
 import { useState } from "react";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
-import type { ChannelType } from "@ripple/shared/enums";
-import type { Values } from "@ripple/shared/types/object";
+import { ChannelVisibility } from "@ripple/shared/enums";
+import {
+  CHANNEL_VISIBILITY_DESCRIPTION,
+  CHANNEL_VISIBILITY_LABEL,
+  type ChannelVisibilityValue,
+} from "@/lib/channel-visibility";
 
 interface ChannelDetailsSectionProps {
   channelId: Id<"channels">;
   channelName: string;
-  channelType: Values<typeof ChannelType>;
+  /** Only a channel reaches this section, so it always has one. */
+  channelVisibility: ChannelVisibilityValue | undefined;
   isAdmin: boolean;
 }
 
 export function ChannelDetailsSection({
   channelId,
   channelName: serverName,
-  channelType,
+  channelVisibility,
   isAdmin,
 }: ChannelDetailsSectionProps) {
   const updateChannel = useMutation(api.channels.update);
@@ -58,23 +63,22 @@ export function ChannelDetailsSection({
         </div>
 
         <div className="space-y-2">
-          <Label>Type</Label>
+          <Label>Visibility</Label>
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            {channelType === "open" ? (
-              <>
-                <Globe className="w-4 h-4" />
-                <span>Open — any workspace member can join</span>
-              </>
-            ) : channelType === "dm" ? (
-              <>
-                <Lock className="w-4 h-4" />
-                <span>Direct message</span>
-              </>
+            {/* No direct-message branch: this section is only ever rendered for
+                a channel, and a channel is the only thing that has a
+                visibility. The prop makes that unrepresentable rather than
+                merely unreached. */}
+            {channelVisibility === ChannelVisibility.PUBLIC ? (
+              <Globe className="w-4 h-4" />
             ) : (
-              <>
-                <Lock className="w-4 h-4" />
-                <span>Closed — only invited members can participate</span>
-              </>
+              <Lock className="w-4 h-4" />
+            )}
+            {channelVisibility && (
+              <span>
+                {CHANNEL_VISIBILITY_LABEL[channelVisibility]} —{" "}
+                {CHANNEL_VISIBILITY_DESCRIPTION[channelVisibility]}
+              </span>
             )}
           </div>
         </div>

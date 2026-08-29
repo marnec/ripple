@@ -10,6 +10,7 @@ import { cascadeDelete } from "./cascadeDelete";
 import { userValidator } from "./validators";
 import { internal } from "./_generated/api";
 
+import { isDirectMessage, isPrivateChannel } from "@ripple/shared/channel";
 const workspaceMemberValidator = v.object({
   _id: v.id("workspaceMembers"),
   _creationTime: v.number(),
@@ -205,7 +206,7 @@ export async function removeMembershipCascade(
       continue;
     }
 
-    if (channel.type === "dm") {
+    if (isDirectMessage(channel)) {
       const dmMembers = await ctx.db
         .query("channelMembers")
         .withIndex("by_channel", (q) => q.eq("channelId", cm.channelId))
@@ -238,7 +239,7 @@ export async function removeMembershipCascade(
       continue;
     }
 
-    if (channel.type === "closed") {
+    if (isPrivateChannel(channel)) {
       const allMembers = await ctx.db
         .query("channelMembers")
         .withIndex("by_channel", (q) => q.eq("channelId", cm.channelId))

@@ -30,8 +30,7 @@ import type { Id } from "../convex/_generated/dataModel";
 import {
   createTestContext,
   setupAuthenticatedUser,
-  setupWorkspaceWithAdmin,
-} from "./helpers";
+  setupWorkspaceWithAdmin, channelFields } from "./helpers";
 import { ChannelRole, WorkspaceRole } from "@ripple/shared/enums/roles";
 import { writerWithTriggers } from "convex-helpers/server/triggers";
 import { triggers } from "../convex/dbTriggers";
@@ -78,7 +77,7 @@ async function setupPrivateChannel(t: TestCtx, type: "closed" | "dm") {
     const id = await ctx.db.insert("channels", {
       name: type === "dm" ? "" : "leadership",
       workspaceId,
-      type,
+      ...channelFields(type),
     });
     await ctx.db.insert("channelMembers", {
       channelId: id,
@@ -173,7 +172,7 @@ describe("channelNotificationPreferences.save — the channel rule", () => {
     const t = createTestContext();
     const { userId, workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
     const channelId = await t.run((ctx) =>
-      ctx.db.insert("channels", { name: "general", workspaceId, type: "open" as const }),
+      ctx.db.insert("channels", { name: "general", workspaceId, ...channelFields("open")}),
     );
 
     await asUser.mutation(api.channelNotificationPreferences.save, {
@@ -323,7 +322,7 @@ describe("migrations.unsubscribeNonMembersFromPrivateChannels", () => {
     const t = createTestContext();
     const { userId, workspaceId } = await setupWorkspaceWithAdmin(t);
     const channelId = await t.run((ctx) =>
-      ctx.db.insert("channels", { name: "general", workspaceId, type: "open" as const }),
+      ctx.db.insert("channels", { name: "general", workspaceId, ...channelFields("open")}),
     );
     // No channelMembers row by design — open channels admit every workspace
     // member, which is exactly what `subscribeChannelMembersPage` writes.

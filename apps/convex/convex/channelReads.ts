@@ -4,6 +4,7 @@ import { query } from "./_generated/server";
 import { mutation } from "./functions";
 import { getWorkspaceMembership, requireUser } from "./authHelpers";
 
+import { isPublicChannel } from "@ripple/shared/channel";
 export const markRead = mutation({
   args: { channelId: v.id("channels") },
   returns: v.null(),
@@ -26,7 +27,7 @@ export const markRead = mutation({
     );
     if (!workspaceMembership) return null;
 
-    if (channel.type !== "open") {
+    if (!isPublicChannel(channel)) {
       const channelMembership = await ctx.db
         .query("channelMembers")
         .withIndex("by_channel_user", (q) => q.eq("channelId", channelId).eq("userId", userId))
@@ -107,7 +108,7 @@ export const getUnreadStatus = query({
           const channel = await ctx.db.get(channelId);
           if (!channel) return { channelId, hasUnread: false };
 
-          if (channel.type === "open") {
+          if (isPublicChannel(channel)) {
             const wsJoin = await workspaceJoinTime(channel.workspaceId);
             if (wsJoin == null) return { channelId, hasUnread: false };
             baseline = wsJoin;

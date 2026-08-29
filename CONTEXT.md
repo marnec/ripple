@@ -214,3 +214,44 @@ one query the route exists for. Whitelists come from `COLLAB_RESOURCES` /
 site: the seven hand-copied secret checks had already drifted into two shapes,
 two of them missing the `Bearer` guard.
 _Avoid_: http helpers, route utils, middleware
+
+**Channel**:
+A `channels` row with `kind: "channel"` — a named, workspace-scoped conversation
+whose roster you manage and whose **visibility** you choose. The thing the
+sidebar's "Channels" section lists and the browse page filters.
+_Avoid_: room, group, chat, conversation
+
+**Direct message**:
+A `channels` row with `kind: "dm"` — a conversation between exactly two
+workspace members, sharing every mechanism a **channel** has (messages, calls,
+reads, mentions, `requireChannelAccess`) and none of its configuration: it has
+no name of its own (its label *is* its roster), no join request, no settings
+page, and no visibility to set. It is not "a private channel"; it is the other
+**kind** of conversation.
+_Avoid_: DM channel, private channel, 1-on-1, chat
+
+**Kind**:
+Which of the two things a `channels` row is — `"channel"` or `"dm"`. The axis
+that says whether a row is *configurable*, and therefore the one every query
+that means "browsable conversations" filters on. Distinct from **visibility**,
+which only a **channel** has.
+_Avoid_: type, channel type, category
+
+**Visibility**:
+Who in the workspace may enter a **channel**: **Public** (any member may read
+and join) or **Private** (members are invited, or ask via a join request). A
+property of the channel, identical for everyone who can see it — never a
+per-user view state, which is **dismissal**. A **direct message** has no
+visibility: it is not a third value on this axis, and any value stored on a DM
+row is a derived constant, never a setting.
+_Avoid_: privacy level, access level, channel type, open/closed, hidden
+
+**Dismissal**:
+One user's decision to drop a conversation out of their own sidebar, stored as
+`userChannelState.hiddenAt`. The only way to decline a **public channel**, since
+you are not a member of one and so have nothing to leave; and the whole lifecycle
+of a **direct message**, which cannot be deleted or left and so ends by being
+dismissed and restarts when a message arrives newer than `hiddenAt`. Private
+channels are left, never dismissed. Per-user and cross-device — the opposite of
+**visibility** on both counts, which is why it does not live in device storage.
+_Avoid_: hiding, visibility, archiving, muting, closing

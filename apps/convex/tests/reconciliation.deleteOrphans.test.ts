@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { internal } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
 import { ChannelRole } from "@ripple/shared/enums/roles";
-import { createTestContext, setupWorkspaceWithAdmin } from "./helpers";
+import { createTestContext, setupWorkspaceWithAdmin, channelFields } from "./helpers";
 
 /**
  * `deleteOrphans` is the repair half of the cascade-failure runbook: the
@@ -27,13 +27,13 @@ async function seedChannelMembers(
     const liveChannelId = await ctx.db.insert("channels", {
       name: "general",
       workspaceId: opts.workspaceId,
-      type: "open" as const,
+      ...channelFields("open"),
     });
     // A channel we delete immediately — its members become the orphans.
     const deadChannelId = await ctx.db.insert("channels", {
       name: "gone",
       workspaceId: opts.workspaceId,
-      type: "open" as const,
+      ...channelFields("open"),
     });
 
     // Healthy rows FIRST so they occupy the head of the table: this is the

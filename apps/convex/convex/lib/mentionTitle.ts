@@ -1,3 +1,5 @@
+import { isDirectMessage } from "@ripple/shared/channel";
+
 /**
  * The push title for an @mention in a chat channel.
  *
@@ -14,9 +16,9 @@
  */
 export function mentionTitle(
   actorName: string,
-  channel: { type: string; name: string },
+  channel: { kind?: string; name: string },
 ): string {
-  return channel.type === "dm"
+  return isDirectMessage(channel)
     ? `${actorName} mentioned you`
     : `${actorName} mentioned you in #${channel.name}`;
 }

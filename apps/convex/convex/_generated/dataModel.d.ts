@@ -472,23 +472,36 @@ export type DataModel = {
   };
   channels: {
     document: {
+      kind: "channel" | "dm";
       name: string;
-      type: "open" | "closed" | "dm";
+      visibility: "public" | "private";
       workspaceId: Id<"workspaces">;
       _id: Id<"channels">;
       _creationTime: number;
     };
-    fieldPaths: "_creationTime" | "_id" | "name" | "type" | "workspaceId";
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "kind"
+      | "name"
+      | "visibility"
+      | "workspaceId";
     indexes: {
       by_id: ["_id"];
       by_creation_time: ["_creationTime"];
-      by_type_workspace: ["type", "workspaceId", "_creationTime"];
+      by_kind_visibility_workspace: [
+        "kind",
+        "visibility",
+        "workspaceId",
+        "_creationTime",
+      ];
+      by_kind_workspace: ["kind", "workspaceId", "_creationTime"];
       by_workspace: ["workspaceId", "_creationTime"];
     };
     searchIndexes: {
       by_name: {
         searchField: "name";
-        filterFields: "type" | "workspaceId";
+        filterFields: "kind" | "visibility" | "workspaceId";
       };
     };
     vectorIndexes: {};

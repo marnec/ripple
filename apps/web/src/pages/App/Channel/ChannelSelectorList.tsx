@@ -27,7 +27,7 @@ export interface ChannelSelectorListProps {
   workspaceId: Id<"workspaces">;
   channelId: Id<"channels"> | undefined;
   onChannelSelect: (id: string | null) => void;
-  channels?: { _id: string; _creationTime: number; name: string; workspaceId: string; type: string; isHidden: boolean }[];
+  channels?: { _id: string; _creationTime: number; name: string; workspaceId: string; kind: string; visibility: string; isHidden: boolean }[];
   isOpen: boolean;
   onToggle: () => void;
   /** Total hidden channels (across both Channels and DMs sections). Used to

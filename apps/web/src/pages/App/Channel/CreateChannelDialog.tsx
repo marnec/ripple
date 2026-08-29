@@ -16,12 +16,10 @@ import {
 } from "@ripple/ui/components/select";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation } from "convex/react";
-import { useQuery } from "convex-helpers/react/cache";
-import { useForm, useWatch } from "react-hook-form";
+import { useForm } from "react-hook-form";
 import * as z from "zod";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
-import { useViewer } from "../UserContext";
 import { Button } from "@ripple/ui/components/button";
 import {
   ResponsiveDialog,
@@ -36,22 +34,25 @@ import { Input } from "@ripple/ui/components/input";
 import { toast } from "sonner";
 import { useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
+import { ChannelVisibility } from "@ripple/shared/enums";
+import {
+  CHANNEL_VISIBILITIES,
+  CHANNEL_VISIBILITY_DESCRIPTION,
+  CHANNEL_VISIBILITY_LABEL,
+} from "@/lib/channel-visibility";
 
-const formSchema = z
-  .object({
-    name: z.string(),
-    type: z.enum(["open", "closed", "dm"]),
-    otherUserId: z.string().optional(),
-  })
-  .refine(
-    (v) => v.type === "dm" || v.name.trim().length > 0,
-    { message: "Channel name is required", path: ["name"] },
-  )
-  .refine(
-    (v) => v.type !== "dm" || (v.otherUserId && v.otherUserId.length > 0),
-    { message: "Select a user to message", path: ["otherUserId"] },
-  );
+const formSchema = z.object({
+  name: z.string().trim().min(1, "Channel name is required"),
+  visibility: z.enum([ChannelVisibility.PUBLIC, ChannelVisibility.PRIVATE]),
+});
 
+/**
+ * Creating a **channel**: a name and a **visibility**, and nothing else.
+ *
+ * Starting a **direct message** is `CreateDmDialog`, deliberately a separate
+ * component. The two shared nothing but this dialog, and paid for it by
+ * changing shape as the member filled them in.
+ */
 export function CreateChannelDialog({
   workspaceId,
   open,
@@ -64,9 +65,6 @@ export function CreateChannelDialog({
   onChannelCreated?: () => void;
 }) {
   const createChannel = useMutation(api.channels.create);
-  const createDm = useMutation(api.channels.createDm);
-  const currentUser = useViewer();
-  const workspaceMembers = useQuery(api.workspaceMembers.membersWithRoles, { workspaceId });
   const navigate = useNavigate();
   const channelNameInput = useRef<HTMLInputElement | null>(null);
 
@@ -78,37 +76,27 @@ export function CreateChannelDialog({
     resolver: zodResolver(formSchema),
     defaultValues: {
       name: "",
-      type: "open",
-      otherUserId: "",
+      visibility: ChannelVisibility.PUBLIC,
     },
   });
 
-  const selectedType = useWatch({ control: form.control, name: "type" });
-
   const submit = async (values: z.infer<typeof formSchema>) => {
     try {
-      if (values.type === "dm") {
-        const channelId = await createDm({
-          workspaceId,
-          otherUserId: values.otherUserId as Id<"users">,
-        });
-        onChannelCreated?.();
-        form.reset();
-        onOpenChange(false);
-        void navigate(`/workspaces/${workspaceId}/channels/${channelId}`);
-      } else {
-        const newChannelId = await createChannel({
-          name: values.name,
-          type: values.type,
-          workspaceId,
-        });
-        onChannelCreated?.();
-        form.reset();
-        onOpenChange(false);
-        void navigate(
-          `/workspaces/${workspaceId}/channels/${newChannelId}${values.type === "open" ? "" : "/settings"}`,
-        );
-      }
+      const newChannelId = await createChannel({
+        name: values.name,
+        visibility: values.visibility,
+        workspaceId,
+      });
+      onChannelCreated?.();
+      form.reset();
+      onOpenChange(false);
+      // A public channel is ready to use; a private one is not until somebody
+      // has been invited to it, so that lands on its settings instead.
+      void navigate(
+        `/workspaces/${workspaceId}/channels/${newChannelId}${
+          values.visibility === ChannelVisibility.PUBLIC ? "" : "/settings"
+        }`,
+      );
     } catch {
       toast.error("Error creating channel", {
         description: "Please try again later",
@@ -116,19 +104,13 @@ export function CreateChannelDialog({
     }
   };
 
-  const availableUsers = workspaceMembers?.filter((m) => m.userId !== currentUser?._id) ?? [];
-
   return (
     <ResponsiveDialog open={open} onOpenChange={onOpenChange} direction="top">
       <ResponsiveDialogContent>
         <ResponsiveDialogHeader>
-          <ResponsiveDialogTitle>
-            {selectedType === "dm" ? "New Direct Message" : "Create New Channel"}
-          </ResponsiveDialogTitle>
+          <ResponsiveDialogTitle>Create New Channel</ResponsiveDialogTitle>
           <ResponsiveDialogDescription>
-            {selectedType === "dm"
-              ? "Start a 1-on-1 conversation with another workspace member"
-              : "Create a new channel in this workspace"}
+            Create a new channel in this workspace
           </ResponsiveDialogDescription>
         </ResponsiveDialogHeader>
         <ResponsiveDialogBody>
@@ -142,10 +124,28 @@ export function CreateChannelDialog({
             >
               <FormField
                 control={form.control}
-                name="type"
+                name="name"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Type</FormLabel>
+                    <FormLabel>Channel Name</FormLabel>
+                    <FormControl>
+                      <Input
+                        {...field}
+                        ref={channelNameInput}
+                        placeholder="Enter channel name"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="visibility"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Visibility</FormLabel>
                     <Select value={field.value} onValueChange={field.onChange}>
                       <FormControl>
                         <SelectTrigger>
@@ -153,75 +153,23 @@ export function CreateChannelDialog({
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="open">Open Channel</SelectItem>
-                        <SelectItem value="closed">Closed Channel</SelectItem>
-                        <SelectItem value="dm">Direct Message</SelectItem>
+                        {CHANNEL_VISIBILITIES.map((visibility) => (
+                          <SelectItem key={visibility} value={visibility}>
+                            {CHANNEL_VISIBILITY_LABEL[visibility]}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                     <FormDescription>
-                      {field.value === "open" &&
-                        "Anyone in the workspace can view and join this channel."}
-                      {field.value === "closed" &&
-                        "Only invited members can participate. All workspace members can see this channel exists."}
-                      {field.value === "dm" &&
-                        "A private 1-on-1 conversation."}
+                      {CHANNEL_VISIBILITY_DESCRIPTION[field.value]}
                     </FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
               />
 
-              {selectedType !== "dm" && (
-                <FormField
-                  control={form.control}
-                  name="name"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Channel Name</FormLabel>
-                      <FormControl>
-                        <Input
-                          {...field}
-                          ref={channelNameInput}
-                          placeholder="Enter channel name"
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              )}
-
-              {selectedType === "dm" && (
-                <FormField
-                  control={form.control}
-                  name="otherUserId"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>User</FormLabel>
-                      <Select value={field.value} onValueChange={field.onChange}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select a workspace member" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {availableUsers.map((u) => (
-                            <SelectItem key={u.userId} value={u.userId}>
-                              {u.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              )}
-
               <ResponsiveDialogFooter>
-                <Button type="submit">
-                  {selectedType === "dm" ? "Start Conversation" : "Create Channel"}
-                </Button>
+                <Button type="submit">Create Channel</Button>
               </ResponsiveDialogFooter>
             </form>
           </Form>

@@ -22,6 +22,7 @@ import { LayoutGroup, m } from "framer-motion";
 import { CalendarDays, LayoutDashboard, ListTodo } from "lucide-react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { api } from "@convex/_generated/api";
+import { isDirectMessage } from "@ripple/shared/channel";
 import { WorkspaceSwitcher } from "./Workspace/WorkspaceSwitcher";
 import { ChannelSelectorList } from "./Channel/ChannelSelectorList";
 import { DmSelectorList } from "./Channel/DmSelectorList";
@@ -154,7 +155,7 @@ export function AppSidebar() {
                   <ChannelSelectorList
                     channelId={channelId}
                     workspaceId={workspaceId}
-                    channels={sidebarData?.channels?.filter((c) => c.type !== "dm")}
+                    channels={sidebarData?.channels?.filter((c) => !isDirectMessage(c))}
                     onChannelSelect={handleChannelSelect}
                     isOpen={isOpen("channels")}
                     onToggle={toggleChannels}
@@ -173,7 +174,7 @@ export function AppSidebar() {
                   <DmSelectorList
                     channelId={channelId}
                     workspaceId={workspaceId}
-                    channels={sidebarData?.channels?.filter((c) => c.type === "dm")}
+                    channels={sidebarData?.channels?.filter((c) => isDirectMessage(c))}
                     onChannelSelect={handleChannelSelect}
                     isOpen={isOpen("dms")}
                     onToggle={toggleDms}

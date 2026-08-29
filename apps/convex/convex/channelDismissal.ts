@@ -2,30 +2,41 @@ import { ConvexError, v } from "convex/values";
 import { mutation } from "./functions";
 import { requireWorkspaceMember } from "./authHelpers";
 
+import { isPrivateChannel } from "@ripple/shared/channel";
 /**
- * Hide a channel from the calling user's sidebar.
+ * **Dismissal**: one user drops a conversation out of their own sidebar.
  *
- * Semantics by channel type:
- *   - "open": stays hidden until `unhideChannel` is called. The sidebar query
- *     treats any `hiddenAt` value as "hidden."
- *   - "dm":   stays hidden until a message arrives newer than `hiddenAt`. The
- *     sidebar query derives this without an extra write, so the auto-unhide
- *     is free.
- *   - "closed": rejected — closed channels are left (`removeFromChannel`), not
- *     hidden.
+ * Not **visibility**, which is a property of a channel and identical for
+ * everyone who can see it. This is per-user view state, and it used to occupy
+ * that word — see `CONTEXT.md`.
+ *
+ * Semantics, by what the conversation is:
+ *   - a **public channel**: stays dismissed until `restoreChannel` is called.
+ *     The sidebar query treats any `hiddenAt` value as dismissed. This is the
+ *     only way to decline one, since you are not a member and so have nothing
+ *     to leave.
+ *   - a **direct message**: stays dismissed until a message arrives newer than
+ *     `hiddenAt`. The sidebar query derives that without an extra write, so the
+ *     auto-restore is free. It is also the whole lifecycle of a DM, which can
+ *     be neither deleted nor left.
+ *   - a **private channel**: rejected — those are left
+ *     (`removeFromChannel`), not dismissed.
+ *
+ * The stored column is still `hiddenAt`. Renaming it is a second migration on a
+ * second table, and it appears in no user-facing string.
  *
  * Lives on `userChannelState` (not `channelMembers`) so the write only
  * invalidates the calling user's subscriptions — never fans out to other
  * channel members.
  */
-export const hideChannel = mutation({
+export const dismissChannel = mutation({
   args: { channelId: v.id("channels") },
   returns: v.null(),
   handler: async (ctx, { channelId }) => {
     const channel = await ctx.db.get(channelId);
     if (!channel) throw new ConvexError("Channel not found");
-    if (channel.type === "closed") {
-      throw new ConvexError("Closed channels cannot be hidden; leave the channel instead");
+    if (isPrivateChannel(channel)) {
+      throw new ConvexError("Private channels cannot be dismissed; leave the channel instead");
     }
 
     const { userId } = await requireWorkspaceMember(ctx, channel.workspaceId);
@@ -51,12 +62,12 @@ export const hideChannel = mutation({
 });
 
 /**
- * Clear `hiddenAt` so the channel shows up in the sidebar again. Idempotent
- * — no-op if there's no state row or it's already unhidden.
+ * Clear `hiddenAt` so the conversation returns to the sidebar. Idempotent — a
+ * no-op if there is no state row, or it was never dismissed.
  *
  * Uses `replace` because Convex `patch` cannot remove an optional field.
  */
-export const unhideChannel = mutation({
+export const restoreChannel = mutation({
   args: { channelId: v.id("channels") },
   returns: v.null(),
   handler: async (ctx, { channelId }) => {

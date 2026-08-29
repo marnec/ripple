@@ -11,6 +11,12 @@ import {
 import { useAnimatedQuery } from "@/hooks/use-animated-query";
 import { useIsMobile } from "@/hooks/use-mobile";
 import type { ChannelVisibilityFilter, FavoriteFilter } from "@/hooks/use-debounced-search";
+import { ChannelVisibility } from "@ripple/shared/enums";
+import { isDirectMessage, isPublicChannel } from "@ripple/shared/channel";
+import {
+  CHANNEL_VISIBILITY_LABEL,
+  type ChannelVisibilityValue,
+} from "@/lib/channel-visibility";
 import { RESOURCE_TYPE_ICONS } from "@/lib/resource-icons";
 import { cn } from "@/lib/utils";
 import { useMutation, usePaginatedQuery } from "convex/react";
@@ -25,7 +31,7 @@ import type { Id } from "@convex/_generated/dataModel";
 import type { BrowsableResourceType as ResourceType, FavoritableResourceType as FavoritableType } from "@ripple/shared/types/resources";
 import { getResourcePreloader } from "../preload";
 
-type SearchResult = { _id: string; name: string; tags?: string[]; _creationTime?: number; type?: string };
+type SearchResult = { _id: string; name: string; tags?: string[]; _creationTime?: number; type?: string; kind?: string; visibility?: string };
 
 const PAGE_SIZE = 20;
 
@@ -37,10 +43,11 @@ const SEARCH_APIS = {
   channel: api.channels.search,
 } as const;
 
-function channelVisibilityToType(filter: ChannelVisibilityFilter): "open" | "closed" | undefined {
-  if (filter === "public") return "open";
-  if (filter === "private") return "closed";
-  return undefined;
+function channelVisibilityArg(
+  filter: ChannelVisibilityFilter,
+): ChannelVisibilityValue | undefined {
+  // "all" is the absence of a filter, not a third visibility.
+  return filter === "all" ? undefined : filter;
 }
 
 function getEmptyMessage(resourceType: ResourceType, favoriteFilter?: FavoriteFilter, channelVisibility?: ChannelVisibilityFilter): string {
@@ -60,12 +67,17 @@ function compactDate(timestamp: number): string {
   return isThisYear(date) ? format(date, "MMM d") : format(date, "MMM d, yyyy");
 }
 
-function ChannelTypeBadge({ type }: { type: string }) {
-  const isOpen = type === "open";
+function ChannelTypeBadge({ channel }: { channel: { kind?: string; visibility?: string } }) {
+  const isPublic = isPublicChannel(channel);
+  // A direct message is the other *kind* of conversation, so it is labelled as
+  // one rather than given a visibility it does not have.
+  const label = isDirectMessage(channel)
+    ? "DM"
+    : CHANNEL_VISIBILITY_LABEL[isPublic ? ChannelVisibility.PUBLIC : ChannelVisibility.PRIVATE];
   return (
     <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-      {isOpen ? <Globe className="h-3 w-3" /> : <Lock className="h-3 w-3" />}
-      <span className="hidden sm:inline">{isOpen ? "Open" : type === "dm" ? "DM" : "Closed"}</span>
+      {isPublic ? <Globe className="h-3 w-3" /> : <Lock className="h-3 w-3" />}
+      <span className="hidden sm:inline">{label}</span>
     </span>
   );
 }
@@ -96,11 +108,11 @@ function useResourceSearch(
   searchText?: string,
   tags?: string[],
   isFavorite?: boolean,
-  channelType?: "open" | "closed",
+  channelVisibility?: ChannelVisibilityValue,
 ): { results: SearchResult[]; status: PaginationStatus; loadMore: (n: number) => void } {
   const channelPagination = usePaginatedQuery(
     SEARCH_APIS.channel,
-    resourceType === "channel" ? { workspaceId, searchText, type: channelType } : "skip",
+    resourceType === "channel" ? { workspaceId, searchText, visibility: channelVisibility } : "skip",
     { initialNumItems: PAGE_SIZE },
   );
 
@@ -223,9 +235,9 @@ function ResourceListRow({
         <span className="pointer-events-none flex-1 min-w-0 truncate font-medium">
           {resource.name}
         </span>
-        {isChannel && resource.type !== undefined && (
+        {isChannel && resource.kind !== undefined && (
           <span className="pointer-events-none">
-            <ChannelTypeBadge type={resource.type} />
+            <ChannelTypeBadge channel={resource} />
           </span>
         )}
         {canFavorite && (
@@ -292,8 +304,8 @@ function ResourceListRow({
       >
         <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
         <span className="flex-1 min-w-0 truncate font-medium">{resource.name}</span>
-        {isChannel && resource.type !== undefined && (
-          <ChannelTypeBadge type={resource.type} />
+        {isChannel && resource.kind !== undefined && (
+          <ChannelTypeBadge channel={resource} />
         )}
         {canFavorite && (
           <Star
@@ -361,7 +373,7 @@ export function SearchResults({
     searchText,
     tags,
     isFavorite,
-    channelVisibilityToType(channelVisibility ?? "all"),
+    channelVisibilityArg(channelVisibility ?? "all"),
   );
 
   // While the query resets after a filter change (LoadingFirstPage), feed
@@ -473,8 +485,8 @@ export function SearchResults({
             <CardTitle className="truncate text-base">
               {resource.name}
             </CardTitle>
-            {resourceType === "channel" && resource.type !== undefined && (
-              <ChannelTypeBadge type={resource.type} />
+            {resourceType === "channel" && resource.kind !== undefined && (
+              <ChannelTypeBadge channel={resource} />
             )}
               </CardHeader>
           <CardContent className="pointer-events-none flex flex-1 flex-col justify-between pt-0">

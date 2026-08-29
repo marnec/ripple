@@ -3,8 +3,7 @@ import { api } from "../convex/_generated/api";
 import {
   createTestContext,
   setupAuthenticatedUser,
-  setupWorkspaceWithAdmin,
-} from "./helpers";
+  setupWorkspaceWithAdmin, channelFields } from "./helpers";
 import { ChannelRole } from "@ripple/shared/enums/roles";
 import type { Id } from "../convex/_generated/dataModel";
 
@@ -16,7 +15,7 @@ async function setupOpenChannel(
     ctx.db.insert("channels", {
       name: opts.name ?? "open-channel",
       workspaceId: opts.workspaceId,
-      type: "open" as const,
+      ...channelFields("open"),
     }),
   );
 }
@@ -29,7 +28,7 @@ async function setupClosedChannel(
     const channelId = await ctx.db.insert("channels", {
       name: opts.name ?? "closed-channel",
       workspaceId: opts.workspaceId,
-      type: "closed" as const,
+      ...channelFields("closed"),
     });
     await ctx.db.insert("channelMembers", {
       channelId,
@@ -49,7 +48,7 @@ async function setupDmChannel(
     const channelId = await ctx.db.insert("channels", {
       name: "",
       workspaceId: opts.workspaceId,
-      type: "dm" as const,
+      ...channelFields("dm"),
     });
     for (const userId of opts.userIds) {
       await ctx.db.insert("channelMembers", {
@@ -79,14 +78,14 @@ async function insertMessage(
   );
 }
 
-describe("channelVisibility", () => {
-  describe("hideChannel", () => {
+describe("channelDismissal", () => {
+  describe("dismissChannel", () => {
     it("sets hiddenAt on userChannelState for an open channel", async () => {
       const t = createTestContext();
       const { userId, workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
       const channelId = await setupOpenChannel(t, { workspaceId });
 
-      await asUser.mutation(api.channelVisibility.hideChannel, { channelId });
+      await asUser.mutation(api.channelDismissal.dismissChannel, { channelId });
 
       const state = await t.run(async (ctx) =>
         ctx.db
@@ -110,7 +109,7 @@ describe("channelVisibility", () => {
       );
       const channelId = await setupDmChannel(t, { workspaceId, userIds: [userId, otherId] });
 
-      await asUser.mutation(api.channelVisibility.hideChannel, { channelId });
+      await asUser.mutation(api.channelDismissal.dismissChannel, { channelId });
 
       const state = await t.run(async (ctx) =>
         ctx.db
@@ -121,13 +120,13 @@ describe("channelVisibility", () => {
       expect(state?.hiddenAt).toBeGreaterThan(0);
     });
 
-    it("rejects closed channels with a guiding message", async () => {
+    it("rejects private channels with a guiding message", async () => {
       const t = createTestContext();
       const { userId, workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
       const channelId = await setupClosedChannel(t, { workspaceId, userId });
 
       await expect(
-        asUser.mutation(api.channelVisibility.hideChannel, { channelId }),
+        asUser.mutation(api.channelDismissal.dismissChannel, { channelId }),
       ).rejects.toThrow("leave the channel instead");
     });
 
@@ -143,7 +142,7 @@ describe("channelVisibility", () => {
         }),
       );
 
-      await asUser.mutation(api.channelVisibility.hideChannel, { channelId });
+      await asUser.mutation(api.channelDismissal.dismissChannel, { channelId });
 
       const rows = await t.run(async (ctx) =>
         ctx.db
@@ -165,12 +164,12 @@ describe("channelVisibility", () => {
       });
 
       await expect(
-        asOutsider.mutation(api.channelVisibility.hideChannel, { channelId }),
+        asOutsider.mutation(api.channelDismissal.dismissChannel, { channelId }),
       ).rejects.toThrow();
     });
   });
 
-  describe("unhideChannel", () => {
+  describe("restoreChannel", () => {
     it("clears hiddenAt while preserving lastReadAt", async () => {
       const t = createTestContext();
       const { userId, workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
@@ -182,7 +181,7 @@ describe("channelVisibility", () => {
         }),
       );
 
-      await asUser.mutation(api.channelVisibility.unhideChannel, { channelId });
+      await asUser.mutation(api.channelDismissal.restoreChannel, { channelId });
 
       const state = await t.run(async (ctx) =>
         ctx.db
@@ -200,7 +199,7 @@ describe("channelVisibility", () => {
       const channelId = await setupOpenChannel(t, { workspaceId });
 
       await expect(
-        asUser.mutation(api.channelVisibility.unhideChannel, { channelId }),
+        asUser.mutation(api.channelDismissal.restoreChannel, { channelId }),
       ).resolves.toBeNull();
     });
 
@@ -215,7 +214,7 @@ describe("channelVisibility", () => {
         }),
       );
 
-      await asUser.mutation(api.channelVisibility.unhideChannel, { channelId });
+      await asUser.mutation(api.channelDismissal.restoreChannel, { channelId });
 
       const rows = await t.run(async (ctx) =>
         ctx.db

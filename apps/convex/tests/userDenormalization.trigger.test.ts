@@ -3,8 +3,7 @@ import { api } from "../convex/_generated/api";
 import {
   createTestContext,
   setupAuthenticatedUser,
-  setupWorkspaceWithAdmin,
-} from "./helpers";
+  setupWorkspaceWithAdmin, channelFields } from "./helpers";
 import { ChannelRole } from "@ripple/shared/enums/roles";
 import { withTriggers } from "../convex/dbTriggers";
 import { NAME_CHANGE_COOLDOWN_MS } from "@ripple/shared/constants";
@@ -25,7 +24,7 @@ async function joinChannel(
     const channelId = await ctx.db.insert("channels", {
       name: "somewhere",
       workspaceId,
-      type,
+      ...channelFields(type),
     });
     await ctx.db.insert("channelMembers", {
       channelId,

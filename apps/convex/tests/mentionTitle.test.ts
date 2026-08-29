@@ -3,13 +3,13 @@ import { mentionTitle } from "../convex/lib/mentionTitle";
 
 describe("mentionTitle", () => {
   it("names the channel for an ordinary channel", () => {
-    expect(mentionTitle("Ada", { type: "open", name: "general" })).toBe(
+    expect(mentionTitle("Ada", { kind: "channel", name: "general" })).toBe(
       "Ada mentioned you in #general",
     );
   });
 
   it("names a closed channel the same way", () => {
-    expect(mentionTitle("Ada", { type: "closed", name: "leadership" })).toBe(
+    expect(mentionTitle("Ada", { kind: "channel", name: "leadership" })).toBe(
       "Ada mentioned you in #leadership",
     );
   });
@@ -19,6 +19,6 @@ describe("mentionTitle", () => {
     // "#". There is also nothing useful to put there: in a two-person
     // conversation the sender is already named, and the only other
     // participant is the person being notified.
-    expect(mentionTitle("Ada", { type: "dm", name: "" })).toBe("Ada mentioned you");
+    expect(mentionTitle("Ada", { kind: "dm", name: "" })).toBe("Ada mentioned you");
   });
 });

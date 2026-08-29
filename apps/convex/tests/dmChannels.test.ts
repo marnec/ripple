@@ -34,7 +34,7 @@ describe("channels.createDm", () => {
     expect(channelId).toBeDefined();
 
     const channel = await t.run(async (ctx) => ctx.db.get(channelId));
-    expect(channel?.type).toBe("dm");
+    expect(channel?.kind).toBe("dm");
     // The row carries no rendered label. It used to store a sorted
     // `<A> × <B>` snapshot to feed `channels.searchIndex("by_name")`, which
     // then needed a rename fan-out to stay fresh. A DM is no longer
@@ -234,3 +234,10 @@ describe("channels.createDm", () => {
     expect(dmNode, "a DM is not mirrored into the workspace-wide node index").toBeNull();
   });
 });
+
+// A test here used to assert that `channels.create` refuses `type: "dm"`. The
+// mutation's argument is now a *visibility*, so a direct message is not
+// something the call can express at all — the guarantee moved from a runtime
+// rejection to the type system. What it protected is covered by
+// `channelKindVisibility.test.ts`, which asserts the mutation always writes
+// `kind: "channel"`.

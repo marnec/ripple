@@ -21,6 +21,7 @@ import {
   type ShareResourceType,
 } from "@ripple/shared/shareTypes";
 
+import { isDirectMessage } from "@ripple/shared/channel";
 // ---------------------------------------------------------------------------
 // Validators
 // ---------------------------------------------------------------------------
@@ -364,7 +365,7 @@ export const getShareInfo = query({
       // authenticated, so there is no viewer to be relative to — the
       // participant-independent form is the only one available here.
       resourceName =
-        channel.type === "dm" ? await dmLabelFull(ctx, channel._id) : channel.name;
+        isDirectMessage(channel) ? await dmLabelFull(ctx, channel._id) : channel.name;
     } else if (share.resourceType === "calendarEvent") {
       // A missing event row means the organizer cancelled (cancellation =
       // hard delete + cascade). The share row itself is cascade-deleted, so

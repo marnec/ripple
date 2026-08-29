@@ -2,7 +2,7 @@ import { ConvexError, v } from "convex/values";
 import { paginationOptsValidator } from "convex/server";
 import { internalQuery, query } from "./_generated/server";
 import { mutation } from "./functions";
-import { ChannelRole, ChannelType } from "@ripple/shared/enums";
+import { ChannelKind, ChannelRole, ChannelVisibility } from "@ripple/shared/enums";
 import { logActivity } from "./auditLog";
 import { getUserDisplayName } from "@ripple/shared/displayName";
 import { WORKSPACE_CHANNEL_LIMIT } from "@ripple/shared/constants";
@@ -13,42 +13,42 @@ import { internal } from "./_generated/api";
 import { cascadeDelete } from "./cascadeDelete";
 import { requireWorkspaceMember, checkWorkspaceMember, requireChannelAccess, requireUser } from "./authHelpers";
 import { notify } from "./utils/notify";
-import { channelTypeSchema } from "./schema";
+import { channelKindSchema, channelVisibilitySchema } from "./schema";
 import type { Doc } from "./_generated/dataModel";
 
+import { isDirectMessage, isPublicChannel, isPrivateChannel } from "@ripple/shared/channel";
 export const create = mutation({
   args: {
     name: v.string(),
     workspaceId: v.id("workspaces"),
-    type: channelTypeSchema,
+    // A visibility, not a kind. This mutation cannot build a direct message:
+    // it inserts a single `channelMembers` row for the creator, where a DM
+    // needs exactly two, and `dmLabelForViewer` derives a DM's label from that
+    // roster — so a one-participant DM could never name itself, and
+    // `createDm`'s dedup would never match it. `createDm` is the only way a
+    // direct message comes into being, and the type system now says so.
+    visibility: channelVisibilitySchema,
   },
   returns: v.id("channels"),
-  handler: async (ctx, { name, type, workspaceId }) => {
+  handler: async (ctx, { name, visibility, workspaceId }) => {
     const { userId } = await requireWorkspaceMember(ctx, workspaceId);
 
-    // Per-workspace channel cap. Counts `open` + `closed` only — see
+    // Per-workspace channel cap. Counts channels only — see
     // WORKSPACE_CHANNEL_LIMIT for why DMs are excluded. `createDm` is not
     // gated at all for the same reason.
     //
-    // Counted through `by_type_workspace` rather than the `channelsByWorkspace`
-    // aggregate: that aggregate is namespaced by workspace alone, so its count
-    // includes DMs and cannot answer this question. `.take(LIMIT)` bounds the
-    // read at 2 x 150 rows on a mutation that runs rarely.
-    const [openChannels, closedChannels] = await Promise.all([
-      ctx.db
-        .query("channels")
-        .withIndex("by_type_workspace", (q) =>
-          q.eq("type", ChannelType.OPEN).eq("workspaceId", workspaceId),
-        )
-        .take(WORKSPACE_CHANNEL_LIMIT),
-      ctx.db
-        .query("channels")
-        .withIndex("by_type_workspace", (q) =>
-          q.eq("type", ChannelType.CLOSED).eq("workspaceId", workspaceId),
-        )
-        .take(WORKSPACE_CHANNEL_LIMIT),
-    ]);
-    if (openChannels.length + closedChannels.length >= WORKSPACE_CHANNEL_LIMIT) {
+    // One bounded range on `by_kind_workspace`, where this used to need two
+    // added together: "every channel, whichever visibility" is expressible as
+    // an index range now that kind is its own column. Not the
+    // `channelsByWorkspace` aggregate, which is namespaced by workspace alone
+    // and so counts DMs too.
+    const channels = await ctx.db
+      .query("channels")
+      .withIndex("by_kind_workspace", (q) =>
+        q.eq("kind", ChannelKind.CHANNEL).eq("workspaceId", workspaceId),
+      )
+      .take(WORKSPACE_CHANNEL_LIMIT);
+    if (channels.length >= WORKSPACE_CHANNEL_LIMIT) {
       throw new ConvexError(
         `This workspace has reached its limit of ${WORKSPACE_CHANNEL_LIMIT} channels. Delete a channel to create a new one.`,
       );
@@ -57,10 +57,13 @@ export const create = mutation({
     const channelId = await ctx.db.insert("channels", {
       name,
       workspaceId,
-      type,
+      kind: ChannelKind.CHANNEL,
+      visibility,
     });
 
-    if (type !== ChannelType.OPEN) {
+    // A private channel needs its creator on the roster; a public one has no
+    // roster to be on.
+    if (visibility === ChannelVisibility.PRIVATE) {
       const creator = await ctx.db.get(userId);
       await ctx.db.insert("channelMembers", {
         channelId,
@@ -96,8 +99,8 @@ export const create = mutation({
 // excluding DMs. The calendar "Hosted in" picker uses this. DMs are excluded
 // because a DM has no agenda of its own and reusing its persistent room would
 // surface the meeting to whichever two members the DM happens to belong to.
-// One indexed equality lookup per non-DM type via `by_type_workspace`, so we
-// never call .filter() and never read DM rows.
+// One indexed range on `by_kind_workspace`, so we never call .filter() and
+// never read DM rows.
 export const listHostable = query({
   args: { workspaceId: v.id("workspaces") },
   returns: v.array(v.object({
@@ -105,33 +108,27 @@ export const listHostable = query({
     _creationTime: v.number(),
     name: v.string(),
     workspaceId: v.id("workspaces"),
-    type: channelTypeSchema,
+    kind: channelKindSchema,
+    visibility: channelVisibilitySchema,
   })),
   handler: async (ctx, { workspaceId }) => {
     const auth = await checkWorkspaceMember(ctx, workspaceId);
     if (!auth) return [];
 
-    const [open, closed] = await Promise.all([
-      ctx.db
-        .query("channels")
-        .withIndex("by_type_workspace", (q) =>
-          q.eq("type", ChannelType.OPEN).eq("workspaceId", workspaceId),
-        )
-        .collect(),
-      ctx.db
-        .query("channels")
-        .withIndex("by_type_workspace", (q) =>
-          q.eq("type", ChannelType.CLOSED).eq("workspaceId", workspaceId),
-        )
-        .collect(),
-    ]);
+    const hostable = await ctx.db
+      .query("channels")
+      .withIndex("by_kind_workspace", (q) =>
+        q.eq("kind", ChannelKind.CHANNEL).eq("workspaceId", workspaceId),
+      )
+      .collect();
 
-    return [...open, ...closed].map((c) => ({
+    return hostable.map((c) => ({
       _id: c._id,
       _creationTime: c._creationTime,
       name: c.name,
       workspaceId: c.workspaceId,
-      type: c.type,
+      kind: c.kind,
+      visibility: c.visibility,
     }));
   },
 });
@@ -144,7 +141,8 @@ export const get = query({
       _creationTime: v.number(),
       name: v.string(),
       workspaceId: v.id("workspaces"),
-      type: channelTypeSchema,
+      kind: channelKindSchema,
+      visibility: channelVisibilitySchema,
     }),
     v.null()
   ),
@@ -168,11 +166,12 @@ export const get = query({
       // that caller so the "you are not in this conversation" gate can name
       // them. What a DM is not is *findable* without the id.
       name:
-        channel.type === "dm"
+        isDirectMessage(channel)
           ? await dmLabelForViewer(ctx, channel._id, auth.userId)
           : channel.name,
       workspaceId: channel.workspaceId,
-      type: channel.type,
+      kind: channel.kind,
+      visibility: channel.visibility,
     };
   },
 });
@@ -186,7 +185,7 @@ export const update = mutation({
   handler: async (ctx, { id, name }) => {
     // Check DM guard before requiring admin role
     const channelDoc = await ctx.db.get(id);
-    if (channelDoc?.type === "dm") {
+    if (channelDoc && isDirectMessage(channelDoc)) {
       throw new ConvexError("Cannot rename a DM");
     }
 
@@ -246,76 +245,74 @@ export const search = query({
   args: {
     workspaceId: v.id("workspaces"),
     searchText: v.optional(v.string()),
-    // Browsable types only. `channelTypeSchema` would also admit "dm", and a
-    // DM is not a browsable resource — its name is its roster. The browse UI
-    // only ever sends "open" / "closed" / nothing (ChannelVisibilityFilter is
-    // "all" | "public" | "private"), so nothing legitimate is lost.
-    type: v.optional(v.union(v.literal("open"), v.literal("closed"))),
+    // A visibility, or nothing for "all". A direct message is not a browsable
+    // resource — its name is its roster — and it is now excluded by `kind`
+    // rather than by there being no value to name it with.
+    visibility: v.optional(channelVisibilitySchema),
     paginationOpts: paginationOptsValidator,
   },
   returns: v.object({
-    page: v.array(v.object({ _id: v.id("channels"), name: v.string(), type: channelTypeSchema })),
+    page: v.array(
+      v.object({
+        _id: v.id("channels"),
+        name: v.string(),
+        kind: channelKindSchema,
+        visibility: channelVisibilitySchema,
+      }),
+    ),
     isDone: v.boolean(),
     continueCursor: v.string(),
     splitCursor: v.optional(v.union(v.string(), v.null())),
     pageStatus: v.optional(v.union(v.literal("SplitRecommended"), v.literal("SplitRequired"), v.null())),
   }),
-  handler: async (ctx, { workspaceId, searchText, type, paginationOpts }) => {
+  handler: async (ctx, { workspaceId, searchText, visibility, paginationOpts }) => {
     await requireWorkspaceMember(ctx, workspaceId);
 
     const result = searchText?.trim()
-      ? await ctx.db
+      ? // Direct messages are excluded by an equality filter on `kind`, not by
+        // discarding them afterwards. While the two axes shared a column this
+        // was impossible — a search index's filterFields do whole-value
+        // equality, so "any type except dm" had nowhere to live — and the
+        // post-filter it forced could hand back a short page.
+        await ctx.db
           .query("channels")
           .withSearchIndex("by_name", (q) => {
-            const base = q.search("name", searchText).eq("workspaceId", workspaceId);
-            return type !== undefined ? base.eq("type", type) : base;
+            const base = q
+              .search("name", searchText)
+              .eq("workspaceId", workspaceId)
+              .eq("kind", ChannelKind.CHANNEL);
+            return visibility !== undefined ? base.eq("visibility", visibility) : base;
           })
-          // A DM's stored name is `<A> × <B>` — it *is* the roster. The search
-          // index's filterFields do whole-value equality, so "any type except
-          // dm" cannot be expressed there; this is the sanctioned narrowing.
-          // Post-filtering can shorten a page, which is acceptable here: a
-          // name search matches few rows to begin with.
-          // Per the note above, a search index's filterFields do whole-value
-          // equality only, so this narrowing has nowhere else to live.
-          // eslint-disable-next-line @convex-dev/no-filter-in-query
-          .filter((q) => q.neq(q.field("type"), "dm"))
           .paginate(paginationOpts)
-      : type !== undefined
+      : visibility !== undefined
         ? await ctx.db
             .query("channels")
-            .withIndex("by_type_workspace", (q) =>
-              q.eq("type", type).eq("workspaceId", workspaceId),
+            .withIndex("by_kind_visibility_workspace", (q) =>
+              q
+                .eq("kind", ChannelKind.CHANNEL)
+                .eq("visibility", visibility)
+                .eq("workspaceId", workspaceId),
             )
             .paginate(paginationOpts)
-        : // "All" means open + closed, never DMs. Merging two index ranges
-          // rather than scanning `by_workspace` and discarding: a workspace
-          // accumulates DMs faster than channels (their count grows with the
-          // square of the member count), so a post-filter would read mostly
-          // rows it throws away and hand back near-empty pages.
-          await mergedStream(
-            [
-              stream(ctx.db, schema)
-                .query("channels")
-                .withIndex("by_type_workspace", (q) =>
-                  q.eq("type", ChannelType.OPEN).eq("workspaceId", workspaceId),
-                ),
-              stream(ctx.db, schema)
-                .query("channels")
-                .withIndex("by_type_workspace", (q) =>
-                  q.eq("type", ChannelType.CLOSED).eq("workspaceId", workspaceId),
-                ),
-            ],
-            // Both streams pin every field before `_creationTime`, so each is
-            // already ordered by it and the merge is a straight interleave.
-            ["_creationTime"],
-          ).paginate(paginationOpts);
+        : // "All" is one range now: every channel in the workspace, whichever
+          // visibility, never a DM. This used to be a merge of two index
+          // ranges interleaved by `_creationTime`, because "not a DM" was not
+          // an expressible range. `by_kind_workspace` is ordered by
+          // `_creationTime` already, so the page order is unchanged.
+          await ctx.db
+            .query("channels")
+            .withIndex("by_kind_workspace", (q) =>
+              q.eq("kind", ChannelKind.CHANNEL).eq("workspaceId", workspaceId),
+            )
+            .paginate(paginationOpts);
 
     return {
       ...result,
       page: result.page.map((c) => ({
         _id: c._id,
         name: c.name,
-        type: c.type,
+        kind: c.kind,
+        visibility: c.visibility,
       })),
     };
   },
@@ -326,7 +323,8 @@ const channelValidator = v.object({
   _creationTime: v.number(),
   name: v.string(),
   workspaceId: v.id("workspaces"),
-  type: channelTypeSchema,
+  kind: channelKindSchema,
+  visibility: channelVisibilitySchema,
 });
 
 export const getInternal = internalQuery({
@@ -340,7 +338,8 @@ export const getInternal = internalQuery({
       _creationTime: channel._creationTime,
       name: channel.name,
       workspaceId: channel.workspaceId,
-      type: channel.type,
+      kind: channel.kind,
+      visibility: channel.visibility,
     };
   },
 });
@@ -387,7 +386,7 @@ export const createDm = mutation({
 
     for (const cm of myChannelMemberships) {
       const channel = await ctx.db.get(cm.channelId);
-      if (channel?.type !== "dm") continue;
+      if (!channel || !isDirectMessage(channel)) continue;
 
       const allMembers = await ctx.db
         .query("channelMembers")
@@ -426,7 +425,11 @@ export const createDm = mutation({
     const channelId = await ctx.db.insert("channels", {
       name: "",
       workspaceId,
-      type: ChannelType.DM,
+      kind: ChannelKind.DM,
+      // A derived constant, not a setting: a direct message has no visibility.
+      // It exists so the column can be required and so indexes leading with it
+      // need not sort around an absent value.
+      visibility: ChannelVisibility.PRIVATE,
     });
 
     await ctx.db.insert("channelMembers", {
@@ -488,7 +491,7 @@ export const getAccessInfo = query({
     if (!auth) return null;
 
     // Open channels: everyone is a member
-    if (channel.type === "open") return { isMember: true as const };
+    if (isPublicChannel(channel)) return { isMember: true as const };
 
     // Check explicit channel membership
     const channelMembership = await ctx.db
@@ -502,7 +505,7 @@ export const getAccessInfo = query({
 
     // DM non-member: DM existence is public, so return participant info so the
     // frontend can show a "you're not in this conversation" gate (not a 404).
-    if (channel.type === "dm") {
+    if (isDirectMessage(channel)) {
       const dmMembers = await ctx.db
         .query("channelMembers")
         .withIndex("by_channel", (q) => q.eq("channelId", channelId))
@@ -541,8 +544,8 @@ export const requestJoin = mutation({
   handler: async (ctx, { channelId }) => {
     const channel = await ctx.db.get(channelId);
     if (!channel) throw new ConvexError("Channel not found");
-    if (channel.type === "open") throw new ConvexError("Channel is open — just join");
-    if (channel.type === "dm") throw new ConvexError("Cannot request to join a DM");
+    if (isPublicChannel(channel)) throw new ConvexError("Channel is open — just join");
+    if (isDirectMessage(channel)) throw new ConvexError("Cannot request to join a DM");
 
     const { userId } = await requireWorkspaceMember(ctx, channel.workspaceId);
 

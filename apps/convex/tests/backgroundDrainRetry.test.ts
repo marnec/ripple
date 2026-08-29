@@ -16,7 +16,7 @@
 import { expect, describe, it, vi, beforeEach, afterEach } from "vitest";
 import { writerWithTriggers } from "convex-helpers/server/triggers";
 import { triggers } from "../convex/dbTriggers";
-import { createTestContext, setupProject, setupWorkspaceWithAdmin } from "./helpers";
+import { createTestContext, setupProject, setupWorkspaceWithAdmin, channelFields } from "./helpers";
 import { api, internal } from "../convex/_generated/api";
 import { WorkspaceRole } from "@ripple/shared/enums/roles";
 import type { Id } from "../convex/_generated/dataModel";
@@ -159,7 +159,7 @@ async function createOpenChannel(
     return await db.insert("channels", {
       name: "general",
       workspaceId,
-      type: "open" as const,
+      ...channelFields("open"),
     });
   });
 }

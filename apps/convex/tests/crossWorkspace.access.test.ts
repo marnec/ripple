@@ -38,8 +38,7 @@ import { api } from "../convex/_generated/api";
 import {
   createTestContext,
   setupAuthenticatedUser,
-  setupWorkspaceWithAdmin,
-} from "./helpers";
+  setupWorkspaceWithAdmin, channelFields } from "./helpers";
 import type { Id } from "../convex/_generated/dataModel";
 import { ChannelRole, WorkspaceRole } from "@ripple/shared/enums/roles";
 import { InviteStatus } from "@ripple/shared/enums/inviteStatus";
@@ -848,7 +847,7 @@ describe("messages enrichment — foreign ids pasted into a body", () => {
       const channelId = await ctx.db.insert("channels", {
         name: "alice-dm",
         workspaceId: alice.workspaceId,
-        type: "dm" as const,
+        ...channelFields("dm"),
       });
       await ctx.db.insert("channelMembers", {
         channelId,
@@ -1140,7 +1139,7 @@ async function setupClosedChannelInB(
     const channelId = await ctx.db.insert("channels", {
       name: "b-private",
       workspaceId: bob.workspaceId,
-      type: "closed" as const,
+      ...channelFields("closed"),
     });
     await ctx.db.insert("channelMembers", {
       channelId,

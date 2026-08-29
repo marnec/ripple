@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ChannelType, WorkspaceRole } from "@ripple/shared/enums/roles";
+import { ChannelType, WorkspaceRole, ChannelVisibility } from "@ripple/shared/enums/roles";
 import { api } from "../convex/_generated/api";
 import { withTriggers } from "../convex/dbTriggers";
 import {
@@ -78,7 +78,7 @@ describe("graph.getWorkspaceGraph", () => {
     const channelId = await asUser.mutation(api.channels.create, {
       workspaceId,
       name: "general",
-      type: ChannelType.OPEN,
+      visibility: ChannelVisibility.PUBLIC,
     });
     const mentioned = await t.run(async (ctx) =>
       ctx.db.insert("users", { name: "Alice", email: "alice@test.com" }),

@@ -2,8 +2,7 @@ import { expect, describe, it } from "vitest";
 import { api } from "../convex/_generated/api";
 import {
   createTestContext,
-  setupWorkspaceWithAdmin,
-} from "./helpers";
+  setupWorkspaceWithAdmin, channelFields } from "./helpers";
 import { ChannelRole } from "@ripple/shared/enums/roles";
 import type { Id } from "../convex/_generated/dataModel";
 
@@ -15,7 +14,7 @@ async function setupChannelWithMembership(
     const channelId = await ctx.db.insert("channels", {
       name: "test-channel",
       workspaceId: opts.workspaceId,
-      type: "closed" as const,
+      ...channelFields("closed"),
     });
     await ctx.db.insert("channelMembers", {
       channelId,
@@ -113,7 +112,7 @@ describe("channelReads", () => {
       // Open channels have no channelMembers rows — access is via workspace
       // membership, so markRead must still record a read marker.
       const channelId = await t.run(async (ctx) =>
-        ctx.db.insert("channels", { name: "open-channel", workspaceId, type: "open" as const }),
+        ctx.db.insert("channels", { name: "open-channel", workspaceId, ...channelFields("open")}),
       );
 
       await asUser.mutation(api.channelReads.markRead, { channelId });
@@ -132,7 +131,7 @@ describe("channelReads", () => {
       const t = createTestContext();
       const { userId, workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
       const channelId = await t.run(async (ctx) =>
-        ctx.db.insert("channels", { name: "closed-channel", workspaceId, type: "closed" as const }),
+        ctx.db.insert("channels", { name: "closed-channel", workspaceId, ...channelFields("closed")}),
       );
 
       await asUser.mutation(api.channelReads.markRead, { channelId });
@@ -177,7 +176,7 @@ describe("channelReads", () => {
       // Channel + a message exist first; the user joins afterwards (later
       // _creationTime), so the pre-existing message is not "unread".
       const channelId = await t.run(async (ctx) =>
-        ctx.db.insert("channels", { name: "pre-join", workspaceId, type: "closed" as const }),
+        ctx.db.insert("channels", { name: "pre-join", workspaceId, ...channelFields("closed")}),
       );
       await insertMessage(t, { channelId, userId });
       await t.run(async (ctx) =>
@@ -200,7 +199,7 @@ describe("channelReads", () => {
       // workspace member (joined before the channel existed), so a later
       // message should register as unread off the workspace-join baseline.
       const channelId = await t.run(async (ctx) =>
-        ctx.db.insert("channels", { name: "open-channel", workspaceId, type: "open" as const }),
+        ctx.db.insert("channels", { name: "open-channel", workspaceId, ...channelFields("open")}),
       );
 
       await insertMessage(t, { channelId, userId });
@@ -213,7 +212,7 @@ describe("channelReads", () => {
       const t = createTestContext();
       const { userId, workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
       const channelId = await t.run(async (ctx) =>
-        ctx.db.insert("channels", { name: "open-channel", workspaceId, type: "open" as const }),
+        ctx.db.insert("channels", { name: "open-channel", workspaceId, ...channelFields("open")}),
       );
 
       await insertMessage(t, { channelId, userId });

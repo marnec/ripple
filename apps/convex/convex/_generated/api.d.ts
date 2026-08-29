@@ -561,6 +561,20 @@ export declare const api: {
       { authToken: string; meetingId: string; transcribe: boolean }
     >;
   };
+  channelDismissal: {
+    dismissChannel: FunctionReference<
+      "mutation",
+      "public",
+      { channelId: Id<"channels"> },
+      null
+    >;
+    restoreChannel: FunctionReference<
+      "mutation",
+      "public",
+      { channelId: Id<"channels"> },
+      null
+    >;
+  };
   channelMembers: {
     addToChannel: FunctionReference<
       "mutation",
@@ -657,7 +671,7 @@ export declare const api: {
       "public",
       {
         name: string;
-        type: "open" | "closed" | "dm";
+        visibility: "public" | "private";
         workspaceId: Id<"workspaces">;
       },
       Id<"channels">
@@ -681,8 +695,9 @@ export declare const api: {
       {
         _creationTime: number;
         _id: Id<"channels">;
+        kind: "channel" | "dm";
         name: string;
-        type: "open" | "closed" | "dm";
+        visibility: "public" | "private";
         workspaceId: Id<"workspaces">;
       } | null
     >;
@@ -718,8 +733,9 @@ export declare const api: {
       Array<{
         _creationTime: number;
         _id: Id<"channels">;
+        kind: "channel" | "dm";
         name: string;
-        type: "open" | "closed" | "dm";
+        visibility: "public" | "private";
         workspaceId: Id<"workspaces">;
       }>
     >;
@@ -764,7 +780,7 @@ export declare const api: {
           numItems: number;
         };
         searchText?: string;
-        type?: "open" | "closed";
+        visibility?: "public" | "private";
         workspaceId: Id<"workspaces">;
       },
       {
@@ -772,8 +788,9 @@ export declare const api: {
         isDone: boolean;
         page: Array<{
           _id: Id<"channels">;
+          kind: "channel" | "dm";
           name: string;
-          type: "open" | "closed" | "dm";
+          visibility: "public" | "private";
         }>;
         pageStatus?: "SplitRecommended" | "SplitRequired" | null;
         splitCursor?: string | null;
@@ -783,20 +800,6 @@ export declare const api: {
       "mutation",
       "public",
       { id: Id<"channels">; name?: string },
-      null
-    >;
-  };
-  channelVisibility: {
-    hideChannel: FunctionReference<
-      "mutation",
-      "public",
-      { channelId: Id<"channels"> },
-      null
-    >;
-    unhideChannel: FunctionReference<
-      "mutation",
-      "public",
-      { channelId: Id<"channels"> },
       null
     >;
   };
@@ -3649,8 +3652,9 @@ export declare const api: {
           _creationTime: number;
           _id: Id<"channels">;
           isHidden: boolean;
+          kind: "channel" | "dm";
           name: string;
-          type: "open" | "closed" | "dm";
+          visibility: "public" | "private";
           workspaceId: Id<"workspaces">;
         }>;
         hiddenChannelCount: number;
@@ -3988,8 +3992,9 @@ export declare const internal: {
       {
         _creationTime: number;
         _id: Id<"channels">;
+        kind: "channel" | "dm";
         name: string;
-        type: "open" | "closed" | "dm";
+        visibility: "public" | "private";
         workspaceId: Id<"workspaces">;
       } | null
     >;
@@ -5393,6 +5398,20 @@ export declare const internal: {
       },
       any
     >;
+    backfillChannelKindVisibility: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        batchSize?: number;
+        cursor?: string | null;
+        dryRun?: boolean;
+        fn?: string;
+        next?: Array<string>;
+        oneBatchOnly?: boolean;
+        reset?: boolean;
+      },
+      any
+    >;
     backfillChannelMemberDenormalized: FunctionReference<
       "mutation",
       "internal",
@@ -5922,6 +5941,20 @@ export declare const internal: {
       },
       any
     >;
+    runBackfillChannelKindVisibility: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        batchSize?: number;
+        cursor?: string | null;
+        dryRun?: boolean;
+        fn?: string;
+        next?: Array<string>;
+        oneBatchOnly?: boolean;
+        reset?: boolean;
+      },
+      any
+    >;
     runBackfillChannelMemberDenormalized: FunctionReference<
       "mutation",
       "internal",
@@ -5950,6 +5983,20 @@ export declare const internal: {
       },
       any
     >;
+    runStripChannelType: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        batchSize?: number;
+        cursor?: string | null;
+        dryRun?: boolean;
+        fn?: string;
+        next?: Array<string>;
+        oneBatchOnly?: boolean;
+        reset?: boolean;
+      },
+      any
+    >;
     stripCalendarEventCancelledAt: FunctionReference<
       "mutation",
       "internal",
@@ -5965,6 +6012,20 @@ export declare const internal: {
       any
     >;
     stripChannelRoleCount: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        batchSize?: number;
+        cursor?: string | null;
+        dryRun?: boolean;
+        fn?: string;
+        next?: Array<string>;
+        oneBatchOnly?: boolean;
+        reset?: boolean;
+      },
+      any
+    >;
+    stripChannelType: FunctionReference<
       "mutation",
       "internal",
       {

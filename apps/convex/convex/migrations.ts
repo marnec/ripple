@@ -103,6 +103,8 @@ export const runAll = migrations.runner([
   internal.migrations.stripDocumentFields,
   internal.migrations.stripDiagramFields,
   internal.migrations.migrateChannelIsPublicToType,
+  internal.migrations.backfillChannelKindVisibility,
+  internal.migrations.stripChannelType,
   internal.migrations.stripChannelRoleCount,
   internal.migrations.stripSpreadsheetFields,
   internal.migrations.backfillDocumentAggregates,
@@ -210,10 +212,15 @@ export const stripChannelRoleCount = migrations.define({
   migrateOne: async (ctx, channel) => {
     const legacy = channel as Record<string, unknown>;
     if (legacy.roleCount !== undefined) {
+      // A `replace` enumerates what survives, so every column the table gains
+      // has to be added here or this repair path quietly deletes it. `type` is
+      // deliberately absent — a row reaching this is being rewritten anyway,
+      // so it may as well arrive in the post-split shape.
       await ctx.db.replace(channel._id, {
         name: channel.name,
         workspaceId: channel.workspaceId,
-        type: channel.type,
+        kind: channel.kind,
+        visibility: channel.visibility,
       });
     }
   },
@@ -233,19 +240,104 @@ export const migrateChannelIsPublicToType = migrations.define({
   table: "channels",
   migrateOne: async (ctx, channel) => {
     const legacy = channel as Record<string, unknown>;
-    if (channel.type !== undefined) return; // already migrated
+    if (channel.kind !== undefined) return; // already migrated
     const isPublic = legacy.isPublic as boolean | undefined;
-    const type = isPublic === false ? "closed" : "open";
+    // Skips `type` entirely and lands on the columns that replaced it. A row
+    // this old predates both splits, so writing the intermediate form would
+    // only mean `backfillChannelKindVisibility` had to migrate it a second
+    // time — and `type` is no longer somewhere a write can put a value.
     await ctx.db.replace(channel._id, {
       name: channel.name,
       workspaceId: channel.workspaceId,
-      type,
+      kind: ChannelKind.CHANNEL,
+      visibility:
+        isPublic === false ? ChannelVisibility.PRIVATE : ChannelVisibility.PUBLIC,
     });
   },
 });
 
 export const runChannelTypeMigration = migrations.runner(
   internal.migrations.migrateChannelIsPublicToType,
+);
+
+/**
+ * Backfill `kind` and `visibility` from `type` — the migrate step of the
+ * `channels.type` split (docs/adr/0001).
+ *
+ *   open   → kind "channel", visibility "public"
+ *   closed → kind "channel", visibility "private"
+ *   dm     → kind "dm",      visibility "private"
+ *
+ * That last visibility is **inert**. A direct message has no visibility to
+ * set — no roster to manage, no join request, no settings page. The value
+ * exists so the column can be made required at the contract step and so
+ * indexes leading with it need not sort around an absent value. Nothing may
+ * read it as a setting; `isPrivateChannel` deliberately stays false for a DM.
+ *
+ * Until this reports done, `type` is the sole source of truth and no reader
+ * may branch on the new columns — an unbackfilled row has `kind: undefined`,
+ * and `undefined !== "dm"` would give every legacy direct message a `nodes`
+ * row, putting participant names into the workspace-wide index and resource
+ * search. See the note on `channels` in schema.ts.
+ *
+ * Idempotent: a row that already has both columns is skipped, which matters
+ * because `runAll` executes on every deploy.
+ */
+export const backfillChannelKindVisibility = migrations.define({
+  table: "channels",
+  migrateOne: async (ctx, channel) => {
+    if (channel.kind !== undefined && channel.visibility !== undefined) return;
+    // Reads `type` directly, and must keep doing so. It is tempting to go
+    // through `isDirectMessage` / `isPublicChannel` — but those predicates read
+    // `kind` and `visibility`, which is precisely what this row does not have
+    // yet. Routing the backfill through them makes it derive the new columns
+    // from themselves: every row comes out `kind: "channel"`, and every public
+    // channel comes out private. This is the one place in the codebase that
+    // must speak the old vocabulary.
+    // Read through an untyped view: `type` is on its way out of the schema, so
+    // it is no longer a declared field, but a row this migration exists for
+    // still carries one. Same shape as `stripTaskStartDate` and the other
+    // repair paths for columns that have been narrowed away.
+    const legacyType = (channel as Record<string, unknown>).type;
+    await ctx.db.patch(channel._id, {
+      kind: legacyType === LegacyChannelType.DM ? ChannelKind.DM : ChannelKind.CHANNEL,
+      visibility:
+        legacyType === LegacyChannelType.OPEN
+          ? ChannelVisibility.PUBLIC
+          : ChannelVisibility.PRIVATE,
+    });
+  },
+});
+
+export const runBackfillChannelKindVisibility = migrations.runner(
+  internal.migrations.backfillChannelKindVisibility,
+);
+
+/**
+ * Remove `type` from every channel row — the contract step of the split
+ * (docs/adr/0001).
+ *
+ * This has to run *before* `type` is deleted from schema.ts, and that ordering
+ * is not a preference: Convex validates existing documents when a schema is
+ * pushed, so a table still holding the column cannot accept a schema that no
+ * longer declares it. The column is therefore declared `v.optional` for one
+ * release — long enough for this to run — and removed in the release after.
+ *
+ * Idempotent, which matters because `runAll` executes on every deploy.
+ */
+export const stripChannelType = migrations.define({
+  table: "channels",
+  migrateOne: async (ctx, channel) => {
+    const legacy = channel as Record<string, unknown>;
+    if (legacy.type === undefined) return;
+    const { type: _dropped, ...rest } = legacy as { type?: unknown } & Record<string, unknown>;
+    void _dropped;
+    await ctx.db.replace(channel._id, rest as unknown as typeof channel);
+  },
+});
+
+export const runStripChannelType = migrations.runner(
+  internal.migrations.stripChannelType,
 );
 
 /**
@@ -774,7 +866,7 @@ export const backfillNodeSearchable = migrations.define({
 export const stripDmDiscoverability = migrations.define({
   table: "channels",
   migrateOne: async (ctx, channel) => {
-    if (channel.type !== "dm") return;
+    if (!isDirectMessage(channel)) return;
 
     const node = await ctx.db
       .query("nodes")
@@ -859,6 +951,15 @@ export const stripCalendarEventCancelledAt = migrations.define({
 
 import type { GenericMutationCtx } from "convex/server";
 
+import { isDirectMessage, isPublicChannel } from "@ripple/shared/channel";
+import { ChannelKind, ChannelVisibility } from "@ripple/shared/enums";
+
+/**
+ * The retired `channels.type` vocabulary. Local to this module on purpose: the
+ * repair paths below are the only code left that reads it, and it has no place
+ * in the shared vocabulary now that `kind` and `visibility` exist.
+ */
+const LegacyChannelType = { OPEN: "open", CLOSED: "closed", DM: "dm" } as const;
 async function backfillTagsForResourceRow(
   ctx: GenericMutationCtx<DataModel>,
   args: {
@@ -1107,8 +1208,11 @@ export const backfillNotificationSubscriptions = migrations.define({
     // Channel-scoped broadcast categories
     const publicChannels = await ctx.db
       .query("channels")
-      .withIndex("by_type_workspace", (q) =>
-        q.eq("type", "open").eq("workspaceId", workspaceId),
+      .withIndex("by_kind_visibility_workspace", (q) =>
+        q
+          .eq("kind", ChannelKind.CHANNEL)
+          .eq("visibility", ChannelVisibility.PUBLIC)
+          .eq("workspaceId", workspaceId),
       )
       .collect();
 
@@ -1345,7 +1449,7 @@ export const unsubscribeNonMembersFromPrivateChannels = migrations.define({
     if (!channelId) return;
 
     const channel = await ctx.db.get(channelId);
-    if (!channel || channel.type === "open") return;
+    if (!channel || isPublicChannel(channel)) return;
 
     const membership = await ctx.db
       .query("channelMembers")

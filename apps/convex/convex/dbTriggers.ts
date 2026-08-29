@@ -14,6 +14,7 @@ import {
   onChannelPreferencesChange,
 } from "./notificationSubscriptionSync";
 
+import { isDirectMessage, isPublicChannel } from "@ripple/shared/channel";
 // ── Aggregate definitions ───────────────────────────────────────────
 // Each aggregate counts documents by workspaceId using O(log n) B-tree lookups.
 
@@ -271,7 +272,7 @@ triggers.register("channels", async (ctx, change) => {
     // Nothing needs a DM's node: breadcrumbs resolve names with `ctx.db.get`
     // on the resource itself (`breadcrumb.resolveResourceName`), and the
     // sidebar derives a DM's label from its participants.
-    if (change.newDoc.type === "dm") return;
+    if (isDirectMessage(change.newDoc)) return;
 
     await insertNode(ctx, {
       workspaceId: change.newDoc.workspaceId,
@@ -945,7 +946,7 @@ triggers.register("workspaceMembers", async (ctx, change) => {
 // Restart safety — a retry replays from the first page — is a property of the
 // pages themselves; see the note on `scheduleSubscriptionDrain`.
 triggers.register("channels", async (ctx, change) => {
-  if (change.operation === "insert" && change.newDoc.type === "open") {
+  if (change.operation === "insert" && isPublicChannel(change.newDoc)) {
     await scheduleSubscriptionDrain(
       ctx,
       internal.notificationSubscriptionJobs.publicChannelCreated,
@@ -953,8 +954,8 @@ triggers.register("channels", async (ctx, change) => {
       { channelId: change.id, workspaceId: change.newDoc.workspaceId },
     );
   } else if (change.operation === "update") {
-    const wasOpen = change.oldDoc.type === "open";
-    const isOpen = change.newDoc.type === "open";
+    const wasOpen = isPublicChannel(change.oldDoc);
+    const isOpen = isPublicChannel(change.newDoc);
     if (wasOpen && !isOpen) {
       await scheduleSubscriptionDrain(
         ctx,

@@ -13,6 +13,7 @@ import {
   type RealtimeKitClient,
 } from "./lib/realtimeKit";
 
+import { isDirectMessage } from "@ripple/shared/channel";
 /**
  * Is the meeting behind an `active` session row still a real, occupied call?
  *
@@ -452,7 +453,7 @@ export const getChannelForTranscript = internalQuery({
     // A DM stores no label — derive it. This query takes no viewer, so it is
     // the participant-independent form.
     const name =
-      channel.type === "dm" ? await dmLabelFull(ctx, channel._id) : channel.name;
+      isDirectMessage(channel) ? await dmLabelFull(ctx, channel._id) : channel.name;
     return { name, workspaceId: channel.workspaceId };
   },
 });

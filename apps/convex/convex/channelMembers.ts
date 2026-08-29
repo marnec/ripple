@@ -1,4 +1,4 @@
-import { ChannelRole, ChannelType } from "@ripple/shared/enums";
+import { ChannelRole } from "@ripple/shared/enums";
 import { ConvexError, v } from "convex/values";
 import { query } from "./_generated/server";
 import { mutation } from "./functions";
@@ -8,6 +8,7 @@ import { channelRoleSchema } from "./schema";
 import { logActivity } from "./auditLog";
 import { requireChannelAccess, requireUser } from "./authHelpers";
 
+import { isDirectMessage, isPublicChannel, isPrivateChannel } from "@ripple/shared/channel";
 // `byChannel` was removed: it had no callers anywhere in the monorepo, its
 // return validator omitted the `name`/`email` columns that `addToChannel`
 // writes (so it threw on any row created that way), and it carried the same
@@ -81,7 +82,7 @@ export const amILastAdmin = query({
     const userId = await requireUser(ctx);
 
     const channel = await ctx.db.get(channelId);
-    if (!channel || channel.type !== "closed") return false;
+    if (!channel || !isPrivateChannel(channel)) return false;
 
     const myMembership = await ctx.db
       .query("channelMembers")
@@ -109,8 +110,8 @@ export const addToChannel = mutation({
     if (!channel) throw new ConvexError(`Channel ${channelId} does not exist`);
 
     // Caller must be channel admin (closed/dm) or workspace member (open)
-    if (channel.type !== "open") {
-      if (channel.type === "dm") {
+    if (!isPublicChannel(channel)) {
+      if (isDirectMessage(channel)) {
         throw new ConvexError("Cannot add members to a DM");
       }
       const callerMembership = await ctx.db
@@ -203,10 +204,10 @@ export const removeFromChannel = mutation({
     // Allow self-removal, otherwise require channel admin (closed) or workspace admin (open)
     const isSelfRemoval = callerId === userId;
     if (!isSelfRemoval) {
-      if (channel.type === "dm") {
+      if (isDirectMessage(channel)) {
         throw new ConvexError("Cannot remove members from a DM");
       }
-      if (channel.type !== "open") {
+      if (!isPublicChannel(channel)) {
         const callerMembership = await ctx.db
           .query("channelMembers")
           .withIndex("by_channel_user", (q) => q.eq("channelId", channelId).eq("userId", callerId))
@@ -236,7 +237,7 @@ export const removeFromChannel = mutation({
 
     // Optional admin transfer: promote target in the same transaction. Only
     // meaningful for closed channels (admin role is irrelevant on DM/open).
-    if (transferAdminTo && channel.type === ChannelType.CLOSED) {
+    if (transferAdminTo && isPrivateChannel(channel)) {
       if (transferAdminTo === userId) {
         throw new ConvexError("Cannot transfer admin to the user being removed");
       }
@@ -297,10 +298,10 @@ export const changeMemberRole = mutation({
     if (!channel) throw new ConvexError("Channel not found");
 
     // Caller must be channel admin (closed) or workspace admin (open). DMs have no role changes.
-    if (channel.type === "dm") {
+    if (isDirectMessage(channel)) {
       throw new ConvexError("Cannot change roles in a DM");
     }
-    if (channel.type !== "open") {
+    if (!isPublicChannel(channel)) {
       const callerMembership = await ctx.db
         .query("channelMembers")
         .withIndex("by_channel_user", (q) => q.eq("channelId", channel._id).eq("userId", callerId))

@@ -22,8 +22,7 @@ import { WorkspaceRole } from "@ripple/shared/enums/roles";
 import {
   createTestContext,
   setupAuthenticatedUser,
-  setupWorkspaceWithAdmin,
-} from "./helpers";
+  setupWorkspaceWithAdmin, channelFields } from "./helpers";
 
 vi.mock("../convex/utils/sendPushToUsers", async () => {
   const probe = await import("./pushProbe");
@@ -278,7 +277,7 @@ describe("calendar events — an offboarded invitee keeps no authority", () => {
       const id = await ctx.db.insert("channels", {
         name: "general",
         workspaceId: admin.workspaceId,
-        type: "open" as const,
+        ...channelFields("open"),
       });
       return id;
     });

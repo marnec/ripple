@@ -10,7 +10,6 @@ NEXT STEPS:
 
 - explore pdf reading, annotation and embedding
 
-
 - export excalidraw presentation to pptx
 
 - add DM plus btn and remove dm type from type select at channel creation, rebrand type as privacy lvl

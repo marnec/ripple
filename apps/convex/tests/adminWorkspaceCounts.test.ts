@@ -6,8 +6,7 @@ import { triggers } from "../convex/dbTriggers";
 import {
   createTestContext,
   setupAuthenticatedUser,
-  setupWorkspaceWithAdmin,
-} from "./helpers";
+  setupWorkspaceWithAdmin, channelFields } from "./helpers";
 
 type T = ReturnType<typeof createTestContext>;
 
@@ -46,8 +45,8 @@ describe("admin/workspaces.get counts", () => {
       const db = writerWithTriggers(ctx, ctx.db, triggers);
 
       // 2 channels, 3 documents, 1 diagram, 1 project, 2 tasks.
-      await db.insert("channels", { name: "general", workspaceId, type: "open" });
-      await db.insert("channels", { name: "random", workspaceId, type: "open" });
+      await db.insert("channels", { name: "general", workspaceId, ...channelFields("open")});
+      await db.insert("channels", { name: "random", workspaceId, ...channelFields("open")});
       for (const name of ["Doc A", "Doc B", "Doc C"]) {
         await db.insert("documents", { workspaceId, name });
       }
@@ -82,7 +81,7 @@ describe("admin/workspaces.get counts", () => {
       await db.insert("channels", {
         name: "theirs",
         workspaceId: otherWorkspaceId,
-        type: "open",
+        ...channelFields("open"),
       });
       await db.insert("documents", {
         workspaceId: otherWorkspaceId,
@@ -169,8 +168,8 @@ describe("admin/workspaces.list counts", () => {
           role: WorkspaceRole.MEMBER,
         });
       }
-      await db.insert("channels", { name: "a", workspaceId: acme, type: "open" });
-      await db.insert("channels", { name: "b", workspaceId: acme, type: "open" });
+      await db.insert("channels", { name: "a", workspaceId: acme, ...channelFields("open")});
+      await db.insert("channels", { name: "b", workspaceId: acme, ...channelFields("open")});
       await db.insert("projects", {
         name: "P",
         color: "bg-blue-500",
@@ -185,7 +184,7 @@ describe("admin/workspaces.list counts", () => {
         workspaceId: globex,
         role: WorkspaceRole.ADMIN,
       });
-      await db.insert("channels", { name: "theirs", workspaceId: globex, type: "open" });
+      await db.insert("channels", { name: "theirs", workspaceId: globex, ...channelFields("open")});
 
       return { acmeId: acme, globexId: globex };
     });

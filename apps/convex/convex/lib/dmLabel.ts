@@ -2,6 +2,7 @@ import { getUserDisplayName } from "@ripple/shared/displayName";
 import type { QueryCtx } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
 
+import { isDirectMessage } from "@ripple/shared/channel";
 /**
  * A DM's display label, derived from its participants.
  *
@@ -86,10 +87,10 @@ export async function dmLabelFull(
 /** `channels.name` for a DM, or the derived label when it is a DM. */
 export async function channelLabelForViewer(
   ctx: QueryCtx,
-  channel: { _id: Id<"channels">; name: string; type: string },
+  channel: { _id: Id<"channels">; name: string; kind?: string },
   viewerId: Id<"users">,
 ): Promise<string> {
-  return channel.type === "dm"
+  return isDirectMessage(channel)
     ? await dmLabelForViewer(ctx, channel._id, viewerId)
     : channel.name;
 }

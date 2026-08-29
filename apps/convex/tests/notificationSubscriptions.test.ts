@@ -3,8 +3,7 @@ import type { Id } from "../convex/_generated/dataModel";
 import {
   createTestContext,
   setupAuthenticatedUser,
-  setupWorkspaceWithAdmin,
-} from "./helpers";
+  setupWorkspaceWithAdmin, channelFields } from "./helpers";
 import { writerWithTriggers } from "convex-helpers/server/triggers";
 import { triggers } from "../convex/dbTriggers";
 import { WorkspaceRole } from "@ripple/shared/enums/roles";
@@ -144,7 +143,7 @@ describe("notificationSubscriptions", () => {
         return await ctx.db.insert("channels", {
           name: "general",
           workspaceId,
-          type: "open" as const,
+          ...channelFields("open"),
         });
       });
 
@@ -273,7 +272,7 @@ describe("notificationSubscriptions", () => {
           name: "Proj", color: "bg-blue-500", workspaceId: wsId, creatorId: userId,
         });
         const chId = await ctx.db.insert("channels", {
-          name: "general", workspaceId: wsId, type: "open" as const,
+          name: "general", workspaceId: wsId, ...channelFields("open"),
         });
         return { workspaceId: wsId, projectId: projId, publicChannelId: chId };
       });
@@ -335,7 +334,7 @@ describe("notificationSubscriptions", () => {
           name: "Test WS", ownerId: userId,
         });
         const chId = await ctx.db.insert("channels", {
-          name: "general", workspaceId: wsId, type: "open" as const,
+          name: "general", workspaceId: wsId, ...channelFields("open"),
         });
         return { workspaceId: wsId, channelId: chId };
       });
@@ -430,7 +429,7 @@ describe("notificationSubscriptions", () => {
       const channelId = await t.run(async (ctx) => {
         const db = writerWithTriggers(ctx, ctx.db, triggers);
         return await db.insert("channels", {
-          name: "general", workspaceId, type: "open" as const,
+          name: "general", workspaceId, ...channelFields("open"),
         });
       });
       await drain(t);
@@ -466,7 +465,12 @@ describe("notificationSubscriptions", () => {
       // Toggle channel to private (trigger schedules async cleanup)
       await t.run(async (ctx) => {
         const db = writerWithTriggers(ctx, ctx.db, triggers);
-        await db.patch(channelId, { type: "closed" as const });
+        // All three columns move together. No production mutation changes a
+        // channel's visibility today — `channels.update` handles only the
+        // name — so this fixture is the only caller. If one is ever added it
+        // must write `type`, `kind` and `visibility` as a unit, or the trigger
+        // below stops seeing the transition.
+        await db.patch(channelId, channelFields("closed"));
       });
       await drain(t);
 
@@ -497,7 +501,7 @@ describe("notificationSubscriptions", () => {
       const channelId = await t.run(async (ctx) => {
         const db = writerWithTriggers(ctx, ctx.db, triggers);
         return await db.insert("channels", {
-          name: "secret", workspaceId, type: "closed" as const,
+          name: "secret", workspaceId, ...channelFields("closed"),
         });
       });
       await drain(t);
@@ -533,7 +537,7 @@ describe("notificationSubscriptions", () => {
       // Toggle channel to public (schedules async subscription creation)
       await t.run(async (ctx) => {
         const db = writerWithTriggers(ctx, ctx.db, triggers);
-        await db.patch(channelId, { type: "open" as const });
+        await db.patch(channelId, channelFields("open"));
       });
       await drain(t);
 
@@ -563,7 +567,7 @@ describe("notificationSubscriptions", () => {
         return await ctx.db.insert("channels", {
           name: "test-channel",
           workspaceId,
-          type: "open" as const,
+          ...channelFields("open"),
         });
       });
 

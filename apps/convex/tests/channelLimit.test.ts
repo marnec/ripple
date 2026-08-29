@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { api } from "../convex/_generated/api";
-import { createTestContext, setupAuthenticatedUser, setupWorkspaceWithAdmin } from "./helpers";
+import { createTestContext, setupAuthenticatedUser, setupWorkspaceWithAdmin, channelFields } from "./helpers";
 import { WORKSPACE_CHANNEL_LIMIT } from "@ripple/shared/constants";
 import type { Id } from "../convex/_generated/dataModel";
 
@@ -12,7 +12,7 @@ async function seedChannels(
   const { workspaceId, count, type } = opts;
   await t.run(async (ctx) => {
     for (let i = 0; i < count; i++) {
-      await ctx.db.insert("channels", { name: `${type}-${i}`, workspaceId, type });
+      await ctx.db.insert("channels", { name: `${type}-${i}`, workspaceId, ...channelFields(type) });
     }
   });
 }
@@ -26,7 +26,7 @@ describe("channels.create — per-workspace channel limit", () => {
     const channelId = await asUser.mutation(api.channels.create, {
       name: "the last one",
       workspaceId,
-      type: "open",
+      visibility: "public",
     });
 
     expect(channelId).toBeDefined();
@@ -38,7 +38,7 @@ describe("channels.create — per-workspace channel limit", () => {
     await seedChannels(t, { workspaceId, count: WORKSPACE_CHANNEL_LIMIT, type: "open" });
 
     await expect(
-      asUser.mutation(api.channels.create, { name: "one too many", workspaceId, type: "open" }),
+      asUser.mutation(api.channels.create, { name: "one too many", workspaceId, visibility: "public" }),
     ).rejects.toThrow(/limit of 150 channels/);
   });
 
@@ -50,7 +50,7 @@ describe("channels.create — per-workspace channel limit", () => {
     await seedChannels(t, { workspaceId, count: WORKSPACE_CHANNEL_LIMIT - half, type: "closed" });
 
     await expect(
-      asUser.mutation(api.channels.create, { name: "over", workspaceId, type: "closed" }),
+      asUser.mutation(api.channels.create, { name: "over", workspaceId, visibility: "private" }),
     ).rejects.toThrow(/limit of 150 channels/);
   });
 
@@ -62,7 +62,7 @@ describe("channels.create — per-workspace channel limit", () => {
     const channelId = await asUser.mutation(api.channels.create, {
       name: "channels are not DMs",
       workspaceId,
-      type: "open",
+      visibility: "public",
     });
 
     expect(channelId).toBeDefined();
@@ -104,7 +104,7 @@ describe("channels.create — per-workspace channel limit", () => {
     const channelId = await asUser.mutation(api.channels.create, {
       name: "fresh workspace",
       workspaceId: otherWorkspaceId,
-      type: "open",
+      visibility: "public",
     });
 
     expect(channelId).toBeDefined();

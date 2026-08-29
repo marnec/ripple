@@ -1,7 +1,7 @@
 import { expect, describe, it, vi, beforeEach, afterEach } from "vitest";
 import { api, internal } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
-import { createTestContext, setupWorkspaceWithAdmin } from "./helpers";
+import { createTestContext, setupWorkspaceWithAdmin, channelFields } from "./helpers";
 import { WorkspaceRole, ChannelRole } from "@ripple/shared/enums/roles";
 import { SUBSCRIPTION_PAGE_SIZE } from "../convex/notificationSubscriptionSync";
 
@@ -67,7 +67,7 @@ describe("open-channel subscription fanout", () => {
       ctx.db.insert("channels", {
         name: "general",
         workspaceId,
-        type: "open" as const,
+        ...channelFields("open"),
       }),
     );
 
@@ -98,7 +98,7 @@ describe("open-channel subscription fanout", () => {
       ctx.db.insert("channels", {
         name: "general",
         workspaceId,
-        type: "open" as const,
+        ...channelFields("open"),
       }),
     );
 
@@ -129,7 +129,7 @@ describe("open-channel subscription fanout", () => {
       const id = await ctx.db.insert("channels", {
         name: "leadership",
         workspaceId,
-        type: "closed" as const,
+        ...channelFields("closed"),
       });
       // Subscriptions left over from when it was open — none of these users has
       // a channelMembers row, so all of them have to go.
@@ -163,7 +163,7 @@ describe("open-channel subscription fanout", () => {
       const id = await ctx.db.insert("channels", {
         name: "leadership",
         workspaceId,
-        type: "closed" as const,
+        ...channelFields("closed"),
       });
       for (const userId of everyone) {
         await ctx.db.insert("notificationSubscriptions", {
@@ -205,7 +205,7 @@ describe("open-channel subscription fanout", () => {
     const channelId = await asUser.mutation(api.channels.create, {
       name: "general",
       workspaceId,
-      type: "open",
+      visibility: "public",
     });
 
     // Before the scheduler runs, the channel exists and nobody is subscribed —

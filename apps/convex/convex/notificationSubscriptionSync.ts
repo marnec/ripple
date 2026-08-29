@@ -22,6 +22,8 @@ import {
   type NotificationCategory,
 } from "@ripple/shared/notificationCategories";
 
+import { isPublicChannel } from "@ripple/shared/channel";
+import { ChannelKind, ChannelVisibility } from "@ripple/shared/enums";
 type Ctx = { db: DatabaseWriter };
 
 // ── Helpers ─────────────────────────────────────────────────────────
@@ -113,8 +115,11 @@ export async function onWorkspaceMemberInsert(
   // channels are handled by the channelMembers INSERT trigger)
   const publicChannels = await ctx.db
     .query("channels")
-    .withIndex("by_type_workspace", (q) =>
-      q.eq("type", "open").eq("workspaceId", workspaceId),
+    .withIndex("by_kind_visibility_workspace", (q) =>
+      q
+        .eq("kind", ChannelKind.CHANNEL)
+        .eq("visibility", ChannelVisibility.PUBLIC)
+        .eq("workspaceId", workspaceId),
     )
     .collect();
 
@@ -281,8 +286,11 @@ export async function onGlobalPreferencesChange(
         // Open channels: all workspace members are subscribed.
         const publicChannels = await ctx.db
           .query("channels")
-          .withIndex("by_type_workspace", (q) =>
-            q.eq("type", "open").eq("workspaceId", wsId),
+          .withIndex("by_kind_visibility_workspace", (q) =>
+            q
+              .eq("kind", ChannelKind.CHANNEL)
+              .eq("visibility", ChannelVisibility.PUBLIC)
+              .eq("workspaceId", wsId),
           )
           .collect();
         // Closed/DM channels: only explicit memberships.
@@ -389,7 +397,7 @@ export async function onChannelPreferencesChange(
 ): Promise<void> {
   const channelId = channel._id;
   const mayReceive =
-    channel.type === "open" || (await isChannelMember(ctx, channelId, userId));
+    isPublicChannel(channel) || (await isChannelMember(ctx, channelId, userId));
 
   await Promise.all(
     BROADCAST_CHANNEL_CATEGORIES.map((cat) => {

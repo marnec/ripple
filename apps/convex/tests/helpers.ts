@@ -11,6 +11,7 @@ import rateLimiterComponent from "@convex-dev/rate-limiter/test";
 import resendComponent from "@convex-dev/resend/test";
 import webhookReceiverComponent from "convex-webhook-receiver/test";
 import workpoolComponent from "@convex-dev/workpool/test";
+import { ChannelKind, ChannelVisibility } from "@ripple/shared/enums";
 
 const modules = import.meta.glob("../convex/**/*.ts");
 
@@ -115,4 +116,20 @@ export async function setupProject(
   return t.run(async (ctx) =>
     ctx.db.insert("projects", { name, color, workspaceId, creatorId, key }),
   );
+}
+
+/**
+ * The storage shape of a channel row, for fixtures that seed `channels`
+ * directly through `t.run`.
+ *
+ * Still takes the retired `open` / `closed` / `dm` vocabulary as its argument:
+ * one word is a more convenient fixture handle than a kind-and-visibility pair,
+ * and every call site already reads that way. What it *writes* is the current
+ * two columns.
+ */
+export function channelFields(type: "open" | "closed" | "dm") {
+  return {
+    kind: type === "dm" ? ChannelKind.DM : ChannelKind.CHANNEL,
+    visibility: type === "open" ? ChannelVisibility.PUBLIC : ChannelVisibility.PRIVATE,
+  } as const;
 }
