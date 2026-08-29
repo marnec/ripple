@@ -44,8 +44,10 @@ type DmChannel = {
   _creationTime: number;
   name: string;
   workspaceId: string;
-  kind: string;
-  visibility: string;
+  // Optional while the migration is in flight — see the note on `channels` in
+  // the Convex schema. A row that predates the backfill has neither.
+  kind?: string;
+  visibility?: string;
   isHidden: boolean;
 };
 

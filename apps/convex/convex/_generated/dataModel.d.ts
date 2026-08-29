@@ -472,9 +472,10 @@ export type DataModel = {
   };
   channels: {
     document: {
-      kind: "channel" | "dm";
+      kind?: "channel" | "dm";
       name: string;
-      visibility: "public" | "private";
+      type?: "open" | "closed" | "dm";
+      visibility?: "public" | "private";
       workspaceId: Id<"workspaces">;
       _id: Id<"channels">;
       _creationTime: number;
@@ -484,6 +485,7 @@ export type DataModel = {
       | "_id"
       | "kind"
       | "name"
+      | "type"
       | "visibility"
       | "workspaceId";
     indexes: {

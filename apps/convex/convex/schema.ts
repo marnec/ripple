@@ -13,6 +13,17 @@ export const channelRoleSchema = v.union(
   ...Object.values(ChannelRole).map((role) => v.literal(role)),
 );
 
+/**
+ * The retired `channels.type` vocabulary. Declared only so the column can be
+ * *accepted* on rows that still carry it until `stripChannelType` has run
+ * everywhere. Nothing reads it but the repair migrations.
+ */
+export const legacyChannelTypeSchema = v.union(
+  v.literal("open"),
+  v.literal("closed"),
+  v.literal("dm"),
+);
+
 export const channelKindSchema = v.union(
   ...Object.values(ChannelKind).map((kind) => v.literal(kind)),
 );
@@ -209,13 +220,25 @@ export default defineSchema({
     // Two axes, two columns (docs/adr/0001). `kind` says what the row is —
     // a channel, or a direct message. `visibility` says who may enter a
     // channel; on a direct message it is an inert derived constant, never a
-    // setting. The single `type` column that conflated them is gone, along
-    // with the index that could not express "everything except a DM".
+    // setting. `type` is the single column that conflated them, on its way out.
     //
-    // `stripChannelType` removed it from existing rows and stays in `runAll`,
-    // because a restored backup can reintroduce the old shape.
-    kind: channelKindSchema,
-    visibility: channelVisibilitySchema,
+    // ALL THREE ARE OPTIONAL, and that is a deploy constraint rather than a
+    // description of the data. `convex deploy` pushes the schema *before*
+    // `migrations:runAll` gets to run, and Convex validates every existing
+    // document at push time — so a schema that requires `kind` cannot reach a
+    // deployment whose rows do not have it yet, and the migration that would
+    // give it to them ships in the same push. Permissive here is the only
+    // shape that lets one deploy carry both.
+    //
+    // This tolerates all three row shapes at once: pre-split (`type` only),
+    // mid-migration (all three), and post-strip (`kind` + `visibility`).
+    // `runAll` moves every row to the last of those, in order:
+    // migrateChannelIsPublicToType → backfillChannelKindVisibility →
+    // stripChannelType. Tightening to required, and dropping `type`, is a
+    // *subsequent* deploy — safe only once prod rows are known clean.
+    type: v.optional(legacyChannelTypeSchema),
+    kind: v.optional(channelKindSchema),
+    visibility: v.optional(channelVisibilitySchema),
   })
   .index("by_workspace", ["workspaceId"])
   // These two replaced `by_type_workspace`. Two rather

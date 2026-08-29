@@ -74,23 +74,78 @@ describe("channels.createDm — populates kind and visibility", () => {
   });
 });
 
-/**
- * The backfill's own tests lived here, and cannot survive this step.
- *
- * They worked by seeding a row in the pre-split shape — `type` and nothing
- * else — and running the migration over it. `convex-test` validates inserts
- * against the live schema at runtime, so once `kind` and `visibility` became
- * required that fixture stopped being constructible; `as never` silences the
- * compiler but not the validator. The same is true of `stripChannelType`, whose
- * fixture needs a `type` the schema is about to stop declaring.
- *
- * This is the ordinary end state for a repair path: `migrateChannelIsPublicToType`
- * has never had tests either, for exactly this reason. Both migrations stay in
- * `runAll` because a restored backup can reintroduce the old shape.
- *
- * Worth recording what was lost: the mapping test caught a real defect during
- * ticket 07, when the backfill was deriving `kind` and `visibility` through the
- * predicates that had just started reading `kind` and `visibility`. It did its
- * job while the shape it asserted still existed.
- */
+describe("rows that predate the split", () => {
+  /** A channel as it exists in a deployment that has never been migrated. */
+  async function seedLegacy(
+    t: ReturnType<typeof createTestContext>,
+    opts: { workspaceId: Id<"workspaces">; name: string; type: "open" | "closed" | "dm" },
+  ) {
+    return t.run(async (ctx) =>
+      ctx.db.insert("channels", {
+        name: opts.name,
+        workspaceId: opts.workspaceId,
+        type: opts.type,
+      }),
+    );
+  }
+
+  const runMigration = (
+    t: ReturnType<typeof createTestContext>,
+    fn: typeof internal.migrations.backfillChannelKindVisibility,
+  ) => t.mutation(fn, { cursor: null, batchSize: 100 });
+
+  it("can exist at all — the schema has to accept them", async () => {
+    // This is the shape that broke a production deploy. `convex deploy` pushes
+    // the schema before `migrations:runAll` can run, and Convex validates every
+    // existing document at push time — so a schema requiring `kind` cannot
+    // reach a deployment whose rows lack it, because the migration that would
+    // add it ships in the very same push. If this test stops passing, that
+    // deploy is broken again.
+    const t = createTestContext();
+    const { workspaceId } = await setupWorkspaceWithAdmin(t);
+    const id = await seedLegacy(t, { workspaceId, name: "italia 1", type: "open" });
+
+    const row = await t.run(async (ctx) => ctx.db.get(id));
+    expect(row?.type).toBe("open");
+    expect(row?.kind).toBeUndefined();
+  });
+
+  it("backfills into kind and visibility", async () => {
+    const t = createTestContext();
+    const { workspaceId } = await setupWorkspaceWithAdmin(t);
+    const openId = await seedLegacy(t, { workspaceId, name: "general", type: "open" });
+    const closedId = await seedLegacy(t, { workspaceId, name: "leadership", type: "closed" });
+    const dmId = await seedLegacy(t, { workspaceId, name: "", type: "dm" });
+
+    await runMigration(t, internal.migrations.backfillChannelKindVisibility);
+
+    const [open, closed, dm] = await t.run(async (ctx) => [
+      await ctx.db.get(openId),
+      await ctx.db.get(closedId),
+      await ctx.db.get(dmId),
+    ]);
+    expect(open).toMatchObject({ kind: "channel", visibility: "public" });
+    expect(closed).toMatchObject({ kind: "channel", visibility: "private" });
+    // Inert, not a setting: a direct message has no visibility.
+    expect(dm).toMatchObject({ kind: "dm", visibility: "private" });
+  });
+
+  it("then strips the retired column, and both migrations are idempotent", async () => {
+    const t = createTestContext();
+    const { workspaceId } = await setupWorkspaceWithAdmin(t);
+    const id = await seedLegacy(t, { workspaceId, name: "general", type: "open" });
+
+    await runMigration(t, internal.migrations.backfillChannelKindVisibility);
+    await runMigration(t, internal.migrations.stripChannelType);
+    const once = await t.run(async (ctx) => ctx.db.get(id));
+    expect(once?.type).toBeUndefined();
+    expect(once).toMatchObject({ kind: "channel", visibility: "public" });
+
+    // `runAll` executes on every deploy, so a second pass must change nothing.
+    await runMigration(t, internal.migrations.backfillChannelKindVisibility);
+    await runMigration(t, internal.migrations.stripChannelType);
+    expect(await t.run(async (ctx) => ctx.db.get(id))).toEqual(once);
+  });
+});
+
 

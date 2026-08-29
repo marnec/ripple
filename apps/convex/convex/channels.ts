@@ -109,8 +109,8 @@ export const listHostable = query({
     _creationTime: v.number(),
     name: v.string(),
     workspaceId: v.id("workspaces"),
-    kind: channelKindSchema,
-    visibility: channelVisibilitySchema,
+    kind: v.optional(channelKindSchema),
+    visibility: v.optional(channelVisibilitySchema),
   })),
   handler: async (ctx, { workspaceId }) => {
     const auth = await checkWorkspaceMember(ctx, workspaceId);
@@ -142,8 +142,8 @@ export const get = query({
       _creationTime: v.number(),
       name: v.string(),
       workspaceId: v.id("workspaces"),
-      kind: channelKindSchema,
-      visibility: channelVisibilitySchema,
+      kind: v.optional(channelKindSchema),
+      visibility: v.optional(channelVisibilitySchema),
     }),
     v.null()
   ),
@@ -257,8 +257,8 @@ export const search = query({
       v.object({
         _id: v.id("channels"),
         name: v.string(),
-        kind: channelKindSchema,
-        visibility: channelVisibilitySchema,
+        kind: v.optional(channelKindSchema),
+        visibility: v.optional(channelVisibilitySchema),
       }),
     ),
     isDone: v.boolean(),
@@ -324,8 +324,8 @@ const channelValidator = v.object({
   _creationTime: v.number(),
   name: v.string(),
   workspaceId: v.id("workspaces"),
-  kind: channelKindSchema,
-  visibility: channelVisibilitySchema,
+  kind: v.optional(channelKindSchema),
+  visibility: v.optional(channelVisibilitySchema),
 });
 
 export const getInternal = internalQuery({

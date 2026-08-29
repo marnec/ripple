@@ -79,5 +79,35 @@ would have.
 0 errors, and a forced (non-incremental) web typecheck — `tsc -b` is
 incremental and reported a false pass mid-ticket until `--force`.
 
-**Production is untouched.** Its two pushes must go in the same order, with
-`runAll` (which now contains both migrations) between them.
+## Correction — the production deploy failed
+
+The guidance above was wrong, and CI proved it. It said production needed "two
+pushes in the same order, with `runAll` between them". But the deploy script is
+`convex deploy && convex run migrations:runAll --prod`: **the schema is pushed
+before the migrations run, in one job**. Convex validates every existing
+document at push time, so a schema requiring `kind` can never reach a deployment
+whose rows lack it — the migration that would add it ships in the same push.
+There is no push order that works. It failed on a real row:
+`{name: "italia 1", type: "open", workspaceId: …}`.
+
+This worked on dev only because dev had been widened and backfilled in an
+earlier session, so its rows were already clean by the time the strict schema
+arrived. That is exactly the trap of verifying a migration against a deployment
+you have already migrated by hand.
+
+**The fix: one permissive schema instead of a strict one.** All three columns
+are `v.optional`, which accepts every row shape at once — pre-split (`type`
+only), mid-migration (all three), post-strip (`kind` + `visibility`). A single
+deploy lands, and `runAll` then walks every row to the final shape in order:
+`migrateChannelIsPublicToType` → `backfillChannelKindVisibility` →
+`stripChannelType`.
+
+**Tightening is a *later* deploy**, and only once production rows are known
+clean. That is ticket 11.
+
+**The regression test is the important artifact.** `channelKindVisibility.test.ts`
+now seeds a row in the pre-split shape and asserts it can exist at all. The
+tests retired in this ticket — on the grounds that a legacy row was no longer
+constructible — were retired one step too early: making them unconstructible is
+precisely what broke the deploy. They are back, plus a strip-and-idempotency
+case.
