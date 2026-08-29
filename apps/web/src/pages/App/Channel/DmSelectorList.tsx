@@ -18,6 +18,7 @@ import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
+import { exitCopy } from "@/lib/channel-exit";
 import {
   ResponsiveDropdownMenu,
   ResponsiveDropdownMenuContent,
@@ -97,7 +98,10 @@ export const DmSelectorList = memo(function DmSelectorList({
     void navigate(`/workspaces/${workspaceId}/channels/${dmId}/videocall`);
   };
 
-  const handleClose = (dmId: Id<"channels">) => {
+  // Takes the conversation rather than its id so the copy can be derived from
+  // it, the way `ChannelSelectorItem` does — one call shape in both menus.
+  const handleClose = (dm: DmChannel) => {
+    const dmId = dm._id as Id<"channels">;
     dismissChannel({ channelId: dmId })
       .then(() => {
         // Closing the conversation you are reading has to take you out of it,
@@ -106,16 +110,16 @@ export const DmSelectorList = memo(function DmSelectorList({
         if (dmId === channelId) onChannelSelect(null);
       })
       .catch((error: unknown) => {
-        toast.error("Couldn't close conversation", {
+        toast.error(exitCopy(dm).dismissFailed, {
           description:
             error instanceof ConvexError ? String(error.data) : "Please try again",
         });
       });
   };
 
-  const handleReopen = (dmId: Id<"channels">) => {
-    restoreChannel({ channelId: dmId }).catch((error: unknown) => {
-      toast.error("Couldn't reopen conversation", {
+  const handleReopen = (dm: DmChannel) => {
+    restoreChannel({ channelId: dm._id as Id<"channels"> }).catch((error: unknown) => {
+      toast.error(exitCopy(dm).restoreFailed, {
         description:
           error instanceof ConvexError ? String(error.data) : "Please try again",
       });
@@ -196,14 +200,14 @@ export const DmSelectorList = memo(function DmSelectorList({
                   </ResponsiveDropdownMenuItem>
                   <ResponsiveDropdownMenuSeparator />
                   {dm.isHidden ? (
-                    <ResponsiveDropdownMenuItem onSelect={() => handleReopen(dm._id as Id<"channels">)}>
+                    <ResponsiveDropdownMenuItem onSelect={() => handleReopen(dm)}>
                       <Eye className="text-muted-foreground" />
-                      <span>Reopen conversation</span>
+                      <span>{exitCopy(dm).restore}</span>
                     </ResponsiveDropdownMenuItem>
                   ) : (
-                    <ResponsiveDropdownMenuItem onSelect={() => handleClose(dm._id as Id<"channels">)}>
+                    <ResponsiveDropdownMenuItem onSelect={() => handleClose(dm)}>
                       <EyeOff className="text-muted-foreground" />
-                      <span>Close conversation</span>
+                      <span>{exitCopy(dm).dismiss}</span>
                     </ResponsiveDropdownMenuItem>
                   )}
                 </ResponsiveDropdownMenuContent>

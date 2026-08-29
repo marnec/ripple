@@ -14,7 +14,8 @@ import {
 import { useState } from "react";
 import { toast } from "sonner";
 import { api } from "@convex/_generated/api";
-import { isPublicChannel } from "@ripple/shared/channel";
+import { exitAction, isPublicChannel } from "@ripple/shared/channel";
+import { exitCopy, LEAVE_COPY } from "@/lib/channel-exit";
 import type { Doc, Id } from "@convex/_generated/dataModel";
 import {
   ResponsiveDropdownMenu,
@@ -70,6 +71,11 @@ export function ChannelSelectorItem({
   const dismissChannel = useMutation(api.channelDismissal.dismissChannel);
   const restoreChannel = useMutation(api.channelDismissal.restoreChannel);
 
+  // A channel only reaches this list through `channelMembers` or by being
+  // public, so a private one here is always one the viewer is a member of.
+  const exit = exitAction(channel, { isMember: true });
+  const copy = exitCopy(channel);
+
   const handleHide = () => {
     // Flag the upcoming list change as self-initiated so the acknowledged
     // channels hook doesn't show a pending "-1" badge.
@@ -82,7 +88,7 @@ export function ChannelSelectorItem({
         if (channel._id === channelId) onChannelSelect(null);
       })
       .catch((error: unknown) => {
-        toast.error("Couldn't hide channel", {
+        toast.error(copy.dismissFailed, {
           description:
             error instanceof ConvexError ? String(error.data) : "Please try again",
         });
@@ -92,7 +98,7 @@ export function ChannelSelectorItem({
   const handleUnhide = () => {
     onSelfChangeIntent?.();
     restoreChannel({ channelId: channel._id }).catch((error: unknown) => {
-      toast.error("Couldn't unhide channel", {
+      toast.error(copy.restoreFailed, {
         description:
           error instanceof ConvexError ? String(error.data) : "Please try again",
       });
@@ -151,23 +157,27 @@ export function ChannelSelectorItem({
             <span>Manage channel</span>
           </ResponsiveDropdownMenuItem>
           <ResponsiveDropdownMenuSeparator />
+          {/* The exit arm. `exit` is the whole decision: this used to read
+              "hidden? unhide : public? hide : leave", whose final branch was
+              safe only because `AppSidebar` had filtered DMs out one module
+              away — the fallthrough said "closed" in a comment rather than in
+              a predicate. */}
           {channel.isHidden ? (
             <ResponsiveDropdownMenuItem onSelect={handleUnhide}>
               <Eye className="text-muted-foreground" />
-              <span>Show in sidebar</span>
+              <span>{copy.restore}</span>
             </ResponsiveDropdownMenuItem>
-          ) : isPublicChannel(channel) ? (
+          ) : exit === "dismiss" ? (
             <ResponsiveDropdownMenuItem onSelect={handleHide}>
               <EyeOff className="text-muted-foreground" />
-              <span>Hide from sidebar</span>
+              <span>{copy.dismiss}</span>
             </ResponsiveDropdownMenuItem>
-          ) : (
-            // closed
+          ) : exit === "leave" ? (
             <ResponsiveDropdownMenuItem onSelect={() => setShowLeaveDialog(true)}>
               <LogOut className="text-destructive" />
-              <span className="text-destructive">Leave channel</span>
+              <span className="text-destructive">{LEAVE_COPY.action}</span>
             </ResponsiveDropdownMenuItem>
-          )}
+          ) : null}
         </ResponsiveDropdownMenuContent>
       </ResponsiveDropdownMenu>
       <LeaveChannelDialog

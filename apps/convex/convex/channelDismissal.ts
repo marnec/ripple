@@ -4,7 +4,7 @@ import { requireChannelAccess } from "./authHelpers";
 import type { MutationCtx } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 
-import { isDirectMessage, isPrivateChannel, isPublicChannel } from "@ripple/shared/channel";
+import { exitAction, isDirectMessage, isPublicChannel } from "@ripple/shared/channel";
 import type { ChannelLike } from "@ripple/shared/channel";
 
 /**
@@ -77,9 +77,13 @@ export const dismissChannel = mutation({
     // gets "Not a member of this channel" instead, and everyone the message
     // below was written for — people who can actually see the channel — still
     // reads it. Do not reorder these.
-    const { userId, channel } = await requireChannelAccess(ctx, channelId);
+    const { userId, channel, channelMembership } = await requireChannelAccess(ctx, channelId);
 
-    if (isPrivateChannel(channel)) {
+    // The same decision the sidebar menu and the settings rail make, from the
+    // same function: a conversation is dismissed, left, or neither. Spelling
+    // this as `isPrivateChannel` here and as `canDismiss` on the client is how
+    // the two came to disagree about a DM.
+    if (exitAction(channel, { isMember: channelMembership !== null }) !== "dismiss") {
       throw new ConvexError("Private channels cannot be dismissed; leave the channel instead");
     }
 

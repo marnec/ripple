@@ -22,7 +22,8 @@ import { useWorkspaceMembers } from "@/contexts/WorkspaceMembersContext";
 import { useViewer } from "../UserContext";
 import { useParams, useSearchParams } from "react-router-dom";
 import { api } from "@convex/_generated/api";
-import { isDirectMessage, isPublicChannel } from "@ripple/shared/channel";
+import { exitAction, isDirectMessage, isPublicChannel } from "@ripple/shared/channel";
+import { exitCopy, LEAVE_COPY } from "@/lib/channel-exit";
 import type { Id } from "@convex/_generated/dataModel";
 import { ChannelDangerZone } from "./ChannelDangerZone";
 import { ChannelDetailsSection } from "./ChannelDetailsSection";
@@ -105,10 +106,12 @@ function ChannelSettingsContent({
   );
 
   const isDm = isDirectMessage(channel);
-  const canDismiss = isDm || isPublicChannel(channel);
-  // A private channel is left rather than dismissed, and only a member has
-  // anything to leave.
-  const canLeave = !isDm && !isPublicChannel(channel) && currentMembership !== undefined;
+  // Dismiss or leave, decided once. `canLeave` used to be spelled
+  // `!isDm && !isPublicChannel(channel) && …` — a double negation standing in
+  // for `isPrivateChannel`, which is exported and was imported by nothing on
+  // the client.
+  const exit = exitAction(channel, { isMember: currentMembership !== undefined });
+  const copy = exitCopy(channel);
 
   const sections: SettingsSection[] = [
     ...(isDm
@@ -133,26 +136,23 @@ function ChannelSettingsContent({
       icon: Bell,
       description: "Control which chat notifications you receive for this channel.",
     },
-    // Dismissal is per-user view state, and only these two can be dismissed:
-    // a private channel is *left* (the Leave section below), not hidden, and
-    // the backend rejects dismissing one.
-    ...(canDismiss
+    ...(exit === "dismiss"
       ? [
           {
             value: "dismiss",
-            label: isDm ? "Close" : "Hide",
+            label: copy.tab,
             icon: EyeOff,
-            title: isDm ? "Close conversation" : "Hide from sidebar",
+            title: copy.dismiss,
           } satisfies SettingsSection,
         ]
       : []),
-    ...(canLeave
+    ...(exit === "leave"
       ? [
           {
             value: "leave",
-            label: "Leave",
+            label: LEAVE_COPY.tab,
             icon: LogOut,
-            title: "Leave channel",
+            title: LEAVE_COPY.action,
             destructive: true,
           } satisfies SettingsSection,
         ]
@@ -210,15 +210,15 @@ function ChannelSettingsContent({
           <ChannelNotificationSettings channelId={channelId} />
         )}
 
-        {active.value === "dismiss" && canDismiss && (
+        {active.value === "dismiss" && exit === "dismiss" && (
           <ChannelDismissSection
             channelId={channelId}
             workspaceId={workspaceId}
-            isDm={isDm}
+            channel={channel}
           />
         )}
 
-        {active.value === "leave" && canLeave && (
+        {active.value === "leave" && exit === "leave" && (
           <ChannelLeaveSection
             channelId={channelId}
             channelName={channel.name}

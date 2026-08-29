@@ -5,15 +5,22 @@ import { removeFromKnownChannels } from "@/hooks/use-acknowledged-channels";
 import { useMutation } from "convex/react";
 import { ConvexError } from "convex/values";
 import { EyeOff } from "lucide-react";
+import { exitCopy } from "@/lib/channel-exit";
+import type { ChannelLike } from "@ripple/shared/channel";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 
 interface ChannelDismissSectionProps {
   channelId: Id<"channels">;
   workspaceId: Id<"workspaces">;
-  /** A DM is "closed", a public channel is "hidden" — same mutation, and the
-   *  same per-user dismissal, but they differ in how they come back. */
-  isDm: boolean;
+  /**
+   * The conversation itself, rather than an `isDm` flag derived from it by the
+   * parent. A DM is "closed" and a public channel is "hidden" — same mutation
+   * and the same per-user dismissal, but different words — and `exitCopy` is
+   * where that difference is stated, so this component asks rather than being
+   * told.
+   */
+  channel: ChannelLike;
 }
 
 /**
@@ -27,9 +34,10 @@ interface ChannelDismissSectionProps {
 export function ChannelDismissSection({
   channelId,
   workspaceId,
-  isDm,
+  channel,
 }: ChannelDismissSectionProps) {
   const navigate = useNavigate();
+  const copy = exitCopy(channel);
   const dismissChannel = useMutation(api.channelDismissal.dismissChannel);
 
   const handleDismiss = () => {
@@ -44,7 +52,7 @@ export function ChannelDismissSection({
         void navigate(`/workspaces/${workspaceId}/channels`);
       })
       .catch((error: unknown) => {
-        toast.error(isDm ? "Couldn't close conversation" : "Couldn't hide channel", {
+        toast.error(copy.dismissFailed, {
           description:
             error instanceof ConvexError ? String(error.data) : "Please try again",
         });
@@ -53,14 +61,10 @@ export function ChannelDismissSection({
 
   return (
     <div className="space-y-3">
-      <p className="text-sm text-muted-foreground">
-        {isDm
-          ? "This removes the conversation from your sidebar. Nothing is deleted and the other person is not notified — it comes back on their next message."
-          : "This removes the channel from your sidebar, for you only. Nothing is deleted and nobody else is affected — you stay a member, and the eye toggle beside the sidebar's Channels heading brings it back."}
-      </p>
+      <p className="text-sm text-muted-foreground">{copy.explanation}</p>
       <Button variant="outline" onClick={handleDismiss}>
         <EyeOff className="w-4 h-4 mr-2" />
-        {isDm ? "Close conversation" : "Hide from sidebar"}
+        {copy.dismiss}
       </Button>
     </div>
   );
