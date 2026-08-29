@@ -23,9 +23,9 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      "@": path.resolve(__dirname, "./src"),
-      "@shared": path.resolve(__dirname, "../../packages/shared/src"),
-      "@convex": path.resolve(__dirname, "../convex/convex"),
+      "@": path.resolve(import.meta.dirname, "./src"),
+      "@shared": path.resolve(import.meta.dirname, "../../packages/shared/src"),
+      "@convex": path.resolve(import.meta.dirname, "../convex/convex"),
     },
   },
 });
