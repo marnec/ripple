@@ -227,8 +227,17 @@ describe("channelDismissal", () => {
     });
   });
 
-  describe("workspaceSidebarData.get filtering", () => {
-    it("filters out hidden open channels by default", async () => {
+  // The query returns every conversation and flags dismissed ones; filtering
+  // and counting moved to the client, where each sidebar section does its own
+  // (see `apps/web/src/lib/conversation-section.ts`). These assertions read
+  // the flag on the row rather than the row's absence from the payload.
+  const isHiddenInSidebar = (
+    result: { channels: { _id: string; isHidden: boolean }[] },
+    channelId: string,
+  ) => result.channels.find((c) => c._id === channelId)?.isHidden;
+
+  describe("workspaceSidebarData.get dismissal flags", () => {
+    it("returns a dismissed open channel, flagged hidden", async () => {
       const t = createTestContext();
       const { userId, workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
       const visibleId = await setupOpenChannel(t, { workspaceId, name: "visible" });
@@ -242,30 +251,13 @@ describe("channelDismissal", () => {
 
       const result = await asUser.query(api.workspaceSidebarData.get, { workspaceId });
       const ids = result.channels.map((c) => c._id);
+      // Both are returned — the client decides what to draw. Withholding the
+      // row server-side is what made "show hidden" a re-query, and made one
+      // shared flag serve two independent sidebar sections.
       expect(ids).toContain(visibleId);
-      expect(ids).not.toContain(hiddenId);
-      expect(result.hiddenChannelCount).toBe(1);
-    });
-
-    it("includes hidden channels when includeHidden=true with isHidden flag set", async () => {
-      const t = createTestContext();
-      const { userId, workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
-      const visibleId = await setupOpenChannel(t, { workspaceId, name: "visible" });
-      const hiddenId = await setupOpenChannel(t, { workspaceId, name: "hidden" });
-
-      await t.run(async (ctx) =>
-        ctx.db.insert("userChannelState", {
-          userId, channelId: hiddenId, workspaceId, hiddenAt: Date.now(),
-        }),
-      );
-
-      const result = await asUser.query(api.workspaceSidebarData.get, {
-        workspaceId, includeHidden: true,
-      });
-      const byId = new Map(result.channels.map((c) => [c._id, c]));
-      expect(byId.get(visibleId)?.isHidden).toBe(false);
-      expect(byId.get(hiddenId)?.isHidden).toBe(true);
-      expect(result.hiddenChannelCount).toBe(1);
+      expect(ids).toContain(hiddenId);
+      expect(isHiddenInSidebar(result, visibleId)).toBe(false);
+      expect(isHiddenInSidebar(result, hiddenId)).toBe(true);
     });
 
     it("auto-unhides a DM whose latest message is newer than hiddenAt", async () => {
@@ -288,9 +280,7 @@ describe("channelDismissal", () => {
       await insertMessage(t, { channelId, userId: otherId });
 
       const result = await asUser.query(api.workspaceSidebarData.get, { workspaceId });
-      const ids = result.channels.map((c) => c._id);
-      expect(ids).toContain(channelId);
-      expect(result.hiddenChannelCount).toBe(0);
+      expect(isHiddenInSidebar(result, channelId)).toBe(false);
     });
 
     it("keeps a DM hidden when no message is newer than hiddenAt", async () => {
@@ -313,8 +303,7 @@ describe("channelDismissal", () => {
       );
 
       const result = await asUser.query(api.workspaceSidebarData.get, { workspaceId });
-      expect(result.channels.map((c) => c._id)).not.toContain(channelId);
-      expect(result.hiddenChannelCount).toBe(1);
+      expect(isHiddenInSidebar(result, channelId)).toBe(true);
     });
 
     it("never hides closed channels even if hiddenAt is set", async () => {
@@ -331,10 +320,7 @@ describe("channelDismissal", () => {
       );
 
       const result = await asUser.query(api.workspaceSidebarData.get, { workspaceId });
-      const closed = result.channels.find((c) => c._id === channelId);
-      expect(closed).toBeDefined();
-      expect(closed!.isHidden).toBe(false);
-      expect(result.hiddenChannelCount).toBe(0);
+      expect(isHiddenInSidebar(result, channelId)).toBe(false);
     });
   });
 });
@@ -447,8 +433,7 @@ describe("restoring a dismissed conversation", () => {
     await asUser.mutation(api.channelDismissal.dismissChannel, { channelId });
 
     const after = await asUser.query(api.workspaceSidebarData.get, { workspaceId });
-    expect(after.channels.map((c) => c._id)).not.toContain(channelId);
-    expect(after.hiddenChannelCount).toBe(1);
+    expect(after.channels.find((c) => c._id === channelId)?.isHidden).toBe(true);
 
     return { channelId, otherId, workspaceId, asUser };
   }
@@ -460,8 +445,7 @@ describe("restoring a dismissed conversation", () => {
     await asUser.mutation(api.channelDismissal.restoreChannel, { channelId });
 
     const restored = await asUser.query(api.workspaceSidebarData.get, { workspaceId });
-    expect(restored.channels.map((c) => c._id)).toContain(channelId);
-    expect(restored.hiddenChannelCount).toBe(0);
+    expect(restored.channels.find((c) => c._id === channelId)?.isHidden).toBe(false);
   });
 
   it("puts a dismissed public channel back", async () => {
@@ -472,14 +456,14 @@ describe("restoring a dismissed conversation", () => {
     await asUser.mutation(api.channelDismissal.dismissChannel, { channelId });
     expect(
       (await asUser.query(api.workspaceSidebarData.get, { workspaceId })).channels
-        .map((c) => c._id),
-    ).not.toContain(channelId);
+        .find((c) => c._id === channelId)?.isHidden,
+    ).toBe(true);
 
     await asUser.mutation(api.channelDismissal.restoreChannel, { channelId });
     expect(
       (await asUser.query(api.workspaceSidebarData.get, { workspaceId })).channels
-        .map((c) => c._id),
-    ).toContain(channelId);
+        .find((c) => c._id === channelId)?.isHidden,
+    ).toBe(false);
   });
 
   it("brings a dismissed DM back when the conversation is started again", async () => {
@@ -497,8 +481,7 @@ describe("restoring a dismissed conversation", () => {
     expect(again).toBe(channelId);
 
     const sidebar = await asUser.query(api.workspaceSidebarData.get, { workspaceId });
-    expect(sidebar.channels.map((c) => c._id)).toContain(channelId);
-    expect(sidebar.hiddenChannelCount).toBe(0);
+    expect(sidebar.channels.find((c) => c._id === channelId)?.isHidden).toBe(false);
   });
 
   it("leaves the other participant's dismissal alone", async () => {

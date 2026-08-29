@@ -54,7 +54,7 @@ describe("open channel with an explicit membership row", () => {
     expect(data.channels.filter((c) => c._id === channelId)).toHaveLength(1);
   });
 
-  it("is counted once by hiddenChannelCount", async () => {
+  it("appears exactly once when dismissed, not twice", async () => {
     const t = createTestContext();
     const { workspaceId, userId, asUser } = await setupWorkspaceWithAdmin(t);
     const channelId = await openChannelWithMembership(t, {
@@ -74,10 +74,12 @@ describe("open channel with an explicit membership row", () => {
       workspaceId,
     });
 
-    expect(data.hiddenChannelCount).toBe(1);
-    // ...and it is filtered out of the default payload exactly once, leaving
-    // nothing behind.
-    expect(data.channels.filter((c) => c._id === channelId)).toHaveLength(0);
+    // The dedup is the point: a public channel the viewer also has an explicit
+    // membership row for arrives from both halves of the sidebar query, and
+    // used to be returned — and counted — twice.
+    const rows = data.channels.filter((c) => c._id === channelId);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].isHidden).toBe(true);
   });
 
 });

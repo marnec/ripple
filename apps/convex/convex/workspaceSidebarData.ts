@@ -11,11 +11,6 @@ import { isDismissed } from "./channelDismissal";
 export const get = query({
   args: {
     workspaceId: v.id("workspaces"),
-    // When true, include channels the user has hidden (still flagged
-    // `isHidden: true` so the client can render them differently). Used by
-    // the "Show hidden" sidebar toggle. Defaults to false — the sidebar
-    // filters hidden channels out server-side to keep the payload tight.
-    includeHidden: v.optional(v.boolean()),
   },
   returns: v.object({
     channels: v.array(
@@ -29,11 +24,21 @@ export const get = query({
         isHidden: v.boolean(),
       }),
     ),
-    // Always reported regardless of `includeHidden` so the sidebar toggle
-    // can render an accurate "N hidden" badge without a second query.
-    hiddenChannelCount: v.number(),
   }),
-  handler: async (ctx, { workspaceId, includeHidden = false }) => {
+  /**
+   * Every conversation the viewer can see, dismissed ones included and flagged
+   * `isHidden`. The client filters and counts per sidebar section.
+   *
+   * This used to filter server-side behind an `includeHidden` arg and report a
+   * single `hiddenChannelCount` across both sections — which is why closing a
+   * DM made the *Channels* header read "Show 1 hidden channel", and why that
+   * eye was the only control that could bring the conversation back. One count
+   * cannot serve two sections, and one server flag cannot give them
+   * independent toggles. Hidden conversations are rare, so carrying them costs
+   * little; the "keep the payload tight" rule this relaxes was about
+   * `.collect()`-ing four resource tables, not about a handful of rows.
+   */
+  handler: async (ctx, { workspaceId }) => {
     const { userId } = await requireWorkspaceMember(ctx, workspaceId);
 
     // Channels only. This query is mounted for the whole app shell, so every
@@ -122,14 +127,6 @@ export const get = query({
       }),
     );
 
-    const hiddenChannelCount = enrichedChannels.filter((c) => c.isHidden).length;
-    const channels = includeHidden
-      ? enrichedChannels
-      : enrichedChannels.filter((c) => !c.isHidden);
-
-    return {
-      channels,
-      hiddenChannelCount,
-    };
+    return { channels: enrichedChannels };
   },
 });

@@ -3646,7 +3646,7 @@ export declare const api: {
     get: FunctionReference<
       "query",
       "public",
-      { includeHidden?: boolean; workspaceId: Id<"workspaces"> },
+      { workspaceId: Id<"workspaces"> },
       {
         channels: Array<{
           _creationTime: number;
@@ -3657,7 +3657,6 @@ export declare const api: {
           visibility: "public" | "private";
           workspaceId: Id<"workspaces">;
         }>;
-        hiddenChannelCount: number;
       }
     >;
   };

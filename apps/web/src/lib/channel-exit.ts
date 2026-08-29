@@ -62,3 +62,12 @@ export const LEAVE_COPY = {
   tab: "Leave",
   action: "Leave channel",
 } as const;
+
+/**
+ * The word for the thing itself, for controls that are not about exiting —
+ * "Manage channel" against "Manage conversation". A direct message shares
+ * every mechanism a channel has and almost none of its vocabulary.
+ */
+export function conversationNoun(channel: ChannelLike): "channel" | "conversation" {
+  return isDirectMessage(channel) ? "conversation" : "channel";
+}

@@ -1,17 +1,27 @@
 import { useCallback, useLayoutEffect, useMemo, useRef, useSyncExternalStore } from "react";
+import type { ConversationSection } from "@/lib/conversation-section";
 
 const STORAGE_PREFIX = "channels:known:";
 
 /** Ordered list of [id, name] tuples — order matches last-seen query order */
 type KnownList = [string, string][];
 
-function getStorageKey(workspaceId: string) {
-  return `${STORAGE_PREFIX}${workspaceId}`;
+/**
+ * One list per workspace *per sidebar section*. Channels and direct messages
+ * are disjoint sets rendered by two independent headers, so a shared key made
+ * a new conversation bump the Channels header's "+1" badge and a closed one
+ * render as a struck-through `#` ghost in the channel list. The hook
+ * auto-acknowledges everything when a key holds nothing, so splitting the key
+ * needs no migration — the first render after this ships simply adopts what is
+ * on screen.
+ */
+function getStorageKey(workspaceId: string, section: ConversationSection) {
+  return `${STORAGE_PREFIX}${workspaceId}:${section}`;
 }
 
-function readKnownList(workspaceId: string): KnownList {
+function readKnownList(workspaceId: string, section: ConversationSection): KnownList {
   try {
-    const raw = localStorage.getItem(getStorageKey(workspaceId));
+    const raw = localStorage.getItem(getStorageKey(workspaceId, section));
     if (raw) {
       const parsed: unknown = JSON.parse(raw);
       // Migration: old format was string[] or Record<string, string>
@@ -33,8 +43,8 @@ function readKnownList(workspaceId: string): KnownList {
   return [];
 }
 
-function writeKnownList(workspaceId: string, list: KnownList) {
-  const key = getStorageKey(workspaceId);
+function writeKnownList(workspaceId: string, section: ConversationSection, list: KnownList) {
+  const key = getStorageKey(workspaceId, section);
   const value = JSON.stringify(list);
   const oldValue = localStorage.getItem(key);
   localStorage.setItem(key, value);
@@ -66,13 +76,19 @@ export interface ChannelEntry {
  * Call this from the acting user's deletion flow before navigating away.
  */
 export function removeFromKnownChannels(workspaceId: string, channelId: string) {
-  const current = readKnownList(workspaceId);
-  const updated = current.filter(([id]) => id !== channelId);
-  writeKnownList(workspaceId, updated);
+  // Both sections: a channel id and a conversation id are drawn from the same
+  // table and can never collide, so the caller — a delete, a leave, a dismissal
+  // — does not have to know which list it is in.
+  for (const section of ["channels", "dms"] as const) {
+    const current = readKnownList(workspaceId, section);
+    const updated = current.filter(([id]) => id !== channelId);
+    if (updated.length !== current.length) writeKnownList(workspaceId, section, updated);
+  }
 }
 
 export function useAcknowledgedChannels(
   workspaceId: string,
+  section: ConversationSection,
   channels: ChannelEntry[] | undefined,
   isVisible: boolean,
 ) {
@@ -85,17 +101,17 @@ export function useAcknowledgedChannels(
   const subscribe = useCallback(
     (onStoreChange: () => void) => {
       const handler = (e: StorageEvent) => {
-        if (e.key === getStorageKey(workspaceId)) onStoreChange();
+        if (e.key === getStorageKey(workspaceId, section)) onStoreChange();
       };
       window.addEventListener("storage", handler);
       return () => window.removeEventListener("storage", handler);
     },
-    [workspaceId],
+    [workspaceId, section],
   );
 
   const getSnapshot = useCallback(
-    () => localStorage.getItem(getStorageKey(workspaceId)),
-    [workspaceId],
+    () => localStorage.getItem(getStorageKey(workspaceId, section)),
+    [workspaceId, section],
   );
 
   const rawSnapshot = useSyncExternalStore(subscribe, getSnapshot);
@@ -143,25 +159,25 @@ export function useAcknowledgedChannels(
     // First load ever (no localStorage): seed the known list
     if (initializedRef.current !== workspaceId && !rawSnapshot) {
       initializedRef.current = workspaceId;
-      writeKnownList(workspaceId, liveList);
+      writeKnownList(workspaceId, section, liveList);
       return;
     }
 
     // Transition from not-visible → visible: auto-acknowledge
     if (!wasVisible) {
-      writeKnownList(workspaceId, liveList);
+      writeKnownList(workspaceId, section, liveList);
     }
-  }, [isVisible, channels, workspaceId, rawSnapshot, liveList]);
+  }, [isVisible, channels, workspaceId, section, rawSnapshot, liveList]);
 
   // Auto-acknowledge when channels change after a user-initiated action.
   // useLayoutEffect so the write happens before paint — no pill flash.
   useLayoutEffect(() => {
     if (autoAckRef.current && channels && channels !== prevChannelsRef.current) {
       autoAckRef.current = false;
-      writeKnownList(workspaceId, liveList);
+      writeKnownList(workspaceId, section, liveList);
     }
     prevChannelsRef.current = channels;
-  }, [channels, workspaceId, liveList]);
+  }, [channels, workspaceId, section, liveList]);
 
   /**
    * Build a merged display list that preserves the known order.
@@ -218,19 +234,19 @@ export function useAcknowledgedChannels(
   /** Sync known list to match the current live channel list */
   const acknowledgeAll = useCallback(() => {
     if (!channels) return;
-    writeKnownList(workspaceId, liveList);
-  }, [workspaceId, channels, liveList]);
+    writeKnownList(workspaceId, section, liveList);
+  }, [workspaceId, section, channels, liveList]);
 
   const acknowledgeOne = useCallback(
     (channelId: string, channelName: string) => {
-      const current = readKnownList(workspaceId);
+      const current = readKnownList(workspaceId, section);
       // Add at end if not already present
       if (!current.some(([id]) => id === channelId)) {
         current.push([channelId, channelName]);
       }
-      writeKnownList(workspaceId, current);
+      writeKnownList(workspaceId, section, current);
     },
-    [workspaceId],
+    [workspaceId, section],
   );
 
   /**

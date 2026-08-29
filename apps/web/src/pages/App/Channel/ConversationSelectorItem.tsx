@@ -9,13 +9,14 @@ import {
   Lock,
   LogOut,
   MoreHorizontal,
+  User,
   Video,
 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { api } from "@convex/_generated/api";
-import { exitAction, isPublicChannel } from "@ripple/shared/channel";
-import { exitCopy, LEAVE_COPY } from "@/lib/channel-exit";
+import { exitAction, isDirectMessage, isPrivateChannel } from "@ripple/shared/channel";
+import { conversationNoun, exitCopy, LEAVE_COPY } from "@/lib/channel-exit";
 import type { Doc, Id } from "@convex/_generated/dataModel";
 import {
   ResponsiveDropdownMenu,
@@ -33,10 +34,10 @@ import { removeFromKnownChannels } from "@/hooks/use-acknowledged-channels";
 import { ChannelCallIndicator } from "./ChannelCallIndicator";
 import type { ChannelCallParticipant } from "@/hooks/use-channel-calls";
 
-/** Channel shape as returned by the sidebar query (extends Doc with isHidden). */
+/** Conversation shape as returned by the sidebar query (a Doc plus isHidden). */
 export type SidebarChannel = Doc<"channels"> & { isHidden: boolean };
 
-export interface ChannelSelectorItemProps {
+export interface ConversationSelectorItemProps {
   channel: SidebarChannel;
   channelId: Id<"channels"> | undefined;
   /** Boolean "something new" signal — we deliberately don't show a count. */
@@ -55,7 +56,16 @@ export interface ChannelSelectorItemProps {
   style?: React.CSSProperties;
 }
 
-export function ChannelSelectorItem({
+/**
+ * One row in a sidebar conversation list — a channel or a direct message.
+ *
+ * There is no kind branch in the props: the icon, the padlock, the menu's exit
+ * arm and its wording all come from the row itself, through `exitAction` and
+ * `exitCopy`. The direct-message half of this used to be a second copy inlined
+ * in `DmSelectorList` — same button, same keyboard handler, same 200-character
+ * trigger class, different nouns.
+ */
+export function ConversationSelectorItem({
   channelId,
   channel,
   hasUnread,
@@ -66,7 +76,7 @@ export function ChannelSelectorItem({
   onSelfChangeIntent,
   className,
   style,
-}: ChannelSelectorItemProps) {
+}: ConversationSelectorItemProps) {
   const [showLeaveDialog, setShowLeaveDialog] = useState(false);
   const dismissChannel = useMutation(api.channelDismissal.dismissChannel);
   const restoreChannel = useMutation(api.channelDismissal.restoreChannel);
@@ -74,6 +84,7 @@ export function ChannelSelectorItem({
   // A channel only reaches this list through `channelMembers` or by being
   // public, so a private one here is always one the viewer is a member of.
   const exit = exitAction(channel, { isMember: true });
+  const isDm = isDirectMessage(channel);
   const copy = exitCopy(channel);
 
   const handleHide = () => {
@@ -123,14 +134,21 @@ export function ChannelSelectorItem({
         isActive={channel._id === channelId}
       >
           <div className="flex items-end shrink-0">
-            <Hash size={14} />
-            <Lock className={cn("size-2.5", "-ml-0.5", isPublicChannel(channel) ? "invisible" : "")} />
+            {isDm ? <User size={14} /> : <Hash size={14} />}
+            {/* The padlock marks a *private channel*. It used to be spelled
+                `isPublicChannel(c) ? "invisible" : ""`, whose complement
+                includes direct messages — reusing that here would have put a
+                padlock beside every conversation. `isPrivateChannel` is the
+                predicate that means what the icon means. */}
+            {!isDm && (
+              <Lock className={cn("size-2.5", "-ml-0.5", isPrivateChannel(channel) ? "" : "invisible")} />
+            )}
           </div>
           <span className={cn(
             "truncate",
             hasUnread && "font-semibold",
             channel.isHidden && "italic text-muted-foreground",
-          )}>{channel.name}</span>
+          )}>{channel.name || "Direct Message"}</span>
           <div className="ml-auto flex shrink-0 items-center gap-1.5">
             {callParticipants && callParticipants.length > 0 && (
               <ChannelCallIndicator participants={callParticipants} />
@@ -154,7 +172,7 @@ export function ChannelSelectorItem({
           </ResponsiveDropdownMenuItem>
           <ResponsiveDropdownMenuItem onSelect={() => onManageChannel(channel._id)}>
             <Cog className="text-muted-foreground" />
-            <span>Manage channel</span>
+            <span>Manage {conversationNoun(channel)}</span>
           </ResponsiveDropdownMenuItem>
           <ResponsiveDropdownMenuSeparator />
           {/* The exit arm. `exit` is the whole decision: this used to read

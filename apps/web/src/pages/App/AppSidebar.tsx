@@ -16,16 +16,17 @@ import { useUserSettings } from "@/hooks/use-user-settings";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useSidebarSections } from "@/hooks/use-sidebar-sections";
 import type { QueryParams } from "@convex/types/routes";
-import { useWorkspaceSidebar, useWorkspaceSidebarHiddenToggle } from "@/contexts/WorkspaceSidebarContext";
+import { useWorkspaceSidebar } from "@/contexts/WorkspaceSidebarContext";
 import { useQuery } from "convex-helpers/react/cache";
 import { LayoutGroup, m } from "framer-motion";
-import { CalendarDays, LayoutDashboard, ListTodo } from "lucide-react";
+import { CalendarDays, LayoutDashboard, ListTodo, MessageCircle, MessageSquare } from "lucide-react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { api } from "@convex/_generated/api";
-import { isDirectMessage } from "@ripple/shared/channel";
+import { sectionOf } from "@/lib/conversation-section";
 import { WorkspaceSwitcher } from "./Workspace/WorkspaceSwitcher";
-import { ChannelSelectorList } from "./Channel/ChannelSelectorList";
-import { DmSelectorList } from "./Channel/DmSelectorList";
+import { ConversationSelectorList } from "./Channel/ConversationSelectorList";
+import { CreateChannelDialog } from "./Channel/CreateChannelDialog";
+import { CreateDmDialog } from "./Channel/CreateDmDialog";
 import { DiagramSelectorList } from "./Diagram/DiagramSelectorList";
 import { DocumentSelectorList } from "./Document/DocumentSelectorList";
 import { ProjectSelectorList } from "./Project/ProjectSelectorList";
@@ -49,7 +50,6 @@ export function AppSidebar() {
   const workspaces = useQuery(api.workspaces.list);
   const activeWorkspace = useQuery(api.workspaces.get, workspaceId ? { id: workspaceId } : "skip");
   const sidebarData = useWorkspaceSidebar();
-  const { includeHidden, toggleIncludeHidden } = useWorkspaceSidebarHiddenToggle();
 
   const handleChannelSelect = (id: string | null) => {
     if (isMobile) setOpen(false);
@@ -152,16 +152,30 @@ export function AppSidebar() {
             <m.div layout="position" transition={{ duration: 0.2, ease: "easeOut" }}>
               <SidebarGroup className="pb-0">
                 <SidebarMenu>
-                  <ChannelSelectorList
+                  <ConversationSelectorList
+                    config={{
+                      section: "channels",
+                      icon: MessageSquare,
+                      label: "Channels",
+                      tooltip: "Channels",
+                      emptyText: "No channels yet",
+                      createLabel: "New Channel",
+                      onHeaderClick: () => handleChannelSelect(null),
+                      renderCreateDialog: ({ open, onOpenChange, onCreated }) => (
+                        <CreateChannelDialog
+                          workspaceId={workspaceId}
+                          open={open}
+                          onOpenChange={onOpenChange}
+                          onChannelCreated={onCreated}
+                        />
+                      ),
+                    }}
                     channelId={channelId}
                     workspaceId={workspaceId}
-                    channels={sidebarData?.channels?.filter((c) => !isDirectMessage(c))}
+                    conversations={sidebarData?.channels?.filter((c) => sectionOf(c) === "channels")}
                     onChannelSelect={handleChannelSelect}
                     isOpen={isOpen("channels")}
                     onToggle={toggleChannels}
-                    hiddenChannelCount={sidebarData?.hiddenChannelCount ?? 0}
-                    includeHidden={includeHidden}
-                    onToggleIncludeHidden={toggleIncludeHidden}
                   />
                 </SidebarMenu>
               </SidebarGroup>
@@ -171,10 +185,29 @@ export function AppSidebar() {
             <m.div layout="position" transition={{ duration: 0.2, ease: "easeOut" }}>
               <SidebarGroup className="py-0">
                 <SidebarMenu>
-                  <DmSelectorList
+                  <ConversationSelectorList
+                    config={{
+                      section: "dms",
+                      icon: MessageCircle,
+                      label: "DMs",
+                      tooltip: "Direct Messages",
+                      emptyText: "No conversations yet",
+                      createLabel: "New Direct Message",
+                      // No header destination: a direct message has no
+                      // browsable index to navigate to.
+                      alwaysShowCreate: true,
+                      renderCreateDialog: ({ open, onOpenChange, conversations }) => (
+                        <CreateDmDialog
+                          workspaceId={workspaceId}
+                          open={open}
+                          onOpenChange={onOpenChange}
+                          existingConversationLabels={new Set(conversations.map((c) => c.name))}
+                        />
+                      ),
+                    }}
                     channelId={channelId}
                     workspaceId={workspaceId}
-                    channels={sidebarData?.channels?.filter((c) => isDirectMessage(c))}
+                    conversations={sidebarData?.channels?.filter((c) => sectionOf(c) === "dms")}
                     onChannelSelect={handleChannelSelect}
                     isOpen={isOpen("dms")}
                     onToggle={toggleDms}

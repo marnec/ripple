@@ -9,6 +9,7 @@ NEXT STEPS:
 - add a dependency view to tasks
 
 - explore pdf reading, annotation and embedding
+- consider introducing document snapshots
 
 - export excalidraw presentation to pptx
 - images and equations are not exported correctly in docx format
