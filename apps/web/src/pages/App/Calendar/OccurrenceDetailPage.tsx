@@ -29,7 +29,6 @@ import { toast } from "sonner";
 import type { RecurrenceRule } from "@ripple/shared/recurrence";
 
 import { Button } from "@ripple/ui/components/button";
-import { Input } from "@ripple/ui/components/input";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { RippleSpinner } from "@/components/RippleSpinner";
 import { MobileHeaderTitle } from "@/contexts/HeaderSlotContext";
@@ -44,6 +43,7 @@ import { JoinCallButton } from "./JoinCallButton";
 import { useJoinStatusTick } from "./useJoinStatusTick";
 import { EditableDescription, EditableTitle } from "./event-detail-blocks";
 import { EditScopeDialog } from "./EditScopeDialog";
+import { TimeSelect } from "./event-fields";
 import { NotifyInviteesDialog } from "./NotifyInviteesDialog";
 import { decideNotify } from "./notify-scope";
 import { RecurrenceDialog } from "./RecurrenceDialog";
@@ -391,21 +391,24 @@ export function OccurrenceDetailPage({
             )}
           </div>
           {editable && (
-            <label className="flex flex-wrap items-center gap-3 text-sm">
+            <div className="flex flex-wrap items-center gap-3 text-sm">
               <span className="text-muted-foreground">
                 Starts at ({series.timezone})
               </span>
-              <Input
-                type="time"
-                className="w-32"
-                defaultValue={series.anchorTime}
-                onBlur={(e) => {
-                  const anchorTime = e.currentTarget.value;
+              <TimeSelect
+                // Show the picked time while the scope question is open —
+                // the series row still holds the old one until it is answered.
+                value={
+                  (pending?.kind === "rule" ? pending.fields.anchorTime : undefined) ??
+                  series.anchorTime
+                }
+                onChange={(anchorTime) => {
                   if (!anchorTime || anchorTime === series.anchorTime) return;
                   setPending({ kind: "rule", fields: { anchorTime } });
                 }}
+                triggerClassName="w-32"
               />
-            </label>
+            </div>
           )}
         </div>
       </div>
