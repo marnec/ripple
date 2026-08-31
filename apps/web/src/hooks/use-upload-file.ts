@@ -14,6 +14,15 @@ export interface ImageUploadResult {
   height: number;
 }
 
+export interface FileUploadResult {
+  /** Hosted URL of the stored blob. */
+  url: string;
+  /** Original file name, as picked — what the attachment card shows. */
+  name: string;
+  mimeType: string;
+  size: number;
+}
+
 /**
  * Returns an `uploadFile` function compatible with BlockNote's `uploadFile` editor option,
  * plus an `uploadImageWithThumbnail` for chat image uploads.
@@ -28,7 +37,7 @@ export function useUploadFile(workspaceId: Id<"workspaces"> | undefined) {
     workspaceIdRef.current = workspaceId;
   }, [workspaceId]);
 
-  const uploadSingleFile = async (file: File): Promise<string> => {
+  const uploadStoredFile = async (file: File, type: "image" | "file"): Promise<string> => {
     const wsId = workspaceIdRef.current;
     if (!wsId) throw new Error("Workspace not available for upload");
 
@@ -54,10 +63,35 @@ export function useUploadFile(workspaceId: Id<"workspaces"> | undefined) {
       fileName: file.name,
       mimeType: file.type,
       size: file.size,
-      type: "image",
+      type,
     });
 
     return url;
+  };
+
+  /**
+   * BlockNote's `uploadFile` option. Its own signature is
+   * `(file, blockId?) => Promise<string>`, so this wrapper takes exactly one
+   * argument — widening it with a second parameter would let BlockNote's
+   * `blockId` land in it.
+   */
+  const uploadSingleFile = (file: File): Promise<string> => uploadStoredFile(file, "image");
+
+  /**
+   * A non-image chat attachment: one blob, stored as-is. There is no
+   * thumbnail leg — nothing to derive one from — so the message body carries
+   * the single URL plus the name/type/size the card renders.
+   */
+  const uploadAttachment = async (file: File): Promise<FileUploadResult> => {
+    const url = await uploadStoredFile(file, "file");
+    return {
+      url,
+      // A file with no name at all (some clipboard payloads) still needs a
+      // label; the card would otherwise render an empty row.
+      name: file.name || "attachment",
+      mimeType: file.type,
+      size: file.size,
+    };
   };
 
   const uploadImageWithThumbnail = async (
@@ -80,6 +114,6 @@ export function useUploadFile(workspaceId: Id<"workspaces"> | undefined) {
   };
 
   return workspaceId
-    ? { uploadFile: uploadSingleFile, uploadImageWithThumbnail }
+    ? { uploadFile: uploadSingleFile, uploadImageWithThumbnail, uploadAttachment }
     : undefined;
 }

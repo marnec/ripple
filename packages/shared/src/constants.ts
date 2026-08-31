@@ -66,3 +66,30 @@ export function canChangeName(
 ): boolean {
   return nameChangeAvailableAt(nameChangedAt, now) === null;
 }
+
+/**
+ * Ceiling on a chat file attachment, enforced in `medias.saveMedia` against
+ * the size the *storage system* reports rather than the client's claim.
+ *
+ * Only `type: "file"` is capped. An `image` upload goes through
+ * `generateThumbnail` first, so what lands in a message body is a bounded
+ * derivative; capping the original too would start rejecting camera-sized
+ * photos that work today, which is a separate decision from "how big may an
+ * arbitrary blob be".
+ */
+export const MESSAGE_FILE_ATTACHMENT_MAX_BYTES = 25 * 1024 * 1024;
+
+/** Human-readable byte size — "0 B", "14 KB", "2.3 MB". */
+export function formatFileSize(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes <= 0) return "0 B";
+  const units = ["B", "KB", "MB", "GB"];
+  let value = bytes;
+  let unit = 0;
+  while (value >= 1024 && unit < units.length - 1) {
+    value /= 1024;
+    unit++;
+  }
+  // Bytes and kilobytes are noise below the decimal point; megabytes up are not.
+  const rounded = unit >= 2 && value < 10 ? value.toFixed(1) : Math.round(value).toString();
+  return `${rounded} ${units[unit]}`;
+}

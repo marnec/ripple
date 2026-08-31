@@ -10,10 +10,12 @@
 //    these composers passes `uploadFile` to BlockNote, so there is no upload
 //    path behind the blocks either; dropping a file is inert (BlockNote's
 //    drop handler returns before inserting when `uploadFile` is unset).
-//    Chat's image *attachment* is a separate, message-level feature that never
-//    went through this schema — it writes an `image` block into the message
-//    body, which `BlockNoteRenderer` draws. Authoring and rendering are
-//    different paths here; this one is authoring.
+//    Chat's *attachments* are a separate, message-level feature that never
+//    goes through this schema — the composer writes an `image` or a `file`
+//    block into the message body at send time, and `MessageRenderer` pulls it
+//    back out and draws it. Authoring and rendering are different paths here;
+//    this one is authoring, which is why the blocks stay out even though a
+//    channel message can carry one.
 //  - **No headings.** A heading inside a chat message or a comment is
 //    structure the surrounding UI already provides.
 //

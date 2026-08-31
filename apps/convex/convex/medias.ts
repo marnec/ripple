@@ -2,6 +2,7 @@ import { ConvexError, v } from "convex/values";
 import { query } from "./_generated/server";
 import { mutation } from "./functions";
 import { checkWorkspaceMember, requireUser, requireWorkspaceMember } from "./authHelpers";
+import { MESSAGE_FILE_ATTACHMENT_MAX_BYTES, formatFileSize } from "@ripple/shared/constants";
 
 export const generateUploadUrl = mutation({
   args: {},
@@ -20,11 +21,30 @@ export const saveMedia = mutation({
     fileName: v.string(),
     mimeType: v.string(),
     size: v.number(),
-    type: v.union(v.literal("image")),
+    type: v.union(v.literal("image"), v.literal("file")),
   },
   returns: v.string(),
   handler: async (ctx, args) => {
     const { userId } = await requireWorkspaceMember(ctx, args.workspaceId);
+
+    // `args.size` is the client's word for it; the storage row is the fact, so
+    // that is what the cap is read off — a client under-reporting `size` would
+    // otherwise walk straight past the check.
+    //
+    // The refused blob is deliberately NOT deleted here. A mutation is one
+    // transaction: a `ctx.storage.delete` followed by a throw is rolled back
+    // with everything else, so the call would be pure noise. What actually
+    // collects it is `storageGc` — no `medias` row ends up referring to it, so
+    // it is an orphan by construction and gets swept after the grace period.
+    if (args.type === "file") {
+      const stored = await ctx.db.system.get(args.storageId);
+      const actualSize = stored?.size ?? args.size;
+      if (actualSize > MESSAGE_FILE_ATTACHMENT_MAX_BYTES) {
+        throw new ConvexError(
+          `File is too large (max ${formatFileSize(MESSAGE_FILE_ATTACHMENT_MAX_BYTES)})`,
+        );
+      }
+    }
 
     await ctx.db.insert("medias", {
       storageId: args.storageId,

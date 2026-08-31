@@ -655,14 +655,22 @@ async function pushTextFromBody(
   }
 
   const text = extractPlainTextFromBody(body, userNames, projectNames, eventTitles);
-  return text || imageLabelFromBody(body);
+  return text || attachmentLabelFromBody(body);
 }
 
-/** The diagram name a snapshot message carries on its image block, if any. */
-function imageLabelFromBody(body: string): string {
+/**
+ * What to call a message that is nothing but an attachment: the diagram name a
+ * snapshot carries, or the file name of a file attachment. Both are the only
+ * words such a message has, so they are what a reply preview and a lock screen
+ * show instead of an empty line.
+ */
+function attachmentLabelFromBody(body: string): string {
   try {
-    const blocks: { type: string; props?: { diagramName?: string } }[] = JSON.parse(body);
-    return blocks.find((b) => b.type === "image")?.props?.diagramName ?? "";
+    const blocks: { type: string; props?: { diagramName?: string; name?: string } }[] =
+      JSON.parse(body);
+    const diagramName = blocks.find((b) => b.type === "image")?.props?.diagramName;
+    if (diagramName) return diagramName;
+    return blocks.find((b) => b.type === "file")?.props?.name ?? "";
   } catch {
     // non-JSON body — nothing to label it with
     return "";

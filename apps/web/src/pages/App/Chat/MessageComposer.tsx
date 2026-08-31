@@ -6,7 +6,7 @@ import { useCreateBlockNote, useEditorChange, SuggestionMenuController } from "@
 import { BlockNoteView } from "@blocknote/shadcn";
 import "@blocknote/shadcn/style.css";
 import { useTheme } from "next-themes";
-import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useConvex } from "convex/react";
 import { toast } from "sonner";
@@ -24,6 +24,7 @@ import {
   Command,
   CornerDownLeft,
   File,
+  Paperclip,
   Phone,
   SendHorizonal,
   X,
@@ -37,6 +38,7 @@ import type { Id } from "@convex/_generated/dataModel";
 import { cn } from "@/lib/utils";
 import { getUserDisplayName } from "@ripple/shared/displayName";
 import { useUploadFile, type ImageUploadResult } from "../../../hooks/use-upload-file";
+import { MESSAGE_FILE_ATTACHMENT_MAX_BYTES, formatFileSize } from "@shared/constants";
 import { useMemberSuggestions } from "../../../hooks/use-member-suggestions";
 import { useEventSuggestions } from "../../../hooks/use-event-suggestions";
 import { useResourceSuggestions } from "../../../hooks/use-resource-suggestions";
@@ -172,6 +174,20 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
   } | null>(null);
   // True while capturing/exporting a snapshot, before the preview blob exists.
   const [isCapturingSnapshot, setIsCapturingSnapshot] = useState(false);
+  // A non-image attachment. One slot, and it is the *same* slot the image
+  // occupies conceptually — a message carries at most one attachment, so
+  // attaching a file clears a pending image and vice versa. `url === null` is
+  // the mid-upload state; the send button waits on it.
+  const [fileAttachment, setFileAttachment] = useState<{
+    name: string;
+    size: number;
+    mimeType: string;
+    url: string | null;
+  } | null>(null);
+  // Bumped by every clear and every new pick, so an upload that resolves after
+  // the user removed (or replaced) its attachment drops its result instead of
+  // resurrecting it.
+  const fileUploadToken = useRef(0);
   // Target spreadsheet for the range dialog; null when it's closed.
   const [rangeTarget, setRangeTarget] = useState<{
     id: Id<"spreadsheets">;
@@ -190,9 +206,19 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
     setIsUploadingImage(false);
     setImageDiagram(null);
     setIsCapturingSnapshot(false);
+    setFileAttachment(null);
     if (editingMessage.id && editingMessage.body) {
       try {
         const blocks: any[] = JSON.parse(editingMessage.body);
+        const fileBlock = blocks.find((b: any) => b.type === "file");
+        if (fileBlock?.props?.url) {
+          setFileAttachment({
+            url: fileBlock.props.url as string,
+            name: (fileBlock.props.name as string) || "attachment",
+            mimeType: (fileBlock.props.mimeType as string) || "",
+            size: (fileBlock.props.size as number) || 0,
+          });
+        }
         const imageBlock = blocks.find((b: any) => b.type === "image");
         if (imageBlock?.props?.url) {
           const url = imageBlock.props.url as string;
@@ -220,13 +246,17 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
   }
 
   // Editor content manipulation must run after editor init — stays in effect.
+  // The token bump rides along here rather than in the synchronous reset above
+  // because a ref may not be touched during render; the effect is the first
+  // moment after an edit-target switch where it can be invalidated.
   useEffect(() => {
+    fileUploadToken.current++;
     if (!editor?._tiptapEditor?.isInitialized) return;
     editor._tiptapEditor.commands.clearContent();
     if (editingMessage.id && editingMessage.body) {
       try {
         const blocks: any[] = JSON.parse(editingMessage.body);
-        const textBlocks = blocks.filter((b: any) => b.type !== "image");
+        const textBlocks = blocks.filter((b: any) => b.type !== "image" && b.type !== "file");
         if (textBlocks.length > 0) {
           editor.replaceBlocks(editor.document, textBlocks);
         }
@@ -239,7 +269,17 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
   }, [editingMessage]);
 
   const hasImage = !!imagePreview;
-  const canSend = (!isEmpty || !!imageUrls) && !isUploadingImage && !isCapturingSnapshot;
+  const isUploadingFile = !!fileAttachment && fileAttachment.url === null;
+  const canSend =
+    (!isEmpty || !!imageUrls || !!fileAttachment?.url) &&
+    !isUploadingImage &&
+    !isCapturingSnapshot &&
+    !isUploadingFile;
+
+  const clearFile = useCallback(() => {
+    fileUploadToken.current++;
+    setFileAttachment(null);
+  }, []);
 
   const clearImage = useCallback(() => {
     if (imagePreview) URL.revokeObjectURL(imagePreview);
@@ -269,6 +309,7 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
   // background, then swap in the hosted URLs.
   const attachImageFile = async (file: File) => {
     if (!fileUpload) return;
+    clearFile();
     try {
       const { thumbnail, previewUrl, isOriginal, width, height } = await generateThumbnail(file);
       handleImagePreview(previewUrl);
@@ -283,22 +324,60 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
     }
   };
 
-  // Paste an image straight from the clipboard. Runs in the capture phase
-  // (see onPasteCapture below) so it intercepts the image before BlockNote
-  // tries to handle the paste. Ignored while another image is mid-upload to
+  // The non-image counterpart: no thumbnail leg and no local preview to
+  // revoke, so the card renders from the picked file's own metadata while the
+  // blob uploads and only the URL arrives later.
+  const attachFile = async (file: File) => {
+    if (!fileUpload) return;
+    if (file.size > MESSAGE_FILE_ATTACHMENT_MAX_BYTES) {
+      toast.error(
+        `That file is too large (max ${formatFileSize(MESSAGE_FILE_ATTACHMENT_MAX_BYTES)}).`,
+      );
+      return;
+    }
+    clearImage();
+    clearFile();
+    const token = fileUploadToken.current;
+    setFileAttachment({
+      name: file.name || "attachment",
+      size: file.size,
+      mimeType: file.type,
+      url: null,
+    });
+    try {
+      const uploaded = await fileUpload.uploadAttachment(file);
+      if (fileUploadToken.current !== token) return;
+      setFileAttachment(uploaded);
+    } catch (err) {
+      if (fileUploadToken.current !== token) return;
+      console.error("File upload failed:", err);
+      toast.error("Couldn't upload that file.");
+      setFileAttachment(null);
+    }
+  };
+
+  // Paste a file straight from the clipboard. Runs in the capture phase
+  // (see onPasteCapture below) so it intercepts the file before BlockNote
+  // tries to handle the paste. Ignored while another upload is in flight to
   // avoid racing two uploads into the single attachment slot.
+  //
+  // Images keep taking the image route (thumbnail + full, inline render);
+  // anything else becomes a file attachment. A clipboard payload carrying
+  // both is an image paste — that is what "copy image" produces, and the
+  // text/plain leg beside it is not a file item at all.
   const handlePaste = (e: React.ClipboardEvent) => {
     const items = e.clipboardData?.items;
     if (!items) return;
-    const imageItem = Array.from(items).find(
-      (it) => it.kind === "file" && it.type.startsWith("image/"),
-    );
-    if (!imageItem) return;
+    const fileItems = Array.from(items).filter((it) => it.kind === "file");
+    if (fileItems.length === 0) return;
+    const item = fileItems.find((it) => it.type.startsWith("image/")) ?? fileItems[0];
     e.preventDefault();
     e.stopPropagation();
-    if (!fileUpload || isUploadingImage || isCapturingSnapshot) return;
-    const file = imageItem.getAsFile();
-    if (file) void attachImageFile(file);
+    if (!fileUpload || isUploadingImage || isCapturingSnapshot || isUploadingFile) return;
+    const file = item.getAsFile();
+    if (!file) return;
+    if (item.type.startsWith("image/")) void attachImageFile(file);
+    else void attachFile(file);
   };
 
   // Snapshot a diagram (whole canvas or a single frame) into a static PNG and
@@ -309,6 +388,7 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
     frameId: string | null,
   ) => {
     if (!fileUpload) return;
+    clearFile();
     setIsCapturingSnapshot(true);
     try {
       const blob = await fetchDiagramSnapshotBlob(convex, diagram.id, frameId);
@@ -461,20 +541,35 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
         },
       });
     }
+    if (fileAttachment?.url) {
+      blocks.unshift({
+        type: "file",
+        props: {
+          url: fileAttachment.url,
+          name: fileAttachment.name,
+          mimeType: fileAttachment.mimeType,
+          size: fileAttachment.size,
+        },
+      });
+    }
     const body = JSON.stringify(blocks);
     let plainText = blocksToPlainText(editor.document, userNames, projectNames);
-    // Give snapshot-only messages searchable/quotable text (the diagram name).
+    // Give attachment-only messages searchable/quotable text: the diagram name
+    // for a snapshot, the file name for a file.
     if (!plainText && imageDiagram) plainText = imageDiagram.name;
+    if (!plainText && fileAttachment?.url) plainText = fileAttachment.name;
 
     handleSubmit(body, plainText);
     editorClear(editor);
     clearImage();
+    clearFile();
   };
 
   const cancelEdit = () => {
     setEditingMessage({ id: null, body: null });
     if (editor) editorClear(editor);
     clearImage();
+    clearFile();
   };
 
   useEffect(() => {
@@ -521,8 +616,9 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
       <div className="flex justify-between items-center">
         <FormattingToolbar
           editor={editor}
-          canAttachImage={!!fileUpload}
+          canAttach={!!fileUpload}
           onAttachImage={(file) => void attachImageFile(file)}
+          onAttachFile={(file) => void attachFile(file)}
         />
         {showCallButton && (
           <Button
@@ -593,6 +689,27 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
           <button
             type="button"
             onClick={clearImage}
+            className="absolute -top-1.5 -right-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-destructive text-destructive-foreground shadow-sm hover:bg-destructive/90"
+          >
+            <X className="h-3 w-3" />
+          </button>
+        </div>
+      )}
+      {fileAttachment && (
+        <div className="relative flex w-fit max-w-xs items-center gap-2.5 rounded-md border bg-muted/50 py-2 pl-2.5 pr-7">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded bg-background text-muted-foreground">
+            {isUploadingFile ? <RippleSpinner size={16} /> : <Paperclip className="h-4 w-4" />}
+          </span>
+          <span className="min-w-0">
+            <span className="block truncate text-sm font-medium">{fileAttachment.name}</span>
+            <span className="block text-xs text-muted-foreground">
+              {isUploadingFile ? "Uploading\u2026" : formatFileSize(fileAttachment.size)}
+            </span>
+          </span>
+          <button
+            type="button"
+            onClick={clearFile}
+            aria-label="Remove attachment"
             className="absolute -top-1.5 -right-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-destructive text-destructive-foreground shadow-sm hover:bg-destructive/90"
           >
             <X className="h-3 w-3" />

@@ -819,7 +819,9 @@ export default defineSchema({
     fileName: v.string(),
     mimeType: v.string(),
     size: v.number(),
-    type: v.union(v.literal("image")), // extend later: "video", "file", etc.
+    // `image` is the chat/document image path (thumbnail + full are two rows);
+    // `file` is any other chat attachment, stored and served as-is.
+    type: v.union(v.literal("image"), v.literal("file")), // extend later: "video", etc.
   })
     .index("by_workspace", ["workspaceId"])
     .index("by_storage_id", ["storageId"]),

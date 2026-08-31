@@ -6,6 +6,7 @@ import {
   ImageIcon,
   ItalicIcon,
   LinkIcon,
+  PaperclipIcon,
   StrikethroughIcon,
   UnderlineIcon,
 } from "lucide-react";
@@ -173,16 +174,19 @@ function LinkButton({ editor }: { editor: Editor }) {
 
 type FormattingToolbarProps = {
   editor: Editor;
-  /** Whether image attachment is available (upload backend ready). */
-  canAttachImage: boolean;
+  /** Whether attaching anything is possible (upload backend ready). */
+  canAttach: boolean;
   /** Hand a picked image file to the composer's shared attachment flow. */
   onAttachImage: (file: File) => void;
+  /** Hand a picked non-image file to the composer's attachment flow. */
+  onAttachFile: (file: File) => void;
 };
 
 export function FormattingToolbar({
   editor,
-  canAttachImage,
+  canAttach,
   onAttachImage,
+  onAttachFile,
 }: FormattingToolbarProps) {
   const [activeStyles, setActiveStyles] = useState<Record<StyleKey, boolean>>({
     bold: false,
@@ -191,6 +195,7 @@ export function FormattingToolbar({
     strike: false,
     code: false,
   });
+  const imageInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const syncStyles = () => {
@@ -207,9 +212,17 @@ export function FormattingToolbar({
   useEditorSelectionChange(syncStyles, editor);
   useEditorChange(syncStyles, editor);
 
+  // Both inputs reset `value` after handing the file over so re-picking the
+  // same file fires `change` again.
   const handleAttachImage = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) onAttachImage(file);
+    e.target.value = "";
+  };
+
+  const handleAttachFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) onAttachFile(file);
     e.target.value = "";
   };
 
@@ -238,17 +251,35 @@ export function FormattingToolbar({
         variant="outline"
         size="sm"
         title="Attach image"
-        disabled={!canAttachImage}
-        onClick={() => fileInputRef.current?.click()}
+        aria-label="Attach image"
+        disabled={!canAttach}
+        onClick={() => imageInputRef.current?.click()}
       >
         <ImageIcon className="h-4 w-4" />
       </Button>
       <input
-        ref={fileInputRef}
+        ref={imageInputRef}
         type="file"
         accept="image/*"
         className="hidden"
         onChange={handleAttachImage}
+      />
+
+      <Button
+        variant="outline"
+        size="sm"
+        title="Attach file"
+        aria-label="Attach file"
+        disabled={!canAttach}
+        onClick={() => fileInputRef.current?.click()}
+      >
+        <PaperclipIcon className="h-4 w-4" />
+      </Button>
+      <input
+        ref={fileInputRef}
+        type="file"
+        className="hidden"
+        onChange={handleAttachFile}
       />
     </div>
   );

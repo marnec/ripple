@@ -189,3 +189,52 @@ describe("MessageRenderer links", () => {
     }
   });
 });
+
+describe("MessageRenderer file attachments", () => {
+  const fileBlock = (props: Record<string, unknown>): Block => ({ type: "file", props });
+
+  it("renders a file block as a download link naming the file and its size", () => {
+    render(
+      <MessageRenderer
+        blocks={[
+          fileBlock({
+            url: "https://storage.test/blob",
+            name: "quarterly-report.pdf",
+            mimeType: "application/pdf",
+            size: 2411724,
+          }),
+        ]}
+      />,
+    );
+
+    const link = screen.getByRole("link", { name: /quarterly-report\.pdf/ });
+    expect(link).toHaveAttribute("href", "https://storage.test/blob");
+    expect(link).toHaveAttribute("download", "quarterly-report.pdf");
+    expect(link).toHaveTextContent("PDF");
+    expect(link).toHaveTextContent("2.3 MB");
+  });
+
+  it("renders the attachment alongside the message text rather than instead of it", () => {
+    render(
+      <MessageRenderer
+        blocks={[
+          fileBlock({ url: "https://storage.test/blob", name: "notes.txt", size: 12 }),
+          {
+            type: "paragraph",
+            content: [{ type: "text", text: "here you go", styles: {} }],
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getByRole("link", { name: /notes\.txt/ })).toBeInTheDocument();
+    expect(screen.getByText("here you go")).toBeInTheDocument();
+  });
+
+  it("ignores a file block with no url instead of rendering an empty card", () => {
+    // The composer only writes the block once the upload resolved, but a body
+    // is client-authored — a half-written one must not paint a dead link.
+    const { container } = render(<MessageRenderer blocks={[fileBlock({ name: "ghost.bin" })]} />);
+    expect(container.querySelector("a")).toBeNull();
+  });
+});

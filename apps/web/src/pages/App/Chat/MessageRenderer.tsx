@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { PenTool } from "lucide-react";
 import { renderBlockGroups, type Block } from "@/components/BlockNoteRenderer";
+import { FileAttachmentCard, type FileAttachment } from "./FileAttachmentCard";
 import { cn } from "@/lib/utils";
 
 export type { Block };
@@ -78,12 +79,20 @@ interface MessageRendererProps {
  */
 export function MessageRenderer({ blocks, onImageClick, onDiagramOpen }: MessageRendererProps) {
   const imageBlock = blocks.find((b) => b.type === "image");
-  const rest = blocks.filter((b) => b.type !== "image");
+  // A file attachment is a message-level block written by the composer, exactly
+  // like the image one — it is never authored inside the editor (the chat
+  // schema has no media blocks), so it is pulled out here rather than left to
+  // `renderBlockGroups`, which would drop it.
+  const fileBlock = blocks.find((b) => b.type === "file");
+  const rest = blocks.filter((b) => b.type !== "image" && b.type !== "file");
   const hasText = rest.some((b) => {
     if (b.type === "paragraph" && Array.isArray(b.content) && b.content.length > 0) return true;
     if (b.type !== "paragraph") return true;
     return false;
   });
+
+  const fileProps = fileBlock?.props as FileAttachment | undefined;
+  const fileAttachment = fileProps?.url ? fileProps : undefined;
 
   const imageProps = imageBlock?.props as ImageProps | undefined;
   const thumbnailUrl = imageProps?.url;
@@ -139,6 +148,11 @@ export function MessageRenderer({ blocks, onImageClick, onDiagramOpen }: Message
               </button>
             </span>
           )}
+        </div>
+      )}
+      {fileAttachment && (
+        <div className={cn(thumbnailUrl && "px-3 pt-1.5", hasText && "pb-1.5")}>
+          <FileAttachmentCard attachment={fileAttachment} />
         </div>
       )}
       {hasText && (

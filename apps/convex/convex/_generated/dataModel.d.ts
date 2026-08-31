@@ -1059,7 +1059,7 @@ export type DataModel = {
       mimeType: string;
       size: number;
       storageId: Id<"_storage">;
-      type: "image";
+      type: "image" | "file";
       uploadedBy: Id<"users">;
       workspaceId: Id<"workspaces">;
       _id: Id<"medias">;

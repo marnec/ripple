@@ -9,7 +9,14 @@ afterEach(cleanup);
 function mountToolbar() {
   const editor = BlockNoteEditor.create();
   editor.mount(document.createElement("div"));
-  render(<FormattingToolbar editor={editor} canAttachImage={false} onAttachImage={() => {}} />);
+  render(
+    <FormattingToolbar
+      editor={editor}
+      canAttach={false}
+      onAttachImage={() => {}}
+      onAttachFile={() => {}}
+    />,
+  );
   return editor;
 }
 

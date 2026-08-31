@@ -2175,7 +2175,7 @@ export declare const api: {
         mimeType: string;
         size: number;
         storageId: Id<"_storage">;
-        type: "image";
+        type: "image" | "file";
         workspaceId: Id<"workspaces">;
       },
       string
