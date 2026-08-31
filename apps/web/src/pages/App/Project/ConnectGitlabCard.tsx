@@ -1,7 +1,6 @@
 import { Button } from "@ripple/ui/components/button";
 import { Input } from "@ripple/ui/components/input";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@ripple/ui/components/badge";
 import {
   Dialog,
   DialogContent,
@@ -10,26 +9,19 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@ripple/ui/components/dialog";
-import {
-  ResponsiveDialog,
-  ResponsiveDialogContent,
-  ResponsiveDialogDescription,
-  ResponsiveDialogFooter,
-  ResponsiveDialogHeader,
-  ResponsiveDialogTitle,
-} from "@/components/ui/responsive-dialog";
 import { useAction, useMutation } from "convex/react";
 import { useQuery } from "convex-helpers/react/cache";
-import { Copy, GitBranch, Inbox, Loader2, Search } from "lucide-react";
+import { Copy, GitBranch, Loader2, Search } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 import { cn } from "@/lib/utils";
-import { IntegrationWarning } from "@/components/IntegrationWarning";
-import { BranchStatusMapEditor } from "../Workspace/BranchStatusMapEditor";
-import { BranchSourceDefaultsEditor } from "../Workspace/BranchSourceDefaultsEditor";
-import { InboundIssueSyncToggle } from "./ConnectGithubWizard";
+import {
+  IntegrationCardShell,
+  type IntegrationLink,
+} from "./IntegrationCardShell";
+import { WizardStepper } from "./WizardStepper";
 
 const GITLAB_FEATURE_KEY = "gitlab_integration";
 
@@ -39,27 +31,13 @@ interface Props {
 }
 
 /**
- * Project-settings entry point for connecting a GitLab project. Mirrors the
- * GitHub card's shape and ordering so the two integrations feel like one
- * surface: gating banner → linked-row(s) with sub-editors → triage warning →
- * "Connect" button → modal wizard. The wizard owns the account picker, the
- * project picker (with already-linked guard), and the PAT fallback.
- *
- * One-link-per-project is enforced by hiding the connect button once a GitLab
- * link exists — matches the GitHub card's behavior. Server-side, `createLink`
- * still rejects mixing providers on the same project.
+ * GitLab variant of the shared integration card. Beyond the provider copy and
+ * its own wizard it adds two things GitHub has no equivalent for: the
+ * PAT-install webhook panel appended to each linked row, and the OAuth-callback
+ * toast — kept at card level (not inside the wizard) so it fires even if the
+ * user closed the wizard before the redirect.
  */
 export function ConnectGitlabCard({ workspaceId, projectId }: Props) {
-  const feature = useQuery(
-    api.integrations.core.entitlements.getWorkspaceFeature,
-    { workspaceId, featureKey: GITLAB_FEATURE_KEY },
-  );
-  const gate = useQuery(api.integrations.core.activationGate.canActivate, {
-    projectId,
-  });
-  const links = useQuery(api.integrations.core.links.linksForProject, {
-    projectId,
-  });
   const oauthConfigured = useQuery(
     api.integrations.gitlab.registerProjectAction.isOAuthConfigured,
     {},
@@ -73,19 +51,6 @@ export function ConnectGitlabCard({ workspaceId, projectId }: Props) {
     { workspaceId },
   );
 
-  const unlink = useMutation(api.integrations.core.links.unlinkLink);
-
-  const [open, setOpen] = useState(false);
-  const [disconnectingId, setDisconnectingId] =
-    useState<Id<"projectIntegrationLinks"> | null>(null);
-  const [disconnectTarget, setDisconnectTarget] = useState<{
-    linkId: Id<"projectIntegrationLinks">;
-    repo: string;
-  } | null>(null);
-
-  // OAuth-callback toast surfaces once on return from GitLab. Kept at card
-  // level (not inside the wizard) so the toast fires even if the user closed
-  // the wizard before the redirect.
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const status = params.get("gitlab_oauth");
@@ -103,274 +68,45 @@ export function ConnectGitlabCard({ workspaceId, projectId }: Props) {
     }
   }, []);
 
-  if (feature === undefined) return null;
-
-  const ready = gate?.canActivate === true;
-  const activeLinks = links ?? [];
-  const gitlabLinks = activeLinks.filter((l) => l.provider === "gitlab");
-  const conflictingLink = activeLinks.find((l) => l.provider !== "gitlab");
-  const gitlabInstalls = (installations ?? []).filter(
-    (i) => i.provider === "gitlab",
+  const gitlabInstalls = (installations ?? [])
+    .filter((i) => i.provider === "gitlab")
+    .map((i) => ({
+      externalAccountId: i.externalAccountId,
+      accountLogin: i.accountLogin ?? i.externalAccountId,
+    }));
+  // Used to grey out picker rows that already correspond to a live link
+  // somewhere in this workspace. We pass the whole workspace set so the picker
+  // can label "Linked to <project>" instead of a generic "Already linked".
+  const liveGitlabLinks = (workspaceLinks ?? []).filter(
+    (l) => l.provider === "gitlab" && l.status !== "disconnected",
   );
 
-  const confirmDisconnect = async () => {
-    if (!disconnectTarget) return;
-    const { linkId, repo } = disconnectTarget;
-    setDisconnectTarget(null);
-    setDisconnectingId(linkId);
-    try {
-      await unlink({ linkId });
-      toast.success(`Disconnected ${repo}`);
-    } catch (err) {
-      toast.error("Could not disconnect", {
-        description: err instanceof Error ? err.message : "Please try again",
-      });
-    } finally {
-      setDisconnectingId(null);
-    }
-  };
-
-  const scrollToEffects = () => {
-    document
-      .getElementById("status-effects")
-      ?.scrollIntoView({ behavior: "smooth", block: "start" });
-  };
-
   return (
-    <section className="mb-8">
-      <h2 className="text-lg font-semibold mb-1">GitLab</h2>
-      <p className="text-sm text-muted-foreground mb-4">
-        Connect a GitLab project so issues sync with this project.
-      </p>
-
-      {conflictingLink ? (
-        <div className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
-          This project is already connected to a{" "}
-          <span className="font-medium capitalize">
-            {conflictingLink.provider}
-          </span>{" "}
-          repository ({conflictingLink.externalRepoFullName}). A project can be
-          linked to one provider at a time — disconnect that link first to
-          connect a GitLab project here.
-        </div>
-      ) : !feature.enabled ? (
-        <div className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
-          The GitLab integration is disabled for this workspace. A workspace
-          admin can enable it under Workspace Settings → Integrations.
-        </div>
-      ) : gitlabLinks.length > 0 ? (
-        <div className="space-y-2">
-          {gitlabLinks.map((link) => (
-            <GitlabLinkedRow
-              key={link._id}
-              link={link}
-              projectId={projectId}
-              disconnecting={disconnectingId === link._id}
-              onDisconnect={() =>
-                setDisconnectTarget({
-                  linkId: link._id,
-                  repo: link.externalRepoFullName,
-                })
-              }
-            />
-          ))}
-          <p className="text-xs text-muted-foreground">
-            Resync lives under Workspace Settings → Integrations.
-          </p>
-          {ready && (
-            <>
-              <Button
-                variant="outline"
-                onClick={() => setOpen(true)}
-                className="gap-2"
-              >
-                <GitBranch className="h-4 w-4" />
-                Connect another project
-              </Button>
-              <ConnectGitlabWizard
-                workspaceId={workspaceId}
-                projectId={projectId}
-                open={open}
-                onOpenChange={setOpen}
-                oauthAvailable={oauthConfigured === true}
-                gitlabInstalls={gitlabInstalls.map((i) => ({
-                  externalAccountId: i.externalAccountId,
-                  accountLogin: i.accountLogin ?? i.externalAccountId,
-                }))}
-                workspaceLinks={(workspaceLinks ?? []).filter(
-                  (l) => l.provider === "gitlab" && l.status !== "disconnected",
-                )}
-              />
-            </>
-          )}
-        </div>
-      ) : !ready ? (
-        <div className="space-y-3">
-          <IntegrationWarning icon={Inbox} className="p-4">
-            <p>
-              Before connecting, choose where imported issues should land.
-              GitLab issues import into an <strong>issue-inbox</strong> status,
-              and this project doesn&apos;t have one yet.
-            </p>
-            <Button
-              size="sm"
-              variant="outline"
-              className="border-amber-400 bg-transparent hover:bg-amber-100 dark:hover:bg-amber-900/40"
-              onClick={scrollToEffects}
-            >
-              Set up status effects →
-            </Button>
-          </IntegrationWarning>
-          <Button variant="outline" className="gap-2" disabled>
-            <GitBranch className="h-4 w-4" />
-            Connect GitLab project
-          </Button>
-        </div>
-      ) : (
-        <>
-          <Button
-            variant="outline"
-            onClick={() => setOpen(true)}
-            className="gap-2"
-          >
-            <GitBranch className="h-4 w-4" />
-            Connect GitLab project
-          </Button>
-          <ConnectGitlabWizard
-            workspaceId={workspaceId}
-            projectId={projectId}
-            open={open}
-            onOpenChange={setOpen}
-            oauthAvailable={oauthConfigured === true}
-            gitlabInstalls={gitlabInstalls.map((i) => ({
-              externalAccountId: i.externalAccountId,
-              accountLogin: i.accountLogin ?? i.externalAccountId,
-            }))}
-            // Used to grey out picker rows that already correspond to a live
-            // link somewhere in this workspace. We pass the whole workspace
-            // set so the picker can label "Linked to <project>" instead of
-            // a generic "Already linked".
-            workspaceLinks={(workspaceLinks ?? []).filter(
-              (l) => l.provider === "gitlab" && l.status !== "disconnected",
-            )}
-          />
-        </>
+    <IntegrationCardShell
+      workspaceId={workspaceId}
+      projectId={projectId}
+      featureKey={GITLAB_FEATURE_KEY}
+      copy={{
+        provider: "gitlab",
+        title: "GitLab",
+        noun: "project",
+        shortNoun: "project",
+      }}
+      renderLinkExtras={(link: IntegrationLink) => (
+        <GitlabWebhookConfig linkId={link._id} />
       )}
-
-      <ResponsiveDialog
-        open={disconnectTarget !== null}
-        onOpenChange={(v) => {
-          if (!v) setDisconnectTarget(null);
-        }}
-      >
-        <ResponsiveDialogContent className="max-w-md">
-          <ResponsiveDialogHeader>
-            <ResponsiveDialogTitle>
-              Disconnect project?
-            </ResponsiveDialogTitle>
-            <ResponsiveDialogDescription>
-              {disconnectTarget && (
-                <>
-                  Disconnect{" "}
-                  <span className="font-mono">{disconnectTarget.repo}</span>?
-                  Synced issues stay, but new GitLab activity will no longer
-                  update this project.
-                </>
-              )}
-            </ResponsiveDialogDescription>
-          </ResponsiveDialogHeader>
-          <ResponsiveDialogFooter>
-            <Button variant="ghost" onClick={() => setDisconnectTarget(null)}>
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={() => void confirmDisconnect()}
-            >
-              Disconnect
-            </Button>
-          </ResponsiveDialogFooter>
-        </ResponsiveDialogContent>
-      </ResponsiveDialog>
-    </section>
-  );
-}
-
-// ───────────────────────────────────────────────────────────────────────────
-// Linked-row: matches the GitHub linked row's layout 1:1, plus a conditional
-// PAT-only webhook configuration panel below the sub-editors.
-// ───────────────────────────────────────────────────────────────────────────
-
-type LinkRow = {
-  _id: Id<"projectIntegrationLinks">;
-  externalRepoFullName: string;
-  status: "configuring" | "active" | "paused" | "disconnected";
-  pausedByBilling: boolean;
-  branchStatusMap?: { branch: string; statusId: Id<"taskStatuses"> }[];
-  defaultBaseBranch?: string;
-  askBranchSourceEachTime?: boolean;
-  inboundIssueSyncDisabled?: boolean;
-};
-
-function GitlabLinkedRow({
-  link,
-  projectId,
-  disconnecting,
-  onDisconnect,
-}: {
-  link: LinkRow;
-  projectId: Id<"projects">;
-  disconnecting: boolean;
-  onDisconnect: () => void;
-}) {
-  return (
-    <div className="space-y-2 rounded-md border px-3 py-2.5">
-      <div className="flex items-center gap-3 text-sm">
-        <GitBranch className="h-4 w-4 shrink-0 text-muted-foreground" />
-        <span className="truncate font-mono">{link.externalRepoFullName}</span>
-        <Badge
-          variant={link.status === "active" ? "secondary" : "outline"}
-          className="shrink-0 capitalize"
-        >
-          {link.pausedByBilling
-            ? "Frozen"
-            : link.status === "paused"
-              ? "Paused"
-              : "Connected"}
-        </Badge>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="ml-auto shrink-0 text-destructive hover:text-destructive"
-          disabled={disconnecting}
-          onClick={onDisconnect}
-        >
-          {disconnecting && (
-            <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-          )}
-          Disconnect
-        </Button>
-      </div>
-      <BranchStatusMapEditor
-        link={{
-          _id: link._id,
-          projectId,
-          branchStatusMap: link.branchStatusMap,
-        }}
-      />
-      <BranchSourceDefaultsEditor
-        link={{
-          _id: link._id,
-          defaultBaseBranch: link.defaultBaseBranch,
-          askBranchSourceEachTime: link.askBranchSourceEachTime,
-        }}
-      />
-      <InboundIssueSyncToggle
-        linkId={link._id}
-        disabled={link.inboundIssueSyncDisabled ?? false}
-      />
-      <GitlabWebhookConfig linkId={link._id} />
-    </div>
+      renderWizard={({ open, onOpenChange }) => (
+        <ConnectGitlabWizard
+          workspaceId={workspaceId}
+          projectId={projectId}
+          open={open}
+          onOpenChange={onOpenChange}
+          oauthAvailable={oauthConfigured === true}
+          gitlabInstalls={gitlabInstalls}
+          workspaceLinks={liveGitlabLinks}
+        />
+      )}
+    />
   );
 }
 
@@ -471,11 +207,10 @@ type WorkspaceLinkSummary = {
 
 type Step = "account" | "project";
 
-const STEP_ORDER: Step[] = ["account", "project"];
-const STEP_LABELS: Record<Step, string> = {
-  account: "Account",
-  project: "Project",
-};
+const WIZARD_STEPS = [
+  { key: "account", label: "Account" },
+  { key: "project", label: "Project" },
+] as const satisfies readonly { key: Step; label: string }[];
 
 function ConnectGitlabWizard({
   workspaceId,
@@ -527,7 +262,7 @@ function ConnectGitlabWizard({
           </DialogDescription>
         </DialogHeader>
 
-        <Stepper current={step} />
+        <WizardStepper steps={WIZARD_STEPS} current={step} />
 
         {step === "account" && (
           <AccountStep
@@ -562,44 +297,6 @@ function ConnectGitlabWizard({
         </DialogFooter>
       </DialogContent>
     </Dialog>
-  );
-}
-
-function Stepper({ current }: { current: Step }) {
-  const currentIndex = STEP_ORDER.indexOf(current);
-  return (
-    <ol className="flex items-center gap-1.5 text-xs">
-      {STEP_ORDER.map((s, i) => {
-        const done = i < currentIndex;
-        const active = i === currentIndex;
-        return (
-          <li key={s} className="flex items-center gap-1.5">
-            <span
-              className={cn(
-                "flex h-5 w-5 items-center justify-center rounded-full border text-[11px] font-medium transition-colors",
-                active && "border-primary bg-primary text-primary-foreground",
-                done && "border-primary/40 bg-primary/10 text-primary",
-                !active &&
-                  !done &&
-                  "border-muted-foreground/30 text-muted-foreground",
-              )}
-            >
-              {i + 1}
-            </span>
-            <span
-              className={cn(
-                active ? "font-medium text-foreground" : "text-muted-foreground",
-              )}
-            >
-              {STEP_LABELS[s]}
-            </span>
-            {i < STEP_ORDER.length - 1 && (
-              <span className="mx-0.5 h-px w-3 bg-border" />
-            )}
-          </li>
-        );
-      })}
-    </ol>
   );
 }
 

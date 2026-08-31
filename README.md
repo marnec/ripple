@@ -2,8 +2,6 @@ NEXT STEPS:
 
 - cascade delete collection phase is bounded even for batched deletes and will hit a ceiling for extremely large cascaded entities.
 
-- recurrent events in calendar
-
 - add a dependency view to tasks
 
 - consider introducing document snapshots
@@ -37,7 +35,6 @@ keyboard accessiblity
 
 - deferred refactors
     - [ ] `workspaceSidebarData.get` is channels-only now (the projects/documents/diagrams/spreadsheets `.collect()` moved to `nodes.suggest` / `breadcrumb.getResourceNames`). Residual cost on the always-mounted query: `channels` + `channelMembers` + `userChannelState` still join the invalidation set of every connected member, plus a per-hidden-DM latest-message read and a per-unnamed-DM `channelMembers.collect()` for the display name. Denormalize the DM name before considering a digest table.
-    - [ ] extract `IntegrationCardShell` + shared stepper from `ConnectGithubWizard`/`ConnectGitlabCard` twins (keep provider wizards as explicit variants)
 
 - [ ] External integrations
     - [ ] github issues
