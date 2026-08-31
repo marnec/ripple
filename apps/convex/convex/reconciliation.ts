@@ -48,6 +48,13 @@ const RELATIONSHIPS = [
   { child: "channelMembers", field: "channelId", parent: "channels" },
   { child: "channelNotificationPreferences", field: "channelId", parent: "channels" },
   { child: "callSessions", field: "channelId", parent: "channels" },
+  { child: "callSessions", field: "eventId", parent: "calendarEvents" },
+  { child: "callSessions", field: "seriesId", parent: "eventSeries" },
+  { child: "eventSeriesInvitees", field: "seriesId", parent: "eventSeries" },
+  // An **override** — a `calendarEvents` row filed under one occurrence of a
+  // series. Orphaned it is worse than untidy: it is still an event row, so it
+  // keeps showing on the calendar under a series nobody can reach any more.
+  { child: "calendarEvents", field: "seriesId", parent: "eventSeries" },
   { child: "messageReactions", field: "messageId", parent: "messages" },
   { child: "documentBlockRefs", field: "documentId", parent: "documents" },
   { child: "spreadsheetCellRefs", field: "spreadsheetId", parent: "spreadsheets" },

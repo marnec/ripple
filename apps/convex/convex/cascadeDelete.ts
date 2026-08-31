@@ -36,6 +36,11 @@ export const cascadeRules = defineCascadeRules({
     { to: "diagrams", via: "by_workspace", field: "workspaceId" },
     { to: "spreadsheets", via: "by_workspace", field: "workspaceId" },
     { to: "calendarEvents", via: "by_workspace_starts", field: "workspaceId" },
+    // A series is a workspace child in its own right, not merely the parent of
+    // some events: its occurrences are computed and never stored, so nothing
+    // else in this list would reach it. The lib recurses into the series' own
+    // rules from here, which is what takes the overrides and the roster too.
+    { to: "eventSeries", via: "by_workspace_activeUntil", field: "workspaceId" },
     { to: "workspaceMembers", via: "by_workspace", field: "workspaceId" },
     { to: "workspaceInvites", via: "by_workspace", field: "workspaceId" },
     { to: "workspaceIntegrations", via: "by_workspace", field: "workspaceId" },
@@ -150,7 +155,45 @@ export const cascadeRules = defineCascadeRules({
   // those are cascaded too — same shape as documents/diagrams.
   calendarEvents: [
     { to: "calendarEventInvitees", via: "by_event", field: "eventId" },
+    // A standalone event is a call venue, so its calls' session rows are its
+    // own. (A channel-hosted event borrows the channel's room; those sessions
+    // belong to the channel and are cascaded by it.)
+    { to: "callSessions", via: "by_event_active", field: "eventId" },
     { to: "resourceShares", via: "by_resource_id", field: "resourceId" },
+    { to: "edges", via: "by_source", field: "sourceId" },
+    { to: "edges", via: "by_target", field: "targetId" },
+    { to: "channelMentionCounts", via: "by_target", field: "targetId" },
+    { to: "nodes", via: "by_resource", field: "resourceId" },
+    { to: "entityTags", via: "by_resource_id", field: "resourceId" },
+  ],
+
+  // ── eventSeries ─────────────────────────────────────────────────────
+  eventSeries: [
+    // The **overrides**: `calendarEvents` rows standing in for one edited
+    // occurrence each. They recurse into the `calendarEvents` rules above, so
+    // an override's own invitee rows and shares go with them. The index is a
+    // composite led by `seriesId`, which is the only field the cascade eq's.
+    { to: "calendarEvents", via: "by_series_original_start", field: "seriesId" },
+    // The roster, and the guest share rows the roster's guest links resolve
+    // through. Losing the share is what makes a cancelled series' guest link
+    // land on the ordinary "not found" page rather than on a live meeting.
+    { to: "eventSeriesInvitees", via: "by_series", field: "seriesId" },
+    { to: "resourceShares", via: "by_resource_id", field: "resourceId" },
+    // A standalone series is a call venue with a room of its own, so its calls'
+    // session rows are its own — the same rule a standalone event follows. (A
+    // channel-hosted series borrows the channel's room; those sessions are
+    // filed under the channel and cascade with it.) The transcript *document*
+    // each session produced is not touched: it is a document, and a document
+    // outlives its event. The session row is the only thing pointing at it, so
+    // dropping the row is also what stops the pointer dangling.
+    { to: "callSessions", via: "by_series_active", field: "seriesId" },
+    // The polymorphic graph and tag rows, by exactly the same mechanism the
+    // one-off event uses above: every one of these indexes eq's a plain string
+    // id, so the rule is complete regardless of which `resourceType` literal
+    // the writer stamps on the row. That is what makes it correct before the
+    // series' node exists as well as after — a resource whose node the cascade
+    // does not know about is a node that outlives its resource, and the graph
+    // has no way to tell that it should not be drawn.
     { to: "edges", via: "by_source", field: "sourceId" },
     { to: "edges", via: "by_target", field: "targetId" },
     { to: "channelMentionCounts", via: "by_target", field: "targetId" },
@@ -254,6 +297,7 @@ const deleters: Record<string, (ctx: MutationCtx, id: string, doc: SnapshotDoc) 
   projects: (ctx, id) => deleteWithTriggers(ctx, id),
   channels: (ctx, id) => deleteWithTriggers(ctx, id),
   calendarEvents: (ctx, id) => deleteWithTriggers(ctx, id),
+  eventSeries: (ctx, id) => deleteWithTriggers(ctx, id),
   medias: deleteMediaWithBlob,
   workspaces: (ctx, id) => deleteWithTriggers(ctx, id),
 };

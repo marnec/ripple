@@ -4,7 +4,7 @@ import { query } from "./_generated/server";
 import { mutation } from "./functions";
 import { paginationOptsValidator } from "convex/server";
 import { getAll } from "convex-helpers/server/relationships";
-import { extractEventMentionIds, extractMentionedUserIds, extractPlainTextFromBody, extractProjectIds, extractResourceReferenceIds, extractTaskMentionIds } from "./utils/blocknote";
+import { extractEventMentionIds, extractEventSeriesMentionIds, extractMentionedUserIds, extractPlainTextFromBody, extractProjectIds, extractResourceReferenceIds, extractTaskMentionIds } from "./utils/blocknote";
 import { getUserDisplayName } from "@ripple/shared/displayName";
 import { mentionTitle } from "./lib/mentionTitle";
 import { isMessageEditable } from "@ripple/shared/constants";
@@ -615,6 +615,11 @@ async function pushTextFromBody(
   const userIds = normalizeIds(ctx.db, "users", extractMentionedUserIds(body));
   const projectIds = normalizeIds(ctx.db, "projects", extractProjectIds(body));
   const eventIds = normalizeIds(ctx.db, "calendarEvents", extractEventMentionIds(body));
+  const seriesIds = normalizeIds(
+    ctx.db,
+    "eventSeries",
+    extractEventSeriesMentionIds(body),
+  );
 
   const userNames = new Map<string, string>();
   if (userIds.length > 0) {
@@ -632,11 +637,20 @@ async function pushTextFromBody(
     });
   }
 
+  // Events and series share one map because they share one chip: the
+  // projection looks up whichever id the mention carries, and the two id
+  // spaces cannot collide.
   const eventTitles = new Map<string, string>();
   if (eventIds.length > 0) {
     const events = await getAll(ctx.db, eventIds);
     events.forEach((e, i) => {
       if (e && e.workspaceId === workspaceId) eventTitles.set(eventIds[i], e.title);
+    });
+  }
+  if (seriesIds.length > 0) {
+    const series = await getAll(ctx.db, seriesIds);
+    series.forEach((s, i) => {
+      if (s && s.workspaceId === workspaceId) eventTitles.set(seriesIds[i], s.title);
     });
   }
 

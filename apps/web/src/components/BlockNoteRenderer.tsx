@@ -62,7 +62,8 @@ type ResourceReferenceContent = {
 
 type EventMentionContent = {
   type: "eventMention";
-  props: { eventId: string };
+  /** Exactly one of the two — an event row, or a **series**. */
+  props: { eventId?: string; seriesId?: string };
 };
 
 export type InlineContent =
@@ -293,7 +294,12 @@ function InlineRenderer({ content }: { content: InlineContent }) {
       );
 
     case "eventMention":
-      return <EventMentionChip eventId={content.props.eventId} />;
+      return (
+        <EventMentionChip
+          eventId={content.props.eventId}
+          seriesId={content.props.seriesId}
+        />
+      );
 
     default:
       return null;

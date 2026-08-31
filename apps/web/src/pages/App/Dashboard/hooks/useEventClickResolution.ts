@@ -34,6 +34,14 @@ export type UseEventClickResolutionArgs = {
   ) => void;
   /** Fired when the user clicks an `event-*` event. */
   onEventClick: (eventId: Id<"calendarEvents">) => void;
+  /**
+   * Fired when the user clicks an `occurrence-*` event. An occurrence has no
+   * row, so it is named by the pair rather than by an id.
+   */
+  onOccurrenceClick: (
+    seriesId: Id<"eventSeries">,
+    originalStartMs: number,
+  ) => void;
 };
 
 /**
@@ -89,6 +97,7 @@ export function useEventClickResolution({
   tasks,
   onTaskClick,
   onEventClick,
+  onOccurrenceClick,
 }: UseEventClickResolutionArgs): void {
   // Refs trampoline — listeners attach once on mount and read fresh
   // values on each call. Keeps the [] deps array honest (the
@@ -96,10 +105,12 @@ export function useEventClickResolution({
   const tasksRef = useRef(tasks);
   const onTaskClickRef = useRef(onTaskClick);
   const onEventClickRef = useRef(onEventClick);
+  const onOccurrenceClickRef = useRef(onOccurrenceClick);
   useEffect(() => {
     tasksRef.current = tasks;
     onTaskClickRef.current = onTaskClick;
     onEventClickRef.current = onEventClick;
+    onOccurrenceClickRef.current = onOccurrenceClick;
   });
 
   useEffect(() => {
@@ -148,6 +159,8 @@ export function useEventClickResolution({
         onTaskClickRef.current(parsed.id, match?.projectId ?? null);
       } else if (parsed?.kind === "event") {
         onEventClickRef.current(parsed.id);
+      } else if (parsed?.kind === "occurrence") {
+        onOccurrenceClickRef.current(parsed.seriesId, parsed.originalStartMs);
       }
     }
 

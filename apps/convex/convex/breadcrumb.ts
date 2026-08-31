@@ -3,7 +3,13 @@ import { query, type QueryCtx } from "./_generated/server";
 import { checkChannelAccess, checkWorkspaceMember, getUser } from "./authHelpers";
 import { channelLabel } from "./lib/dmLabel";
 
-const resourceIdValidator = v.union(v.id("workspaces"), v.id("channels"), v.id("projects"), v.id("documents"), v.id("diagrams"), v.id("spreadsheets"), v.id("tasks"), v.id("cycles"), v.id("calendarEvents"), v.id("taskImportJobs"));
+// `eventSeries` belongs here for the same reason every other table does: it
+// appears in a URL. `/workspaces/:ws/events/:id` carries a **series** id
+// whenever the event repeats, and an id this union rejects does not degrade to
+// a blank crumb — it fails the whole query, which throws into the breadcrumb's
+// error boundary, whose re-render throws again. A missing table here costs the
+// page, not a label.
+const resourceIdValidator = v.union(v.id("workspaces"), v.id("channels"), v.id("projects"), v.id("documents"), v.id("diagrams"), v.id("spreadsheets"), v.id("tasks"), v.id("cycles"), v.id("calendarEvents"), v.id("eventSeries"), v.id("taskImportJobs"));
 
 /**
  * Breadcrumb labels are still resource data. This query used to import nothing
@@ -33,8 +39,8 @@ async function canSeeResource(
   if (workspaceId) return (await checkWorkspaceMember(ctx, workspaceId)) !== null;
 
   // Every remaining table in `resourceIdValidator` — projects, documents,
-  // diagrams, spreadsheets, tasks, cycles, calendarEvents, taskImportJobs —
-  // carries a workspaceId column.
+  // diagrams, spreadsheets, tasks, cycles, calendarEvents, eventSeries,
+  // taskImportJobs — carries a workspaceId column.
   const owning = ctx.db.normalizeId("workspaces", String(resource.workspaceId ?? ""));
   if (!owning) return false;
   return (await checkWorkspaceMember(ctx, owning)) !== null;

@@ -46,8 +46,10 @@ const pool = new Workpool(components.emailPool, {
 export type EmailJob = {
   /** The sending action, as `module:function`. */
   kind: string;
-  /** Names the mail when the recipient has no invitee row of their own. */
-  eventId: Id<"calendarEvents">;
+  /** Names the mail when the recipient has no invitee row of their own. A
+   *  **series** names itself here and always takes this branch: its roster
+   *  rows live in `eventSeriesInvitees`, which carries no delivery columns. */
+  eventId: Id<"calendarEvents"> | Id<"eventSeries">;
   /**
    * The delivery-tracking row, when there is one. A member notified by
    * preference rather than by invitation has none, and their mail is untracked

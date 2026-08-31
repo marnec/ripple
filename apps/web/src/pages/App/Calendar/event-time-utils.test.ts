@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { addMinutes, parseTypedTime, sameDayDuration } from "./event-time-utils";
+import {
+  addMinutes,
+  parseTypedTime,
+  sameDayDuration,
+  toLocalIsoDate,
+} from "./event-time-utils";
 
 describe("parseTypedTime", () => {
   it.each([
@@ -61,5 +66,18 @@ describe("sameDayDuration", () => {
   it("returns empty when end ≤ start (cross-midnight cases)", () => {
     expect(sameDayDuration("10:00", "09:00")).toBe("");
     expect(sameDayDuration("10:00", "10:00")).toBe("");
+  });
+});
+
+describe("toLocalIsoDate", () => {
+  it("reads the date off the local calendar, not the UTC one", () => {
+    // Late-evening local times are where `toISOString()` silently rolls the
+    // date forward in any positive-offset zone.
+    expect(toLocalIsoDate(new Date(2026, 8, 1, 23, 30))).toBe("2026-09-01");
+    expect(toLocalIsoDate(new Date(2026, 8, 1, 0, 15))).toBe("2026-09-01");
+  });
+
+  it("pads single-digit months and days", () => {
+    expect(toLocalIsoDate(new Date(2026, 0, 5))).toBe("2026-01-05");
   });
 });

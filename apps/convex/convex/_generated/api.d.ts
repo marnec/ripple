@@ -311,6 +311,7 @@ export declare const api: {
           | Id<"tasks">
           | Id<"cycles">
           | Id<"calendarEvents">
+          | Id<"eventSeries">
           | Id<"taskImportJobs">
         >;
       },
@@ -363,7 +364,9 @@ export declare const api: {
           createdBy: Id<"users">;
           description?: string;
           endsAt: number;
+          originalStartMs?: number;
           sequence?: number;
+          seriesId?: Id<"eventSeries">;
           startsAt: number;
           tags?: Array<string>;
           timezone: string;
@@ -490,7 +493,9 @@ export declare const api: {
         description?: string;
         endsAt: number;
         nonOrganizerInviteeCount: number;
+        originalStartMs?: number;
         sequence?: number;
+        seriesId?: Id<"eventSeries">;
         startsAt: number;
         tags?: Array<string>;
         timezone: string;
@@ -1325,6 +1330,325 @@ export declare const api: {
         sourceType: "document" | "task";
         workspaceId: Id<"workspaces">;
       },
+      null
+    >;
+  };
+  eventSeries: {
+    addInvitees: FunctionReference<
+      "mutation",
+      "public",
+      {
+        guestEmails: Array<string>;
+        seriesId: Id<"eventSeries">;
+        userIds: Array<Id<"users">>;
+      },
+      null
+    >;
+    cancel: FunctionReference<
+      "mutation",
+      "public",
+      { notifyInvitees?: boolean; seriesId: Id<"eventSeries"> },
+      null
+    >;
+    cancelOccurrence: FunctionReference<
+      "mutation",
+      "public",
+      {
+        notifyInvitees?: boolean;
+        originalStartMs: number;
+        seriesId: Id<"eventSeries">;
+      },
+      null
+    >;
+    countOverrides: FunctionReference<
+      "query",
+      "public",
+      { fromOriginalStartMs?: number; seriesId: Id<"eventSeries"> },
+      number
+    >;
+    create: FunctionReference<
+      "mutation",
+      "public",
+      {
+        anchorDate: string;
+        anchorTime: string;
+        channelId?: Id<"channels">;
+        description?: string;
+        durationMs: number;
+        invitees?: { guestEmails: Array<string>; userIds: Array<Id<"users">> };
+        rule: {
+          end:
+            | { kind: "never" }
+            | { date: string; kind: "onDate" }
+            | { count: number; kind: "afterCount" };
+          freq: "daily" | "weekly" | "monthly" | "yearly";
+          interval: number;
+          monthlyMode?: "dayOfMonth" | "nthWeekday";
+          weekdays?: Array<string>;
+        };
+        timezone: string;
+        title: string;
+        workspaceId: Id<"workspaces">;
+      },
+      Id<"eventSeries">
+    >;
+    get: FunctionReference<
+      "query",
+      "public",
+      { seriesId: Id<"eventSeries"> },
+      {
+        _creationTime: number;
+        _id: Id<"eventSeries">;
+        activeUntil: number;
+        anchorDate: string;
+        anchorTime: string;
+        channelId?: Id<"channels">;
+        cloudflareMeetingId?: string;
+        createdBy: Id<"users">;
+        description?: string;
+        durationMs: number;
+        excludedStarts?: Array<number>;
+        rule: {
+          end:
+            | { kind: "never" }
+            | { date: string; kind: "onDate" }
+            | { count: number; kind: "afterCount" };
+          freq: "daily" | "weekly" | "monthly" | "yearly";
+          interval: number;
+          monthlyMode?: "dayOfMonth" | "nthWeekday";
+          weekdays?: Array<string>;
+        };
+        sequence?: number;
+        tags?: Array<string>;
+        timezone: string;
+        title: string;
+        workspaceId: Id<"workspaces">;
+      } | null
+    >;
+    getByShareId: FunctionReference<
+      "query",
+      "public",
+      { shareId: string },
+      {
+        invitee?: {
+          guestName?: string;
+          status: "pending" | "accepted" | "declined" | "tentative";
+        };
+        series?: {
+          anchorDate: string;
+          anchorTime: string;
+          description?: string;
+          durationMs: number;
+          excludedStarts?: Array<number>;
+          organizerName?: string;
+          rule: {
+            end:
+              | { kind: "never" }
+              | { date: string; kind: "onDate" }
+              | { count: number; kind: "afterCount" };
+            freq: "daily" | "weekly" | "monthly" | "yearly";
+            interval: number;
+            monthlyMode?: "dayOfMonth" | "nthWeekday";
+            weekdays?: Array<string>;
+          };
+          timezone: string;
+          title: string;
+          workspaceName?: string;
+        };
+        status: "active" | "expired" | "revoked" | "not_found";
+      }
+    >;
+    joinSeriesCall: FunctionReference<
+      "action",
+      "public",
+      { seriesId: Id<"eventSeries">; userImage?: string; userName: string },
+      {
+        authToken: string;
+        channelId: Id<"channels"> | null;
+        meetingId: string;
+        transcribe: boolean;
+      }
+    >;
+    listForMembersInRange: FunctionReference<
+      "query",
+      "public",
+      {
+        memberIds: Array<Id<"users">>;
+        rangeEndMs: number;
+        rangeStartMs: number;
+        workspaceId: Id<"workspaces">;
+      },
+      Array<{ endsAt: number; memberId: Id<"users">; startsAt: number }>
+    >;
+    listForMentionAutocomplete: FunctionReference<
+      "query",
+      "public",
+      { limit?: number; query?: string; workspaceId: Id<"workspaces"> },
+      Array<{
+        nextStartsAt: number | null;
+        seriesId: Id<"eventSeries">;
+        title: string;
+      }>
+    >;
+    listInvitees: FunctionReference<
+      "query",
+      "public",
+      { seriesId: Id<"eventSeries"> },
+      Array<{
+        _creationTime: number;
+        _id: Id<"eventSeriesInvitees">;
+        guestEmail?: string;
+        guestName?: string;
+        guestSub?: string;
+        lastRsvpDtstamp?: number;
+        lastRsvpSequence?: number;
+        originalStartMs?: number;
+        respondedAt?: number;
+        seriesId: Id<"eventSeries">;
+        shareId?: string;
+        status: "pending" | "accepted" | "declined" | "tentative";
+        userEmail?: string;
+        userId?: Id<"users">;
+        userImage?: string;
+        userName?: string;
+        workspaceId: Id<"workspaces">;
+      }>
+    >;
+    listMineInRange: FunctionReference<
+      "query",
+      "public",
+      {
+        rangeEndMs: number;
+        rangeStartMs: number;
+        workspaceId: Id<"workspaces">;
+      },
+      Array<{
+        channelId?: Id<"channels">;
+        createdBy: Id<"users">;
+        description?: string;
+        endsAt: number;
+        nonOrganizerInviteeCount: number;
+        originalStartMs: number;
+        seriesId: Id<"eventSeries">;
+        startsAt: number;
+        tags?: Array<string>;
+        timezone: string;
+        title: string;
+      }>
+    >;
+    removeInvitee: FunctionReference<
+      "mutation",
+      "public",
+      { inviteeId: Id<"eventSeriesInvitees"> },
+      null
+    >;
+    rename: FunctionReference<
+      "mutation",
+      "public",
+      { seriesId: Id<"eventSeries">; title: string },
+      null
+    >;
+    resolveLink: FunctionReference<
+      "query",
+      "public",
+      { linkId: string },
+      { originalStartMs: number | null; seriesId: Id<"eventSeries"> } | null
+    >;
+    respond: FunctionReference<
+      "mutation",
+      "public",
+      {
+        seriesId: Id<"eventSeries">;
+        status: "pending" | "accepted" | "declined" | "tentative";
+      },
+      null
+    >;
+    respondAsGuest: FunctionReference<
+      "mutation",
+      "public",
+      {
+        guestName: string;
+        shareId: string;
+        status: "pending" | "accepted" | "declined" | "tentative";
+      },
+      null
+    >;
+    selfInvite: FunctionReference<
+      "mutation",
+      "public",
+      { seriesId: Id<"eventSeries"> },
+      null
+    >;
+    updateFollowing: FunctionReference<
+      "mutation",
+      "public",
+      {
+        anchorTime?: string;
+        channelId?: Id<"channels">;
+        description?: string;
+        durationMs?: number;
+        notifyInvitees?: boolean;
+        originalStartMs: number;
+        rule?: {
+          end:
+            | { kind: "never" }
+            | { date: string; kind: "onDate" }
+            | { count: number; kind: "afterCount" };
+          freq: "daily" | "weekly" | "monthly" | "yearly";
+          interval: number;
+          monthlyMode?: "dayOfMonth" | "nthWeekday";
+          weekdays?: Array<string>;
+        };
+        seriesId: Id<"eventSeries">;
+        timezone?: string;
+        title?: string;
+      },
+      Id<"eventSeries">
+    >;
+    updateOccurrence: FunctionReference<
+      "mutation",
+      "public",
+      {
+        description?: string;
+        endsAt?: number;
+        notifyInvitees?: boolean;
+        originalStartMs: number;
+        seriesId: Id<"eventSeries">;
+        startsAt?: number;
+        title?: string;
+      },
+      Id<"calendarEvents">
+    >;
+    updateSeries: FunctionReference<
+      "mutation",
+      "public",
+      {
+        anchorDate?: string;
+        anchorTime?: string;
+        channelId?: Id<"channels">;
+        description?: string;
+        durationMs?: number;
+        notifyInvitees?: boolean;
+        rule?: {
+          end:
+            | { kind: "never" }
+            | { date: string; kind: "onDate" }
+            | { count: number; kind: "afterCount" };
+          freq: "daily" | "weekly" | "monthly" | "yearly";
+          interval: number;
+          monthlyMode?: "dayOfMonth" | "nthWeekday";
+          weekdays?: Array<string>;
+        };
+        seriesId: Id<"eventSeries">;
+        timezone?: string;
+        title?: string;
+      },
+      null
+    >;
+    updateTags: FunctionReference<
+      "mutation",
+      "public",
+      { seriesId: Id<"eventSeries">; tags: Array<string> },
       null
     >;
   };
@@ -2377,7 +2701,8 @@ export declare const api: {
           | "diagram"
           | "spreadsheet"
           | "channel"
-          | "calendarEvent";
+          | "calendarEvent"
+          | "eventSeries";
       },
       { shareId: string }
     >;
@@ -2412,7 +2737,8 @@ export declare const api: {
           | "diagram"
           | "spreadsheet"
           | "channel"
-          | "calendarEvent";
+          | "calendarEvent"
+          | "eventSeries";
         status: "active" | "expired" | "revoked" | "not_found";
         workspaceName?: string;
       }
@@ -2427,7 +2753,8 @@ export declare const api: {
           | "diagram"
           | "spreadsheet"
           | "channel"
-          | "calendarEvent";
+          | "calendarEvent"
+          | "eventSeries";
       },
       Array<{
         _creationTime: number;
@@ -2444,7 +2771,8 @@ export declare const api: {
           | "diagram"
           | "spreadsheet"
           | "channel"
-          | "calendarEvent";
+          | "calendarEvent"
+          | "eventSeries";
         revokedAt?: number;
         shareId: string;
         workspaceId: Id<"workspaces">;
@@ -3836,23 +4164,11 @@ export declare const internal: {
         workspaceId: Id<"workspaces">;
       } | null
     >;
-    _getEventForJoinPublic: FunctionReference<
-      "query",
-      "internal",
-      { eventId: Id<"calendarEvents"> },
-      { cloudflareMeetingId?: string } | null
-    >;
     _patchInviteeGuestName: FunctionReference<
       "mutation",
       "internal",
       { guestName: string; inviteeId: Id<"calendarEventInvitees"> },
       null
-    >;
-    _setEventMeetingId: FunctionReference<
-      "mutation",
-      "internal",
-      { cloudflareMeetingId: string; eventId: Id<"calendarEvents"> },
-      null | string
     >;
     getManyForMentions: FunctionReference<
       "query",
@@ -3888,9 +4204,12 @@ export declare const internal: {
       "mutation",
       "internal",
       {
-        channelId: Id<"channels">;
         cloudflareMeetingId: string;
         transcribe: boolean;
+        venue:
+          | { channelId: Id<"channels">; kind: "channel" }
+          | { eventId: Id<"calendarEvents">; kind: "event" }
+          | { kind: "series"; seriesId: Id<"eventSeries"> };
       },
       null | { cloudflareMeetingId: string; transcribe: boolean }
     >;
@@ -3920,23 +4239,25 @@ export declare const internal: {
     getActiveSession: FunctionReference<
       "query",
       "internal",
-      { channelId: Id<"channels"> },
+      {
+        venue:
+          | { channelId: Id<"channels">; kind: "channel" }
+          | { eventId: Id<"calendarEvents">; kind: "event" }
+          | { kind: "series"; seriesId: Id<"eventSeries"> };
+      },
       {
         _creationTime: number;
         _id: Id<"callSessions">;
         active: boolean;
-        channelId: Id<"channels">;
+        channelId?: Id<"channels">;
         cloudflareMeetingId: string;
         cloudflareSessionId?: string;
+        eventId?: Id<"calendarEvents">;
+        occurrenceStartMs?: number;
+        seriesId?: Id<"eventSeries">;
         transcribe?: boolean;
         transcriptDocumentId?: Id<"documents">;
       } | null
-    >;
-    getChannelForTranscript: FunctionReference<
-      "query",
-      "internal",
-      { channelId: Id<"channels"> },
-      { name: string; workspaceId: Id<"workspaces"> } | null
     >;
     getSessionByMeeting: FunctionReference<
       "query",
@@ -3946,12 +4267,25 @@ export declare const internal: {
         _creationTime: number;
         _id: Id<"callSessions">;
         active: boolean;
-        channelId: Id<"channels">;
+        channelId?: Id<"channels">;
         cloudflareMeetingId: string;
         cloudflareSessionId?: string;
+        eventId?: Id<"calendarEvents">;
+        occurrenceStartMs?: number;
+        seriesId?: Id<"eventSeries">;
         transcribe?: boolean;
         transcriptDocumentId?: Id<"documents">;
         transcriptDocumentNeedsSnapshot: boolean;
+      } | null
+    >;
+    getVenueForTranscript: FunctionReference<
+      "query",
+      "internal",
+      { sessionId: Id<"callSessions"> },
+      {
+        channelId: Id<"channels"> | null;
+        name: string;
+        workspaceId: Id<"workspaces">;
       } | null
     >;
   };
@@ -4067,7 +4401,7 @@ export declare const internal: {
       "mutation",
       "internal",
       {
-        channelId: Id<"channels">;
+        channelId?: Id<"channels">;
         name: string;
         workspaceId: Id<"workspaces">;
       },
@@ -4498,6 +4832,18 @@ export declare const internal: {
         inviteeId?: Id<"calendarEventInvitees">;
         inviterName: string;
         recipientEmail: string;
+        recurrence?: {
+          exdate?: string;
+          overrides: Array<{
+            description?: string;
+            endsAt: number;
+            originalStartMs: number;
+            startsAt: number;
+            title: string;
+          }>;
+          rrule: string;
+          timezone: string;
+        };
         sequence: number;
         startsAt: number;
       },
@@ -4514,6 +4860,18 @@ export declare const internal: {
         inviteeId?: Id<"calendarEventInvitees">;
         inviterName: string;
         recipientEmail: string;
+        recurrence?: {
+          exdate?: string;
+          overrides: Array<{
+            description?: string;
+            endsAt: number;
+            originalStartMs: number;
+            startsAt: number;
+            title: string;
+          }>;
+          rrule: string;
+          timezone: string;
+        };
         sequence: number;
         startsAt: number;
         targetUrl: string;
@@ -4532,10 +4890,34 @@ export declare const internal: {
         inviterName: string;
         newRangeLabel: string;
         recipientEmail: string;
+        recurrence?: {
+          exdate?: string;
+          overrides: Array<{
+            description?: string;
+            endsAt: number;
+            originalStartMs: number;
+            startsAt: number;
+            title: string;
+          }>;
+          rrule: string;
+          timezone: string;
+        };
         sequence: number;
         startsAt: number;
       },
       null
+    >;
+  };
+  eventSeries: {
+    _getSeriesForJoin: FunctionReference<
+      "query",
+      "internal",
+      { seriesId: Id<"eventSeries">; userId: Id<"users"> },
+      {
+        channelId: Id<"channels"> | null;
+        occurrenceOpen: boolean;
+        workspaceId: Id<"workspaces">;
+      } | null
     >;
   };
   integrations: {
@@ -6449,7 +6831,8 @@ export declare const internal: {
           | "diagram"
           | "spreadsheet"
           | "channel"
-          | "calendarEvent";
+          | "calendarEvent"
+          | "eventSeries";
         workspaceId: Id<"workspaces">;
       }
     >;

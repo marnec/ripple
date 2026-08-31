@@ -4,6 +4,7 @@ import { internalMutation, mutation } from "./functions";
 import { internal } from "./_generated/api";
 import type { Id, Doc } from "./_generated/dataModel";
 import { getAuthUserId } from "@convex-dev/auth/server";
+import { affectsOnlyThePast } from "@ripple/shared/recurrence";
 import {
   getWorkspaceMembership,
   requireChannelAccess,
@@ -14,11 +15,18 @@ import { emailDeliveryStatus } from "./schema";
 import { notify } from "./utils/notify";
 import { generateShareId, sanitizeGuestName } from "./utils/shareIds";
 import { assertOrganizer } from "./utils/eventAuth";
+import {
+  announceOccurrenceCancelled,
+  excludeOccurrenceStart,
+  isSeriesInvitee,
+} from "./eventSeries";
 import { loadInviteeRows } from "./utils/eventInvitees";
 import { dispatchEventNotifications } from "./utils/eventNotifications";
 import { rateLimiter } from "./rateLimits";
 import {
   ensureMeetingForChannel,
+  ensureMeetingForVenue,
+  findLiveMeetingForVenue,
   PRESET_NO_TRANSCRIBE,
   PRESET_TRANSCRIBE,
 } from "./callSessions";
@@ -26,6 +34,11 @@ import {
   realtimeKitFromEnv,
   type RealtimeKitClient,
 } from "./lib/realtimeKit";
+import {
+  isInJoinWindow,
+  JOIN_WINDOW_LEAD_MS,
+  JOIN_WINDOW_TAIL_MS,
+} from "./lib/joinWindow";
 import { GUEST_SUB_PREFIX } from "@ripple/shared/shareTypes";
 import { cascadeDelete, logCascadeSummary } from "./cascadeDelete";
 import { syncTagsForResource } from "./tagSync";
@@ -41,8 +54,6 @@ const MAX_INVITEES = 200;
 const MAX_DURATION_MS = 24 * 60 * 60 * 1000;
 /** Upper bound on colleagues the busy-block overlay will resolve in one call. */
 const MAX_OVERLAY_MEMBERS = 100;
-const JOIN_WINDOW_LEAD_MS = 5 * 60 * 1000; // join allowed from start − 5 min
-const JOIN_WINDOW_TAIL_MS = 15 * 60 * 1000; // until end + 15 min
 const SHARE_BUFFER_MS = 24 * 60 * 60 * 1000; // share expires endsAt + 24h
 const GUEST_SUB_MAX = 64;
 
@@ -73,6 +84,12 @@ const eventValidator = v.object({
   createdBy: v.id("users"),
   sequence: v.optional(v.number()),
   tags: v.optional(v.array(v.string())),
+  // Set together, and only on an **override** — a row standing in for one
+  // occurrence of a series. Declared rather than stripped because a client
+  // holding an override needs to know it is one: it is the coordinate that
+  // leads back to the series the occurrence came from.
+  seriesId: v.optional(v.id("eventSeries")),
+  originalStartMs: v.optional(v.number()),
 });
 
 const inviteeValidator = v.object({
@@ -177,31 +194,6 @@ function validateDescription(description: string | undefined): string | undefine
   return description;
 }
 
-function isInJoinWindow(
-  event: { startsAt: number; endsAt: number },
-  now: number,
-): boolean {
-  return (
-    now >= event.startsAt - JOIN_WINDOW_LEAD_MS &&
-    now <= event.endsAt + JOIN_WINDOW_TAIL_MS
-  );
-}
-
-/**
- * Suppress notifications when a past event is being shuffled to another
- * past time — the organizer is cleaning up history, not changing
- * anyone's plans. Mirrored client-side (apps/web/src/lib/calendar-utils)
- * to skip the "notify invitees?" dialog at the source; this server
- * check is the safety net for non-dashboard edit paths.
- */
-export function isHistoricalReschedule(
-  oldStart: number,
-  newStart: number,
-  now: number,
-): boolean {
-  return oldStart < now && newStart < now;
-}
-
 // ---------------------------------------------------------------------------
 // Queries
 // ---------------------------------------------------------------------------
@@ -229,6 +221,9 @@ const eventInRangeValidator = v.object({
   createdBy: v.id("users"),
   sequence: v.optional(v.number()),
   tags: v.optional(v.array(v.string())),
+  /** Set together, and only on an **override**. See `eventValidator`. */
+  seriesId: v.optional(v.id("eventSeries")),
+  originalStartMs: v.optional(v.number()),
   /** Non-organizer invitee count — drives the reschedule prompt's
    *  "X invitees" copy and gates whether the prompt fires at all. */
   nonOrganizerInviteeCount: v.number(),
@@ -276,6 +271,35 @@ async function isInvitee(
   return row !== null;
 }
 
+/**
+ * Does this row belong on the caller's own calendar?
+ *
+ * Two kinds of row, and only one of them has a roster. An ordinary event
+ * carries its own invitee rows. An **override** — one occurrence of a series
+ * that was moved or edited — carries none: the roster belongs to the series
+ * (ADR 0002), which is why `cancel` announces an override's removal from the
+ * series' roster rather than this row's. Asking an override who was coming
+ * therefore finds nobody, and without this the moved Tuesday would be missing
+ * from every invitee's calendar — the one week they most needed to see, since
+ * it is the one that is not where the pattern says.
+ *
+ * Both are consulted rather than either, because an organizer can still add
+ * someone to an override row directly and that row must keep working.
+ */
+async function isOnCallersCalendar(
+  ctx: QueryCtx,
+  event: Doc<"calendarEvents">,
+  userId: Id<"users">,
+): Promise<boolean> {
+  if (
+    event.seriesId !== undefined &&
+    (await isSeriesInvitee(ctx, event.seriesId, userId))
+  ) {
+    return true;
+  }
+  return await isInvitee(ctx, event._id, userId);
+}
+
 export const listMineInRange = query({
   args: {
     workspaceId: v.id("workspaces"),
@@ -298,13 +322,16 @@ export const listMineInRange = query({
       await eventsTouchingWindow(ctx, workspaceId, rangeStartMs, rangeEndMs)
     ).sort((a, b) => a.startsAt - b.startsAt);
 
-    // "Mine" = organizer, or an invitee row for me. Organizer needs no read;
-    // the rest cost one `by_event_user` point lookup each, bounded by the
-    // events in the window rather than by the caller's tenure.
+    // "Mine" = organizer, or invited — to this row, or to the series an
+    // override stands in for. Organizer needs no read; the rest cost one or
+    // two point lookups each, bounded by the events in the window rather than
+    // by the caller's tenure.
     const mine = (
       await Promise.all(
         events.map(async (e) =>
-          e.createdBy === userId || (await isInvitee(ctx, e._id, userId)) ? e : null,
+          e.createdBy === userId || (await isOnCallersCalendar(ctx, e, userId))
+            ? e
+            : null,
         ),
       )
     ).filter((e): e is Doc<"calendarEvents"> => e !== null);
@@ -596,6 +623,19 @@ export const listForMentionAutocomplete = query({
         .take(perGroup * 4);
     }
 
+    // An **override** — a row standing in for one edited occurrence of a
+    // series — carries the series' own title, so leaving it in floods the
+    // picker with a hundred identical "Standup" entries, none of which is the
+    // thing a user means by @Standup. The series is the mention target (ADR
+    // 0002); this is the explicit exclusion that costs, because the search
+    // index and the browse range both cover every row in the table.
+    // Regression test: `tests/occurrenceOverride.test.ts`.
+    //
+    // Filtered here rather than in the index range because a search index
+    // cannot express "field absent", and the `take` above already reads with
+    // headroom for exactly this kind of post-filtering.
+    events = events.filter((e) => e.seriesId === undefined);
+
     const upcoming = events
       .filter((e) => e.startsAt >= now)
       .sort((a, b) => a.startsAt - b.startsAt)
@@ -864,7 +904,7 @@ export const update = mutation({
     // detail sheet, future API consumers). The dashboard skips the
     // dialog up front via the same predicate in calendar-utils.
     const historical = timeChanged
-      ? isHistoricalReschedule(event.startsAt, newStart, Date.now())
+      ? affectsOnlyThePast([event.startsAt, newStart], Date.now())
       : false;
 
     // In-app + email fan-out — gated on the flag and on the
@@ -994,6 +1034,29 @@ export const cancel = mutation({
     // The workspace rule first, the organizer narrowing second — in that order.
     const { userId, membership } = await requireWorkspaceMember(ctx, event.workspaceId);
     assertOrganizer(event, userId, membership, "cancel this event");
+
+    // An **override** stands in for one occurrence, so deleting its row is only
+    // half of cancelling that occurrence: the rule would hand it straight back
+    // at its original time. The other half is the excluded start, and it goes
+    // first — the cap can refuse, and refusing after the cascade would be a
+    // cancellation that half-happened.
+    if (event.seriesId !== undefined && event.originalStartMs !== undefined) {
+      const series = await ctx.db.get(event.seriesId);
+      if (series) {
+        await excludeOccurrenceStart(ctx, series, event.originalStartMs);
+        // The roster to tell is the **series'**, not this row's: an override
+        // carries no invitees of its own, so the `dispatchEventNotifications`
+        // below reaches nobody and the guest's client would keep showing a
+        // meeting that is off. Same announcement the series' own skip makes.
+        await announceOccurrenceCancelled(ctx, {
+          series,
+          originalStartMs: event.originalStartMs,
+          movedToMs: event.startsAt,
+          actorId: userId,
+          notifyInvitees: undefined,
+        });
+      }
+    }
 
     // Snapshot invitees + bump sequence so ICS recipients accept the CANCEL.
     const invitees = await loadInviteeRows(ctx, event._id);
@@ -1136,6 +1199,30 @@ export const respondAsGuest = mutation({
   },
 });
 
+/**
+ * Refuse a roster write aimed at an **override** — a `calendarEvents` row
+ * standing in for one edited occurrence of a series (ADR 0002).
+ *
+ * A roster belongs to the series, never to one Tuesday of it: invite someone
+ * once and they are invited to all of it. An override is not a resource — the
+ * node trigger skips it, so it has no graph node — and the
+ * `calendarEventInvitees` trigger would answer a roster row on one by writing
+ * an `invites` edge out of a node that does not exist. Both writers into that
+ * table — `addInvitees` and the organizer's `selfInvite` shortcut — go through
+ * here. No product surface offers this (the series page invites through
+ * `eventSeries.addInvitees`), so this is the invariant made enforceable rather
+ * than merely observed.
+ * Regression test: `tests/occurrenceOverride.test.ts` → "an override is not a
+ * resource" → "cannot be given a roster of its own".
+ */
+function assertNotOverride(event: Doc<"calendarEvents">): void {
+  if (event.seriesId !== undefined) {
+    throw new ConvexError(
+      "Invitees belong to the whole repeating event — invite them to the series, not to one occurrence",
+    );
+  }
+}
+
 export const addInvitees = mutation({
   args: {
     eventId: v.id("calendarEvents"),
@@ -1149,6 +1236,7 @@ export const addInvitees = mutation({
     // The workspace rule first, the organizer narrowing second — in that order.
     const { userId, membership } = await requireWorkspaceMember(ctx, event.workspaceId);
     assertOrganizer(event, userId, membership, "add invitees");
+    assertNotOverride(event);
 
     // Existing invitees — used to filter duplicates.
     const existing = await loadInviteeRows(ctx, event._id);
@@ -1254,6 +1342,7 @@ export const selfInvite = mutation({
     // the event existed and how full its guest list was.
     const { userId, membership } = await requireWorkspaceMember(ctx, event.workspaceId);
     assertOrganizer(event, userId, membership, "self-invite");
+    assertNotOverride(event);
 
     // Idempotent: organiser already invited → no-op.
     const existing = await ctx.db
@@ -1419,27 +1508,6 @@ export const _getEventByShareIdForJoin = internalQuery({
   },
 });
 
-export const _setEventMeetingId = internalMutation({
-  args: {
-    eventId: v.id("calendarEvents"),
-    cloudflareMeetingId: v.string(),
-  },
-  returns: v.union(v.null(), v.string()),
-  handler: async (ctx, { eventId, cloudflareMeetingId }) => {
-    const event = await ctx.db.get(eventId);
-    if (!event) return null;
-    if (event.cloudflareMeetingId) {
-      // We lost the race — return the winner's ID so the caller can clean up
-      // the orphan Cloudflare meeting (mirrors callSessions.createSession).
-      return event.cloudflareMeetingId;
-    }
-    // The calendarEvents trigger sees this patch and no-ops on it
-    // (title/tags unchanged).
-    await ctx.db.patch(eventId, { cloudflareMeetingId });
-    return null;
-  },
-});
-
 export const _patchInviteeGuestName = internalMutation({
   args: {
     inviteeId: v.id("calendarEventInvitees"),
@@ -1457,60 +1525,48 @@ export const _patchInviteeGuestName = internalMutation({
 // ---------------------------------------------------------------------------
 
 /**
- * Race-safe wrapper for standalone events. Mirrors ensureMeetingForChannel.
+ * The meeting for a standalone event's call, joining one in progress or
+ * starting a fresh one.
+ *
+ * This used to pin the meeting id to the event row forever, which made every
+ * call on that event the *same* Cloudflare meeting — one meeting, one session
+ * by meeting id, and so the second call's transcript was discarded as a
+ * duplicate of the first call's. Worse, there was no session row at all, so
+ * there was never a first transcript either.
+ *
+ * A standalone event is now a call **venue** like a channel is: successive
+ * calls are successive session rows, each with its own meeting and its own
+ * transcript, and all the liveness reasoning (`active` is a claim, Cloudflare
+ * is the fact, retire by id) is the shared one rather than a second copy.
  */
 async function ensureMeetingForEvent(
   ctx: ActionCtx,
   eventId: Id<"calendarEvents">,
   rtk: RealtimeKitClient,
 ): Promise<string> {
-  // Cheap path: already provisioned.
-  const existing = await ctx.runQuery(internal.calendarEvents._getEventForJoinPublic, {
-    eventId,
-  });
-  if (existing?.cloudflareMeetingId) return existing.cloudflareMeetingId;
-
-  let ourMeetingId: string;
-  try {
-    ({ id: ourMeetingId } = await rtk.createMeeting({
-      title: `Event call ${eventId}`,
-    }));
-  } catch (e) {
-    console.error("Cloudflare create-meeting failed:", e);
-    throw new ConvexError("Could not start the call");
-  }
-
-  const winner = await ctx.runMutation(internal.calendarEvents._setEventMeetingId, {
-    eventId,
-    cloudflareMeetingId: ourMeetingId,
-  });
-
-  if (winner && winner !== ourMeetingId) {
-    void rtk.deleteMeeting(ourMeetingId);
-    return winner;
-  }
-  return ourMeetingId;
+  const { meetingId } = await ensureMeetingForVenue(
+    ctx,
+    { kind: "event", eventId },
+    rtk,
+    false,
+  );
+  return meetingId;
 }
 
 /**
- * Internal-query alias used by the action above. We need a no-auth lookup
- * inside the action that doesn't gate on userId — the action has already
- * authenticated the caller separately.
+ * The live meeting for a standalone event's call, or null — never starting
+ * one. The guest form, for exactly the reason `findLiveMeetingForChannel`
+ * exists: a guest on a share link must not be able to mint a call in a
+ * workspace they are not a member of.
  */
-export const _getEventForJoinPublic = internalQuery({
-  args: { eventId: v.id("calendarEvents") },
-  returns: v.union(
-    v.object({
-      cloudflareMeetingId: v.optional(v.string()),
-    }),
-    v.null(),
-  ),
-  handler: async (ctx, { eventId }) => {
-    const event = await ctx.db.get(eventId);
-    if (!event) return null;
-    return { cloudflareMeetingId: event.cloudflareMeetingId };
-  },
-});
+async function findLiveMeetingForEvent(
+  ctx: ActionCtx,
+  eventId: Id<"calendarEvents">,
+  rtk: RealtimeKitClient,
+): Promise<string | null> {
+  const live = await findLiveMeetingForVenue(ctx, { kind: "event", eventId }, rtk);
+  return live?.meetingId ?? null;
+}
 
 export const joinEventCall = action({
   args: {
@@ -1636,7 +1692,11 @@ export const getGuestEventCallToken = action({
         false,
       ));
     } else {
-      meetingId = await ensureMeetingForEvent(ctx, data.eventId, rtk);
+      // A guest may join a standalone event's call but never start one, the
+      // same rule `shares.getGuestCallToken` applies to a channel's.
+      const live = await findLiveMeetingForEvent(ctx, data.eventId, rtk);
+      if (!live) throw new ConvexError("This call has not started yet");
+      meetingId = live;
       transcribe = false;
     }
 

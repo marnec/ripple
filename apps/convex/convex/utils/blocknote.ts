@@ -16,7 +16,7 @@ type InlineContent =
   | { type: "taskMention"; props: { taskId: string; taskTitle?: string } }
   | { type: "projectReference"; props: { projectId: string } }
   | { type: "resourceReference"; props: { resourceId: string; resourceType: string; resourceName: string; cellRef?: string } }
-  | { type: "eventMention"; props: { eventId: string } }
+  | { type: "eventMention"; props: { eventId?: string; seriesId?: string } }
   | { type: string; [key: string]: unknown };
 
 /**
@@ -115,8 +115,15 @@ function inlineContentToPlainText(
         break;
       }
       case "eventMention": {
-        const mention = item as { type: "eventMention"; props: { eventId: string } };
-        const title = eventTitles?.get(mention.props.eventId);
+        // One chip, two kinds of target — an event row or a series. Both are
+        // titles the map may hold, and neither is more "the" mention than the
+        // other, so the lookup takes whichever id the chip carries.
+        const mention = item as {
+          type: "eventMention";
+          props: { eventId?: string; seriesId?: string };
+        };
+        const id = mention.props.eventId || mention.props.seriesId;
+        const title = id ? eventTitles?.get(id) : undefined;
         text += `@${title || "event"}`;
         break;
       }
@@ -206,32 +213,41 @@ export function extractTaskMentionIds(documentJson: string): string[] {
 }
 
 /**
- * Extract all event IDs referenced via eventMention in BlockNote JSON document.
- * @<event> mentions in chats, docs, task descriptions, and task comments.
+ * Extract the ids referenced via eventMention in a BlockNote JSON document,
+ * under one of the chip's two props.
+ *
+ * One inline type carries two kinds of target: `eventId` for a one-off event's
+ * row, `seriesId` for a **series** (ADR 0002). They must be pulled out
+ * separately because they live in different tables — every caller resolves
+ * them against one table and would silently drop, or worse mislabel, the
+ * other.
  */
-export function extractEventMentionIds(documentJson: string): string[] {
+function extractEventMentionProp(
+  documentJson: string,
+  prop: "eventId" | "seriesId",
+): string[] {
   try {
     const blocks: BlockNoteBlock[] = JSON.parse(documentJson);
-    const eventIds = new Set<string>();
+    const ids = new Set<string>();
+
+    const collect = (item: InlineContent): void => {
+      if (item.type !== "eventMention") return;
+      const mention = item as {
+        type: "eventMention";
+        props: Partial<Record<"eventId" | "seriesId", string>>;
+      };
+      const id = mention.props?.[prop];
+      if (id) ids.add(id);
+    };
 
     function traverse(blocks: BlockNoteBlock[]): void {
       for (const block of blocks) {
         if (block.content) {
           for (const item of block.content) {
-            if (item.type === "eventMention") {
-              const mention = item as { type: "eventMention"; props: { eventId: string } };
-              if (mention.props?.eventId) eventIds.add(mention.props.eventId);
-            }
+            collect(item);
             if (item.type === "link") {
               const link = item as { type: "link"; content: InlineContent[] };
-              if (Array.isArray(link.content)) {
-                for (const c of link.content) {
-                  if (c.type === "eventMention") {
-                    const mention = c as { type: "eventMention"; props: { eventId: string } };
-                    if (mention.props?.eventId) eventIds.add(mention.props.eventId);
-                  }
-                }
-              }
+              if (Array.isArray(link.content)) link.content.forEach(collect);
             }
           }
         }
@@ -240,10 +256,28 @@ export function extractEventMentionIds(documentJson: string): string[] {
     }
 
     traverse(blocks);
-    return Array.from(eventIds);
+    return Array.from(ids);
   } catch {
     return [];
   }
+}
+
+/**
+ * Extract all event IDs referenced via eventMention in BlockNote JSON document.
+ * @<event> mentions in chats, docs, task descriptions, and task comments.
+ */
+export function extractEventMentionIds(documentJson: string): string[] {
+  return extractEventMentionProp(documentJson, "eventId");
+}
+
+/**
+ * The same, for mentions of a **series**. Kept apart from the event ids for
+ * the reason above: a series id resolved against `calendarEvents` is not found
+ * and the chip goes dead, and an edge labelled `calendarEvent` pointing at a
+ * series is a lie the graph would happily draw.
+ */
+export function extractEventSeriesMentionIds(documentJson: string): string[] {
+  return extractEventMentionProp(documentJson, "seriesId");
 }
 
 /**
@@ -339,15 +373,26 @@ export function extractResourceReferenceIds(documentJson: string): Array<{ id: s
   }
 }
 
+/** Everything a message body can point at. Mirrors `edges.targetType`. */
+export type MessageTargetType =
+  | "user"
+  | "task"
+  | "project"
+  | "document"
+  | "diagram"
+  | "spreadsheet"
+  | "calendarEvent"
+  | "eventSeries";
+
 /**
  * Extract all reference targets from a message body (users, tasks, projects, resources).
  * Pure function — no DB access.
  */
-export function extractMessageTargets(body: string): Array<{ targetType: "user" | "task" | "project" | "document" | "diagram" | "spreadsheet" | "calendarEvent"; targetId: string }> {
-  const targets: Array<{ targetType: "user" | "task" | "project" | "document" | "diagram" | "spreadsheet" | "calendarEvent"; targetId: string }> = [];
+export function extractMessageTargets(body: string): Array<{ targetType: MessageTargetType; targetId: string }> {
+  const targets: Array<{ targetType: MessageTargetType; targetId: string }> = [];
   const seen = new Set<string>();
 
-  const add = (targetType: typeof targets[number]["targetType"], targetId: string) => {
+  const add = (targetType: MessageTargetType, targetId: string) => {
     if (!seen.has(targetId)) {
       seen.add(targetId);
       targets.push({ targetType, targetId });
@@ -358,6 +403,9 @@ export function extractMessageTargets(body: string): Array<{ targetType: "user" 
   for (const taskId of extractTaskMentionIds(body)) add("task", taskId);
   for (const projectId of extractProjectIds(body)) add("project", projectId);
   for (const eventId of extractEventMentionIds(body)) add("calendarEvent", eventId);
+  // A mention of the ritual rather than of one Tuesday. Its own target type,
+  // so the graph link says what it points at.
+  for (const seriesId of extractEventSeriesMentionIds(body)) add("eventSeries", seriesId);
   for (const ref of extractResourceReferenceIds(body)) {
     add(ref.type as "document" | "diagram" | "spreadsheet", ref.id);
   }

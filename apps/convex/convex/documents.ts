@@ -64,7 +64,9 @@ export const createForTranscript = internalMutation({
   args: {
     workspaceId: v.id("workspaces"),
     name: v.string(),
-    channelId: v.id("channels"),
+    // Absent for a standalone calendar event's call, which has no channel to
+    // be the transcript of.
+    channelId: v.optional(v.id("channels")),
   },
   returns: v.id("documents"),
   handler: async (ctx, { workspaceId, name, channelId }) => {
@@ -90,6 +92,11 @@ export const createForTranscript = internalMutation({
     // row was just created by the documents insert-trigger above; the channel's
     // node already exists. Cascades away when either side is deleted (cascade
     // rules cover edges by_source/by_target on both documents and channels).
+    //
+    // A standalone event's call has no channel, and so no edge — the document
+    // still exists, is still tagged `transcript`, and is still reachable.
+    if (!channelId) return documentId;
+
     const [docNode, channelNode] = await Promise.all([
       ctx.db
         .query("nodes")

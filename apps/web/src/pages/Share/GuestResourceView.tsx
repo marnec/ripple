@@ -15,6 +15,7 @@ import { GuestDiagramView } from "./GuestDiagramView";
 import { GuestSpreadsheetView } from "./GuestSpreadsheetView";
 import { GuestCallView } from "./GuestCallView";
 import { GuestEventView } from "./GuestEventView";
+import { GuestSeriesView } from "./GuestSeriesView";
 
 /**
  * Guest resource surface at `/share/:shareId/view`.
@@ -147,6 +148,9 @@ export function GuestResourceView() {
             guestSub={session.guestSub}
             guestName={session.guestName}
           />
+        )}
+        {info.resourceType === "eventSeries" && (
+          <GuestSeriesView shareId={shareId} guestName={session.guestName} />
         )}
       </main>
     </div>

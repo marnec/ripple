@@ -7,6 +7,7 @@ import type { Id } from "@convex/_generated/dataModel";
 import {
   useEventReschedule,
   type ReschedulableEvent,
+  type ReschedulableOccurrence,
   type CalendarAppRescheduleHandle,
   type UpdateEventMutation,
 } from "./useEventReschedule";
@@ -25,6 +26,22 @@ const FUTURE_START = new Date("2026-06-15T09:00:00Z").getTime();
 const FUTURE_END = new Date("2026-06-15T10:00:00Z").getTime();
 
 const EVENT_ID = "ev_aaaa" as Id<"calendarEvents">;
+const SERIES_ID = "se_bbbb" as Id<"eventSeries">;
+
+/** An occurrence is named by the pair, because it has no row to be named by. */
+function makeOccurrence(
+  overrides: Partial<ReschedulableOccurrence> = {},
+): ReschedulableOccurrence {
+  return {
+    seriesId: SERIES_ID,
+    originalStartMs: FUTURE_START,
+    startsAt: FUTURE_START,
+    endsAt: FUTURE_END,
+    title: "Standup",
+    nonOrganizerInviteeCount: 0,
+    ...overrides,
+  };
+}
 
 function makeEvent(
   overrides: Partial<ReschedulableEvent> = {},
@@ -71,6 +88,8 @@ describe("useEventReschedule.handleEventUpdate", () => {
     const calendarApp = makeCalendarApp();
     const { result } = renderHook(() =>
       useEventReschedule({
+        occurrences: [],
+        overrideOccurrence: () => Promise.resolve(),
         events: [makeEvent({ nonOrganizerInviteeCount: 5 })],
         updateEvent,
         calendarApp,
@@ -96,6 +115,8 @@ describe("useEventReschedule.handleEventUpdate", () => {
     const calendarApp = makeCalendarApp();
     const { result } = renderHook(() =>
       useEventReschedule({
+        occurrences: [],
+        overrideOccurrence: () => Promise.resolve(),
         events: [makeEvent({ nonOrganizerInviteeCount: 5 })],
         updateEvent,
         calendarApp,
@@ -121,6 +142,8 @@ describe("useEventReschedule.handleEventUpdate", () => {
     const calendarApp = makeCalendarApp();
     const { result } = renderHook(() =>
       useEventReschedule({
+        occurrences: [],
+        overrideOccurrence: () => Promise.resolve(),
         events: [],
         updateEvent,
         calendarApp,
@@ -148,6 +171,8 @@ describe("useEventReschedule.handleEventUpdate", () => {
     const newEnd = FUTURE_END + 60 * 60 * 1000;
     const { result } = renderHook(() =>
       useEventReschedule({
+        occurrences: [],
+        overrideOccurrence: () => Promise.resolve(),
         events: [makeEvent({ nonOrganizerInviteeCount: 0 })],
         updateEvent,
         calendarApp,
@@ -181,6 +206,8 @@ describe("useEventReschedule.handleEventUpdate", () => {
     const newEnd = PAST_END + 30 * 60 * 1000;
     const { result } = renderHook(() =>
       useEventReschedule({
+        occurrences: [],
+        overrideOccurrence: () => Promise.resolve(),
         events: [
           makeEvent({
             startsAt: PAST_START,
@@ -219,6 +246,8 @@ describe("useEventReschedule.handleEventUpdate", () => {
     const newEnd = FUTURE_END + 60 * 60 * 1000;
     const { result } = renderHook(() =>
       useEventReschedule({
+        occurrences: [],
+        overrideOccurrence: () => Promise.resolve(),
         events: [
           makeEvent({
             title: "Quarterly review",
@@ -243,7 +272,7 @@ describe("useEventReschedule.handleEventUpdate", () => {
     expect(updateEvent).not.toHaveBeenCalled();
     const pending = result.current.pendingReschedule;
     expect(pending).not.toBeNull();
-    expect(pending?.eventId).toBe(EVENT_ID);
+    expect(pending?.target).toEqual({ kind: "event", eventId: EVENT_ID });
     expect(pending?.title).toBe("Quarterly review");
     expect(pending?.inviteeCount).toBe(3);
     expect(pending?.oldStartsAt).toBe(FUTURE_START);
@@ -253,6 +282,261 @@ describe("useEventReschedule.handleEventUpdate", () => {
     expect(pending?.original.id).toBe(`event-${EVENT_ID}`);
     expect(pending?.original.calendarId).toBe(EVENT_CAL_ID);
     expect(pending?.original.title).toBe("Quarterly review");
+  });
+});
+
+/**
+ * Dragging or resizing one box of a repeating meeting is the cheapest gesture
+ * in the product, so it stays the safest one: it always writes an override for
+ * that single occurrence and never touches the rule. No scope question is
+ * asked, because the answer is never in doubt.
+ */
+describe("useEventReschedule.handleEventUpdate — occurrences of a series", () => {
+  it("moves the one occurrence, and asks nothing", () => {
+    const updateEvent = vi.fn(() => Promise.resolve());
+    const overrideOccurrence = vi.fn(() => Promise.resolve());
+    const calendarApp = makeCalendarApp();
+    const newStart = FUTURE_START + 60 * 60 * 1000;
+    const newEnd = FUTURE_END + 60 * 60 * 1000;
+    const { result } = renderHook(() =>
+      useEventReschedule({
+        events: [],
+        occurrences: [makeOccurrence()],
+        overrideOccurrence,
+        updateEvent,
+        calendarApp,
+        eventCalendarId: EVENT_CAL_ID,
+        now: () => FIXED_NOW,
+      }),
+    );
+
+    act(() => {
+      result.current.handleEventUpdate({
+        id: `occurrence-${SERIES_ID}@${FUTURE_START}`,
+        start: instant(newStart),
+        end: instant(newEnd),
+      });
+    });
+
+    expect(overrideOccurrence).toHaveBeenCalledTimes(1);
+    expect(overrideOccurrence).toHaveBeenCalledWith({
+      seriesId: SERIES_ID,
+      originalStartMs: FUTURE_START,
+      startsAt: newStart,
+      endsAt: newEnd,
+      notifyInvitees: false,
+    });
+    // The series is untouched, and no scope dialog is staged.
+    expect(updateEvent).not.toHaveBeenCalled();
+    expect(result.current.pendingReschedule).toBeNull();
+  });
+
+  it("resizes the one occurrence, changing only its end", () => {
+    const overrideOccurrence = vi.fn(() => Promise.resolve());
+    const newEnd = FUTURE_END + 30 * 60 * 1000;
+    const { result } = renderHook(() =>
+      useEventReschedule({
+        events: [],
+        occurrences: [makeOccurrence()],
+        overrideOccurrence,
+        updateEvent: vi.fn(() => Promise.resolve()),
+        calendarApp: makeCalendarApp(),
+        eventCalendarId: EVENT_CAL_ID,
+        now: () => FIXED_NOW,
+      }),
+    );
+
+    act(() => {
+      result.current.handleEventUpdate({
+        id: `occurrence-${SERIES_ID}@${FUTURE_START}`,
+        start: instant(FUTURE_START),
+        end: instant(newEnd),
+      });
+    });
+
+    expect(overrideOccurrence).toHaveBeenCalledWith({
+      seriesId: SERIES_ID,
+      originalStartMs: FUTURE_START,
+      startsAt: FUTURE_START,
+      endsAt: newEnd,
+      notifyInvitees: false,
+    });
+    expect(result.current.pendingReschedule).toBeNull();
+  });
+
+  it("is a no-op when start and end are unchanged", () => {
+    const overrideOccurrence = vi.fn(() => Promise.resolve());
+    const { result } = renderHook(() =>
+      useEventReschedule({
+        events: [],
+        occurrences: [makeOccurrence()],
+        overrideOccurrence,
+        updateEvent: vi.fn(() => Promise.resolve()),
+        calendarApp: makeCalendarApp(),
+        eventCalendarId: EVENT_CAL_ID,
+        now: () => FIXED_NOW,
+      }),
+    );
+
+    act(() => {
+      result.current.handleEventUpdate({
+        id: `occurrence-${SERIES_ID}@${FUTURE_START}`,
+        start: instant(FUTURE_START),
+        end: instant(FUTURE_END),
+      });
+    });
+
+    expect(overrideOccurrence).not.toHaveBeenCalled();
+  });
+
+  it("is a no-op for an occurrence the calendar does not hold", () => {
+    const overrideOccurrence = vi.fn(() => Promise.resolve());
+    const { result } = renderHook(() =>
+      useEventReschedule({
+        events: [],
+        occurrences: [makeOccurrence()],
+        overrideOccurrence,
+        updateEvent: vi.fn(() => Promise.resolve()),
+        calendarApp: makeCalendarApp(),
+        eventCalendarId: EVENT_CAL_ID,
+        now: () => FIXED_NOW,
+      }),
+    );
+
+    act(() => {
+      result.current.handleEventUpdate({
+        id: `occurrence-${SERIES_ID}@${PAST_START}`,
+        start: instant(PAST_START + 60 * 60 * 1000),
+        end: instant(PAST_END + 60 * 60 * 1000),
+      });
+    });
+
+    expect(overrideOccurrence).not.toHaveBeenCalled();
+  });
+
+  it("asks before moving an occurrence people are expecting", () => {
+    // No scope question — that answer is never in doubt — but the same
+    // "notify invitees?" question a one-off event's drag asks, named for what
+    // it will actually send.
+    const overrideOccurrence = vi.fn(() => Promise.resolve());
+    const newStart = FUTURE_START + 60 * 60 * 1000;
+    const newEnd = FUTURE_END + 60 * 60 * 1000;
+    const { result } = renderHook(() =>
+      useEventReschedule({
+        events: [],
+        occurrences: [
+          makeOccurrence({ title: "Standup", nonOrganizerInviteeCount: 2 }),
+        ],
+        overrideOccurrence,
+        updateEvent: vi.fn(() => Promise.resolve()),
+        calendarApp: makeCalendarApp(),
+        eventCalendarId: EVENT_CAL_ID,
+        now: () => FIXED_NOW,
+      }),
+    );
+
+    act(() => {
+      result.current.handleEventUpdate({
+        id: `occurrence-${SERIES_ID}@${FUTURE_START}`,
+        start: instant(newStart),
+        end: instant(newEnd),
+      });
+    });
+
+    expect(overrideOccurrence).not.toHaveBeenCalled();
+    const pending = result.current.pendingReschedule;
+    expect(pending?.summary).toBe("2 invitees, this occurrence");
+    expect(pending?.title).toBe("Standup");
+
+    act(() => {
+      result.current.sendReschedule();
+    });
+
+    expect(overrideOccurrence).toHaveBeenCalledWith({
+      seriesId: SERIES_ID,
+      originalStartMs: FUTURE_START,
+      startsAt: newStart,
+      endsAt: newEnd,
+      notifyInvitees: true,
+    });
+  });
+
+  it("moves a past occurrence to another past time without asking", () => {
+    // Housekeeping on a standup that already happened is not news, however
+    // many people are on the roster.
+    const overrideOccurrence = vi.fn(() => Promise.resolve());
+    const newStart = PAST_START + 30 * 60 * 1000;
+    const newEnd = PAST_END + 30 * 60 * 1000;
+    const { result } = renderHook(() =>
+      useEventReschedule({
+        events: [],
+        occurrences: [
+          makeOccurrence({
+            originalStartMs: PAST_START,
+            startsAt: PAST_START,
+            endsAt: PAST_END,
+            nonOrganizerInviteeCount: 4,
+          }),
+        ],
+        overrideOccurrence,
+        updateEvent: vi.fn(() => Promise.resolve()),
+        calendarApp: makeCalendarApp(),
+        eventCalendarId: EVENT_CAL_ID,
+        now: () => FIXED_NOW,
+      }),
+    );
+
+    act(() => {
+      result.current.handleEventUpdate({
+        id: `occurrence-${SERIES_ID}@${PAST_START}`,
+        start: instant(newStart),
+        end: instant(newEnd),
+      });
+    });
+
+    expect(result.current.pendingReschedule).toBeNull();
+    expect(overrideOccurrence).toHaveBeenCalledWith({
+      seriesId: SERIES_ID,
+      originalStartMs: PAST_START,
+      startsAt: newStart,
+      endsAt: newEnd,
+      notifyInvitees: false,
+    });
+  });
+
+  it("moves an already-moved occurrence from where it now is", () => {
+    // An override still travels as an `event-` id, because by then it is a row.
+    const updateEvent = vi.fn(() => Promise.resolve());
+    const overrideOccurrence = vi.fn(() => Promise.resolve());
+    const newStart = FUTURE_START + 2 * 60 * 60 * 1000;
+    const newEnd = FUTURE_END + 2 * 60 * 60 * 1000;
+    const { result } = renderHook(() =>
+      useEventReschedule({
+        events: [makeEvent()],
+        occurrences: [],
+        overrideOccurrence,
+        updateEvent,
+        calendarApp: makeCalendarApp(),
+        eventCalendarId: EVENT_CAL_ID,
+        now: () => FIXED_NOW,
+      }),
+    );
+
+    act(() => {
+      result.current.handleEventUpdate({
+        id: `event-${EVENT_ID}`,
+        start: instant(newStart),
+        end: instant(newEnd),
+      });
+    });
+
+    expect(updateEvent).toHaveBeenCalledWith({
+      eventId: EVENT_ID,
+      startsAt: newStart,
+      endsAt: newEnd,
+      notifyInvitees: false,
+    });
+    expect(overrideOccurrence).not.toHaveBeenCalled();
   });
 });
 
@@ -266,6 +550,8 @@ describe("useEventReschedule.sendReschedule / persistSilently / revertReschedule
     const newEnd = FUTURE_END + 60 * 60 * 1000;
     const hook = renderHook(() =>
       useEventReschedule({
+        occurrences: [],
+        overrideOccurrence: () => Promise.resolve(),
         events: [makeEvent({ nonOrganizerInviteeCount: 4 })],
         updateEvent,
         calendarApp,
@@ -345,6 +631,8 @@ describe("useEventReschedule.sendReschedule / persistSilently / revertReschedule
     };
     const { result } = renderHook(() =>
       useEventReschedule({
+        occurrences: [],
+        overrideOccurrence: () => Promise.resolve(),
         events: [makeEvent({ nonOrganizerInviteeCount: 4 })],
         updateEvent,
         calendarApp,
@@ -374,6 +662,8 @@ describe("useEventReschedule.sendReschedule / persistSilently / revertReschedule
     const calendarApp = makeCalendarApp();
     const { result } = renderHook(() =>
       useEventReschedule({
+        occurrences: [],
+        overrideOccurrence: () => Promise.resolve(),
         events: [makeEvent({ nonOrganizerInviteeCount: 4 })],
         updateEvent,
         calendarApp,

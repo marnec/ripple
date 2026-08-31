@@ -151,6 +151,64 @@ describe("reconciliation.deleteOrphans", () => {
     expect(third.remaining).toBe(false);
   });
 
+  /**
+   * A series owns rows in two tables that nothing else would reach if its
+   * cascade died mid-batch — the roster, and the overrides standing in for its
+   * edited occurrences. Both are the expensive kind of leftover: an override
+   * is a `calendarEvents` row, so it keeps showing on the calendar as an event
+   * belonging to a series that no longer exists.
+   */
+  it("repairs the rows a failed series cascade would leave behind", async () => {
+    const t = createTestContext();
+    const { workspaceId, userId } = await setupWorkspaceWithAdmin(t);
+
+    await t.run(async (ctx) => {
+      const seriesId = await ctx.db.insert("eventSeries", {
+        workspaceId,
+        title: "Standup",
+        anchorDate: "2026-09-01",
+        anchorTime: "09:00",
+        durationMs: 30 * 60 * 1000,
+        timezone: "Europe/Rome",
+        rule: { freq: "weekly", interval: 1, weekdays: ["tuesday"], end: { kind: "never" } },
+        createdBy: userId,
+        activeUntil: 8_640_000_000_000_000,
+      });
+      await ctx.db.insert("eventSeriesInvitees", {
+        seriesId,
+        workspaceId,
+        userId,
+        status: "pending",
+      });
+      const startsAt = Date.parse("2026-09-08T07:00:00.000Z");
+      await ctx.db.insert("calendarEvents", {
+        workspaceId,
+        title: "Standup (moved)",
+        startsAt,
+        endsAt: startsAt + 30 * 60 * 1000,
+        timezone: "Europe/Rome",
+        createdBy: userId,
+        seriesId,
+        originalStartMs: startsAt,
+      });
+      // The cascade died here: the root went, its children did not.
+      await ctx.db.delete(seriesId);
+    });
+
+    expect(
+      await t.mutation(internal.reconciliation.deleteOrphans, {
+        childTable: "eventSeriesInvitees",
+        parentField: "seriesId",
+      }),
+    ).toMatchObject({ deleted: 1 });
+    expect(
+      await t.mutation(internal.reconciliation.deleteOrphans, {
+        childTable: "calendarEvents",
+        parentField: "seriesId",
+      }),
+    ).toMatchObject({ deleted: 1 });
+  });
+
   it("rejects a relationship it doesn't know about", async () => {
     const t = createTestContext();
     await setupWorkspaceWithAdmin(t);

@@ -1,13 +1,14 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { ConvexError, v } from "convex/values";
 import { channelLabel } from "./lib/dmLabel";
-import { action, internalQuery, type ActionCtx } from "./_generated/server";
+import { action, internalQuery, type ActionCtx, type QueryCtx } from "./_generated/server";
 import { internalMutation, mutation } from "./functions";
 import type { Id } from "./_generated/dataModel";
 import { internal } from "./_generated/api";
 import { transcriptHintValidator } from "./transcriptFormat";
 import { scheduleTranscriptIngest } from "./transcriptPool";
 import { requireChannelAccess, requireUser } from "./authHelpers";
+import { occurrenceOpenAt } from "./lib/seriesOccurrence";
 import {
   realtimeKitFromEnv,
   type RealtimeKitClient,
@@ -73,7 +74,47 @@ async function isSessionUsable(
 }
 
 /**
- * Race-safe wrapper that returns the Cloudflare meetingId for a channel.
+ * Where a call happens. A channel has a persistent room and so accumulates
+ * successive sessions on one id; a standalone calendar event hosts its own.
+ * Every session belongs to exactly one venue.
+ */
+export type CallVenue =
+  | { kind: "channel"; channelId: Id<"channels"> }
+  | { kind: "event"; eventId: Id<"calendarEvents"> }
+  | { kind: "series"; seriesId: Id<"eventSeries"> };
+
+const callVenueValidator = v.union(
+  v.object({ kind: v.literal("channel"), channelId: v.id("channels") }),
+  v.object({ kind: v.literal("event"), eventId: v.id("calendarEvents") }),
+  v.object({ kind: v.literal("series"), seriesId: v.id("eventSeries") }),
+);
+
+/** The venue's own words for a Cloudflare meeting title. */
+function venueLabel(venue: CallVenue): string {
+  switch (venue.kind) {
+    case "channel":
+      return `Channel call ${venue.channelId}`;
+    case "event":
+      return `Event call ${venue.eventId}`;
+    case "series":
+      return `Series call ${venue.seriesId}`;
+  }
+}
+
+/** The one column a `callSessions` row files its venue under. */
+function venueColumn(venue: CallVenue) {
+  switch (venue.kind) {
+    case "channel":
+      return { channelId: venue.channelId };
+    case "event":
+      return { eventId: venue.eventId };
+    case "series":
+      return { seriesId: venue.seriesId };
+  }
+}
+
+/**
+ * Race-safe wrapper that returns the Cloudflare meetingId for a venue.
  *
  * The race: two parallel callers both see `getActiveSession` return null,
  * both create a meeting on Cloudflare, both try to persist. Only one
@@ -87,9 +128,9 @@ async function isSessionUsable(
  * Takes the `RealtimeKitClient` as a parameter (rather than reaching for env)
  * so the race recovery can be exercised against a fake client in tests.
  */
-export async function ensureMeetingForChannel(
+export async function ensureMeetingForVenue(
   ctx: ActionCtx,
-  channelId: Id<"channels">,
+  venue: CallVenue,
   rtk: RealtimeKitClient,
   transcribe: boolean,
   // ISO 639-1 code (`en`, `es`, …). Only meaningful when `transcribe` is true
@@ -97,7 +138,7 @@ export async function ensureMeetingForChannel(
   transcriptionLanguage?: string,
 ): Promise<{ meetingId: string; transcribe: boolean }> {
   const session = await ctx.runQuery(internal.callSessions.getActiveSession, {
-    channelId,
+    venue,
   });
 
   // A session row saying `active` is a claim, not a fact. `endSession` is the
@@ -135,7 +176,7 @@ export async function ensureMeetingForChannel(
   let ourMeetingId: string;
   try {
     ({ id: ourMeetingId } = await rtk.createMeeting({
-      title: `Channel call ${channelId}`,
+      title: venueLabel(venue),
       transcribeOnEnd: transcribe,
       transcriptionLanguage,
     }));
@@ -147,7 +188,7 @@ export async function ensureMeetingForChannel(
   }
 
   const winner = await ctx.runMutation(internal.callSessions.createSession, {
-    channelId,
+    venue,
     cloudflareMeetingId: ourMeetingId,
     transcribe,
   });
@@ -176,13 +217,13 @@ export async function ensureMeetingForChannel(
  * fail-open: an RTK outage reports the call as live, and the subsequent
  * `addParticipant` is what fails.
  */
-export async function findLiveMeetingForChannel(
+export async function findLiveMeetingForVenue(
   ctx: ActionCtx,
-  channelId: Id<"channels">,
+  venue: CallVenue,
   rtk: RealtimeKitClient,
 ): Promise<{ meetingId: string; transcribe: boolean } | null> {
   const session = await ctx.runQuery(internal.callSessions.getActiveSession, {
-    channelId,
+    venue,
   });
   if (!session) return null;
   if (!(await isSessionUsable(rtk, session))) return null;
@@ -193,15 +234,46 @@ export async function findLiveMeetingForChannel(
   };
 }
 
+/**
+ * The channel forms, kept because a channel call is by far the common one and
+ * every existing caller says "channel" rather than "venue".
+ */
+export function ensureMeetingForChannel(
+  ctx: ActionCtx,
+  channelId: Id<"channels">,
+  rtk: RealtimeKitClient,
+  transcribe: boolean,
+  transcriptionLanguage?: string,
+): Promise<{ meetingId: string; transcribe: boolean }> {
+  return ensureMeetingForVenue(
+    ctx,
+    { kind: "channel", channelId },
+    rtk,
+    transcribe,
+    transcriptionLanguage,
+  );
+}
+
+export function findLiveMeetingForChannel(
+  ctx: ActionCtx,
+  channelId: Id<"channels">,
+  rtk: RealtimeKitClient,
+): Promise<{ meetingId: string; transcribe: boolean } | null> {
+  return findLiveMeetingForVenue(ctx, { kind: "channel", channelId }, rtk);
+}
+
 const callSessionFields = {
   _id: v.id("callSessions"),
   _creationTime: v.number(),
-  channelId: v.id("channels"),
+  channelId: v.optional(v.id("channels")),
+  eventId: v.optional(v.id("calendarEvents")),
+  seriesId: v.optional(v.id("eventSeries")),
   cloudflareMeetingId: v.string(),
   active: v.boolean(),
   transcribe: v.optional(v.boolean()),
   cloudflareSessionId: v.optional(v.string()),
   transcriptDocumentId: v.optional(v.id("documents")),
+  occurrenceStartMs: v.optional(v.number()),
 };
 
 const callSessionValidator = v.object(callSessionFields);
@@ -229,22 +301,63 @@ export const assertChannelAccess = internalQuery({
   },
 });
 
+/** The active session for a venue, whichever kind of venue it is. */
+async function activeSessionFor(ctx: QueryCtx, venue: CallVenue) {
+  switch (venue.kind) {
+    case "channel":
+      return await ctx.db
+        .query("callSessions")
+        .withIndex("by_channel_active", (q) =>
+          q.eq("channelId", venue.channelId).eq("active", true),
+        )
+        .first();
+    case "event":
+      return await ctx.db
+        .query("callSessions")
+        .withIndex("by_event_active", (q) =>
+          q.eq("eventId", venue.eventId).eq("active", true),
+        )
+        .first();
+    case "series":
+      return await ctx.db
+        .query("callSessions")
+        .withIndex("by_series_active", (q) =>
+          q.eq("seriesId", venue.seriesId).eq("active", true),
+        )
+        .first();
+  }
+}
+
+/**
+ * The occurrence a call being created right now belongs to, as the fields to
+ * spread onto the new row.
+ *
+ * Only a series has occurrences, and only the clock decides which one: the
+ * occurrence whose join window is open. When none is — a caller that reached
+ * here outside every window — the row is left unstamped rather than being
+ * given the nearest guess, because a call filed under the wrong Tuesday is
+ * worse than one filed under none.
+ */
+async function occurrenceStamp(
+  ctx: QueryCtx,
+  venue: CallVenue,
+): Promise<{ occurrenceStartMs?: number }> {
+  if (venue.kind !== "series") return {};
+  const series = await ctx.db.get(venue.seriesId);
+  if (!series) return {};
+  const occurrence = occurrenceOpenAt(series, Date.now());
+  return occurrence ? { occurrenceStartMs: occurrence.originalStartMs } : {};
+}
+
 export const getActiveSession = internalQuery({
-  args: { channelId: v.id("channels") },
+  args: { venue: callVenueValidator },
   returns: v.union(callSessionValidator, v.null()),
-  handler: async (ctx, { channelId }) => {
-    return await ctx.db
-      .query("callSessions")
-      .withIndex("by_channel_active", (q) =>
-        q.eq("channelId", channelId).eq("active", true),
-      )
-      .first();
-  },
+  handler: async (ctx, { venue }) => await activeSessionFor(ctx, venue),
 });
 
 export const createSession = internalMutation({
   args: {
-    channelId: v.id("channels"),
+    venue: callVenueValidator,
     cloudflareMeetingId: v.string(),
     transcribe: v.boolean(),
   },
@@ -254,14 +367,9 @@ export const createSession = internalMutation({
     v.null(),
     v.object({ cloudflareMeetingId: v.string(), transcribe: v.boolean() }),
   ),
-  handler: async (ctx, { channelId, cloudflareMeetingId, transcribe }) => {
+  handler: async (ctx, { venue, cloudflareMeetingId, transcribe }) => {
     // Check inside the mutation (transactional) to prevent duplicate sessions
-    const existing = await ctx.db
-      .query("callSessions")
-      .withIndex("by_channel_active", (q) =>
-        q.eq("channelId", channelId).eq("active", true),
-      )
-      .first();
+    const existing = await activeSessionFor(ctx, venue);
 
     if (existing) {
       return {
@@ -271,10 +379,15 @@ export const createSession = internalMutation({
     }
 
     await ctx.db.insert("callSessions", {
-      channelId,
+      ...venueColumn(venue),
       cloudflareMeetingId,
       active: true,
       transcribe,
+      // Decided here — once, at creation — and never revisited. A call that
+      // started three minutes early belongs to the occurrence about to begin,
+      // and one that runs twenty minutes long keeps the occurrence it opened
+      // in rather than being re-adjudicated as it goes.
+      ...(await occurrenceStamp(ctx, venue)),
     });
     return null;
   },
@@ -509,21 +622,55 @@ export const getSessionByMeeting = internalQuery({
 });
 
 /**
- * Channel name + workspace for the transcript ingest (no auth — invoked from
- * the webhook action, which has already resolved the session by meeting id).
+ * What the transcript ingest needs to name and file a call's document: the
+ * venue's own name, its workspace, and the channel to link the document to
+ * when there is one. No auth — invoked from the webhook action, which has
+ * already resolved the session by meeting id.
+ *
+ * Takes the session rather than the venue, because the webhook holds a session
+ * and only this query knows which venue kind the row carries.
  */
-export const getChannelForTranscript = internalQuery({
-  args: { channelId: v.id("channels") },
+export const getVenueForTranscript = internalQuery({
+  args: { sessionId: v.id("callSessions") },
   returns: v.union(
-    v.object({ name: v.string(), workspaceId: v.id("workspaces") }),
+    v.object({
+      name: v.string(),
+      workspaceId: v.id("workspaces"),
+      channelId: v.union(v.id("channels"), v.null()),
+    }),
     v.null(),
   ),
-  handler: async (ctx, { channelId }) => {
-    const channel = await ctx.db.get(channelId);
-    if (!channel) return null;
-    // No viewer here, so the participant-independent form.
-    const name = await channelLabel(ctx, channel);
-    return { name, workspaceId: channel.workspaceId };
+  handler: async (ctx, { sessionId }) => {
+    const session = await ctx.db.get(sessionId);
+    if (!session) return null;
+
+    if (session.channelId) {
+      const channel = await ctx.db.get(session.channelId);
+      if (!channel) return null;
+      // No viewer here, so the participant-independent form.
+      return {
+        name: await channelLabel(ctx, channel),
+        workspaceId: channel.workspaceId,
+        channelId: session.channelId,
+      };
+    }
+
+    if (session.eventId) {
+      const event = await ctx.db.get(session.eventId);
+      if (!event) return null;
+      return { name: event.title, workspaceId: event.workspaceId, channelId: null };
+    }
+
+    if (session.seriesId) {
+      const series = await ctx.db.get(session.seriesId);
+      if (!series) return null;
+      // The series' own name, not the occurrence's date: each occurrence's
+      // call already has its own session and therefore its own document, and
+      // the ingest stamps the name with when the call happened.
+      return { name: series.title, workspaceId: series.workspaceId, channelId: null };
+    }
+
+    return null;
   },
 });
 

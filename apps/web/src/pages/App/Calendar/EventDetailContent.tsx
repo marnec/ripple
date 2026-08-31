@@ -1,9 +1,8 @@
-import { Hash, MailWarning, Trash2, UserPlus } from "lucide-react";
+import { Hash } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useMutation } from "convex/react";
 
 import { cn } from "@/lib/utils";
-import { inviteDeliveryNotice } from "@ripple/shared/inviteDelivery";
 import { TagInput } from "@/components/TagInput";
 
 import { api } from "@convex/_generated/api";
@@ -12,12 +11,12 @@ import {
   EditableChannel,
   EditableDateTime,
   EditableDescription,
-  InviteAdder,
   PersonRow,
   ReadDateTime,
   ReadSection,
 } from "./event-detail-blocks";
-import { RSVP_BADGE_CLASS, RSVP_LABEL, type useEventDetail } from "./event-detail-data";
+import type { useEventDetail } from "./event-detail-data";
+import { InviteeRoster, type RosterCandidate } from "./InviteeRoster";
 
 type Detail = NonNullable<ReturnType<typeof useEventDetail>["detail"]>;
 
@@ -50,7 +49,7 @@ export function EventDetailContent({
 }: {
   detail: Detail;
   channels: { _id: Id<"channels">; name: string }[] | undefined;
-  members: Parameters<typeof InviteAdder>[0]["members"] | undefined;
+  members: RosterCandidate[] | undefined;
   editable: boolean;
   workspaceId: Id<"workspaces">;
   saveField: ReturnType<typeof useEventDetail>["saveField"];
@@ -193,161 +192,19 @@ export function EventDetailContent({
         />
       </ReadSection>
 
-      <InviteesSection
-        detail={detail}
-        members={members}
+      {/* Passing `onSelfInvite` is what offers the ghost "add yourself" row,
+          so an organiser already on the roster simply doesn't get one. A
+          one-off event is the only thing that offers it today. */}
+      <InviteeRoster
+        invitees={detail.invitees}
         editable={editable}
-        viewerInvited={viewerInvited}
-        handleAddInvitees={handleAddInvitees}
-        handleSelfInvite={handleSelfInvite}
-        handleRemoveInvitee={handleRemoveInvitee}
+        members={members}
+        organizerId={detail.event.createdBy}
+        onAdd={handleAddInvitees}
+        onRemove={handleRemoveInvitee}
+        onSelfInvite={viewerInvited ? undefined : handleSelfInvite}
       />
     </div>
   );
 }
 
-/**
- * Invitees list + InviteAdder. Lifted out of the inline section that
- * was previously copy-pasted between Sheet (lines 232-305) and Page
- * (lines 316-380) — they had drifted in subtle ways (Page memoised the
- * existingUserIds Set; Sheet rebuilt it on every render) and now share
- * one implementation.
- */
-function InviteesSection({
-  detail,
-  members,
-  editable,
-  viewerInvited,
-  handleAddInvitees,
-  handleSelfInvite,
-  handleRemoveInvitee,
-}: {
-  detail: Detail;
-  members: Parameters<typeof InviteAdder>[0]["members"] | undefined;
-  editable: boolean;
-  viewerInvited: boolean;
-  handleAddInvitees: ReturnType<typeof useEventDetail>["handleAddInvitees"];
-  handleSelfInvite: ReturnType<typeof useEventDetail>["handleSelfInvite"];
-  handleRemoveInvitee: ReturnType<typeof useEventDetail>["handleRemoveInvitee"];
-}) {
-  const existingUserIds = new Set(
-    detail.invitees
-      .map((i) => i.userId)
-      .filter((id): id is Id<"users"> => !!id),
-  );
-  const existingGuestEmails = new Set(
-    detail.invitees
-      .map((i) => i.guestEmail)
-      .filter((e): e is string => !!e),
-  );
-
-  // Ghost CTA at the top of the list. Shown when the viewer is the
-  // organiser (`editable`) and hasn't already invited themselves —
-  // keeps organiser↔event out of the knowledge graph by default while
-  // making opt-in a single click. Reappears if the organiser later
-  // removes their own invitee row.
-  const showSelfInvite = editable && !viewerInvited;
-
-  return (
-    <section>
-      <div className="flex items-center justify-between mb-1.5">
-        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-          Invitees
-        </p>
-        <span className="text-xs text-muted-foreground tabular-nums">
-          {detail.invitees.length}
-        </span>
-      </div>
-      {detail.invitees.length === 0 && !showSelfInvite ? (
-        <p className="text-xs text-muted-foreground">No one invited yet.</p>
-      ) : (
-        <ul className="space-y-1.5">
-          {showSelfInvite && (
-            <li>
-              <button
-                type="button"
-                onClick={() => void handleSelfInvite()}
-                className="w-full flex items-center gap-2 text-sm rounded-md border border-dashed border-muted-foreground/30 px-2 py-1.5 text-muted-foreground hover:text-foreground hover:border-foreground/40 hover:bg-muted/40 transition-colors"
-              >
-                <UserPlus className="h-3.5 w-3.5" />
-                <span>Add yourself as invitee</span>
-              </button>
-            </li>
-          )}
-          {detail.invitees.map((inv) => {
-            const delivery = inviteDeliveryNotice(inv);
-            return (
-            <li
-              key={inv._id}
-              className="group flex items-center gap-2 text-sm"
-            >
-              <PersonRow
-                name={
-                  inv.userName ??
-                  inv.guestName ??
-                  inv.guestEmail ??
-                  "Invitee"
-                }
-                image={inv.userImage}
-                guest={!inv.userId}
-                subtitle={inv.userId ? inv.userEmail : "Guest"}
-              />
-              {/* Only failures are shown, and only as an icon: an invitee whose
-                  mail is merely in flight is not news, and "pending" is
-                  ambiguous precisely when delivery went wrong. The reason rides
-                  in the tooltip so the row stays one line. */}
-              {delivery && (
-                <span
-                  className={cn(
-                    "ml-auto shrink-0",
-                    delivery.tone === "error"
-                      ? "text-destructive"
-                      : "text-muted-foreground",
-                  )}
-                  title={
-                    delivery.detail
-                      ? `${delivery.label} · ${delivery.detail}`
-                      : delivery.label
-                  }
-                  aria-label={delivery.label}
-                >
-                  <MailWarning className="h-3.5 w-3.5" />
-                </span>
-              )}
-              <span
-                className={cn(
-                  "text-[11px] px-1.5 py-0.5 rounded font-medium",
-                  delivery ? "" : "ml-auto",
-                  RSVP_BADGE_CLASS[inv.status],
-                )}
-              >
-                {RSVP_LABEL[inv.status]}
-              </span>
-              {editable && (
-                <button
-                  type="button"
-                  onClick={() => void handleRemoveInvitee(inv._id)}
-                  aria-label={`Remove ${inv.userName ?? inv.guestEmail ?? "invitee"}`}
-                  className="opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity rounded-md p-1 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
-              )}
-            </li>
-            );
-          })}
-        </ul>
-      )}
-
-      {editable && (
-        <InviteAdder
-          members={members ?? []}
-          existingUserIds={existingUserIds}
-          existingGuestEmails={existingGuestEmails}
-          organizerId={detail.event.createdBy}
-          onSubmit={handleAddInvitees}
-        />
-      )}
-    </section>
-  );
-}

@@ -1,11 +1,11 @@
 import { TableAggregate } from "@convex-dev/aggregate";
 import { ConvexError } from "convex/values";
-import type { DataModel } from "./_generated/dataModel";
+import type { DataModel, Doc } from "./_generated/dataModel";
 import { Id } from "./_generated/dataModel";
 import { components, internal } from "./_generated/api";
 import { Triggers, writerWithTriggers } from "convex-helpers/server/triggers";
 import type { GenericMutationCtx } from "convex/server";
-import { extractMessageTargets } from "./utils/blocknote";
+import { extractMessageTargets, type MessageTargetType } from "./utils/blocknote";
 import { getUserDisplayName } from "@ripple/shared/displayName";
 import { scheduleSubscriptionDrain } from "./subscriptionPool";
 import {
@@ -332,13 +332,39 @@ triggers.register("tasks", async (ctx, change) => {
   // delete: node cleanup handled by cascade rules
 });
 
+/**
+ * Whether this `calendarEvents` change is an **override** — a row standing in
+ * for one edited occurrence of a series (ADR 0002).
+ *
+ * An override is not a resource. The series is, and it owns the single graph
+ * node, the single set of tags and the single mention target. This predicate is
+ * the guard on the two graph-side triggers below; the third mechanism that acts
+ * on every row of the table — the `by_title` search index behind mention
+ * autocomplete — is filtered at its own read site in `calendarEvents.ts`.
+ */
+function isOverride(change: {
+  newDoc: Doc<"calendarEvents"> | null;
+  oldDoc: Doc<"calendarEvents"> | null;
+}): boolean {
+  return (change.newDoc ?? change.oldDoc)?.seriesId !== undefined;
+}
+
 // Calendar events become nodes with `searchable: false` — they participate
 // in the graph and edges (so transcripts, mentions, action-items can link to
 // them) but stay out of `nodes.search` (Ctrl+K). High-frequency patches like
 // SEQUENCE bumps and RSVP-driven sequence increments shouldn't write to the
 // node, so we filter on title changes only — same shape as the tasks trigger
 // above.
+//
+// An **override** — a row carrying `seriesId`, standing in for one occurrence
+// of a series — is the exception, and it has to be an explicit one. It is not
+// a resource: the *series* is (ADR 0002), and it owns the single node. Without
+// the guard below every rescheduled Tuesday quietly becomes a second graph node
+// under the series' own name, and a weekly standup with a few moved weeks turns
+// the graph into a picture of the calendar's arithmetic. Regression test:
+// `tests/occurrenceOverride.test.ts` → "an override is not a resource".
 triggers.register("calendarEvents", async (ctx, change) => {
+  if (isOverride(change)) return;
   if (change.operation === "insert") {
     await insertNode(ctx, {
       workspaceId: change.newDoc.workspaceId,
@@ -348,6 +374,35 @@ triggers.register("calendarEvents", async (ctx, change) => {
       searchable: false,
     });
   } else if (change.operation === "update") {
+    await syncNode(ctx, change.id, change.newDoc.title, change.oldDoc.title);
+  }
+  // delete: cascadeDelete.ts handles node + edges + entityTags + invitees
+});
+
+// ── Series nodes ────────────────────────────────────────────────────
+// The other half of the same decision. A **series** is the resource a
+// repeating meeting has (ADR 0002): its occurrences are computed rather than
+// stored, so there is nothing else for the graph to hang a node on, and one
+// node is what keeps the graph a picture of the workspace rather than of the
+// calendar's arithmetic — a weekly standup running two years would otherwise
+// be 104 of them.
+//
+// `searchable: false`, exactly as a one-off event: a series participates in
+// the graph and in backlinks, but Ctrl+K stays a search for documents, tasks
+// and channels rather than a list of every meeting anyone ever booked.
+triggers.register("eventSeries", async (ctx, change) => {
+  if (change.operation === "insert") {
+    await insertNode(ctx, {
+      workspaceId: change.newDoc.workspaceId,
+      resourceType: "eventSeries",
+      resourceId: change.id,
+      name: change.newDoc.title,
+      searchable: false,
+    });
+  } else if (change.operation === "update") {
+    // Title only — the same filter the events and tasks triggers use. A series
+    // row is patched on every excluded start and every SEQUENCE bump, none of
+    // which the node cares about.
     await syncNode(ctx, change.id, change.newDoc.title, change.oldDoc.title);
   }
   // delete: cascadeDelete.ts handles node + edges + entityTags + invitees
@@ -534,63 +589,115 @@ triggers.register("tasks", async (ctx, change) => {
 // registered after the calendarEvent node trigger above so findNodeId
 // resolves the event's node.
 
-triggers.register("calendarEvents", async (ctx, change) => {
-  if (change.operation === "insert") {
-    if (!change.newDoc.channelId) return;
+/**
+ * Point `sourceId`'s single venue edge at `newChannelId` (or at nothing).
+ *
+ * Shared by the one-off event and the series, because a repeating meeting has
+ * exactly the venue a one-off has: one channel, one `hosted_in` edge, moved or
+ * dropped when the venue changes. Passing the old channel as `undefined` means
+ * "there was none" — the insert case — so both branches of both triggers are
+ * this one call.
+ */
+async function syncVenueEdge(
+  ctx: TriggerCtx,
+  args: {
+    sourceType: "calendarEvent" | "eventSeries";
+    sourceId: string;
+    workspaceId: Id<"workspaces">;
+    oldChannelId: Id<"channels"> | undefined;
+    newChannelId: Id<"channels"> | undefined;
+  },
+): Promise<void> {
+  const { oldChannelId, newChannelId } = args;
+  if (oldChannelId === newChannelId) return;
+
+  if (oldChannelId) {
+    const oldEdges = await ctx.db
+      .query("edges")
+      .withIndex("by_source_target", (q) =>
+        q.eq("sourceId", args.sourceId).eq("targetId", oldChannelId),
+      )
+      .collect();
+    const edge = oldEdges.find(
+      (e) => e.edgeType === "hosted_in" && e.targetType === "channel",
+    );
+    if (edge) await ctx.db.delete(edge._id);
+  }
+
+  if (newChannelId) {
     const [sourceNodeId, targetNodeId] = await Promise.all([
-      findNodeId(ctx, change.id),
-      findNodeId(ctx, change.newDoc.channelId),
+      findNodeId(ctx, args.sourceId),
+      findNodeId(ctx, newChannelId),
     ]);
     await ctx.db.insert("edges", {
-      sourceType: "calendarEvent",
-      sourceId: change.id,
+      sourceType: args.sourceType,
+      sourceId: args.sourceId,
       targetType: "channel",
-      targetId: change.newDoc.channelId,
+      targetId: newChannelId,
       edgeType: "hosted_in",
-      workspaceId: change.newDoc.workspaceId,
+      workspaceId: args.workspaceId,
       sourceNodeId,
       targetNodeId,
       createdAt: Date.now(),
     } as never);
+  }
+}
+
+triggers.register("calendarEvents", async (ctx, change) => {
+  // Same exclusion, same reason as the node trigger: an override has no node,
+  // so an edge out of it would point at nothing. The venue edge belongs to the
+  // series (ADR 0002) — and `getWorkspaceGraph` drops links it cannot resolve,
+  // so the orphan would sit in the table unseen.
+  if (isOverride(change)) return;
+  if (change.operation === "insert") {
+    await syncVenueEdge(ctx, {
+      sourceType: "calendarEvent",
+      sourceId: change.id,
+      workspaceId: change.newDoc.workspaceId,
+      oldChannelId: undefined,
+      newChannelId: change.newDoc.channelId,
+    });
   } else if (change.operation === "update") {
-    const oldChannelId = change.oldDoc.channelId;
-    const newChannelId = change.newDoc.channelId;
-    if (oldChannelId === newChannelId) return;
-    if (oldChannelId) {
-      const oldEdges = await ctx.db
-        .query("edges")
-        .withIndex("by_source_target", (q) =>
-          q.eq("sourceId", change.id).eq("targetId", oldChannelId),
-        )
-        .collect();
-      const edge = oldEdges.find(
-        (e) => e.edgeType === "hosted_in" && e.targetType === "channel",
-      );
-      if (edge) await ctx.db.delete(edge._id);
-    }
-    if (newChannelId) {
-      const [sourceNodeId, targetNodeId] = await Promise.all([
-        findNodeId(ctx, change.id),
-        findNodeId(ctx, newChannelId),
-      ]);
-      await ctx.db.insert("edges", {
-        sourceType: "calendarEvent",
-        sourceId: change.id,
-        targetType: "channel",
-        targetId: newChannelId,
-        edgeType: "hosted_in",
-        workspaceId: change.newDoc.workspaceId,
-        sourceNodeId,
-        targetNodeId,
-        createdAt: Date.now(),
-      } as never);
-    }
+    await syncVenueEdge(ctx, {
+      sourceType: "calendarEvent",
+      sourceId: change.id,
+      workspaceId: change.newDoc.workspaceId,
+      oldChannelId: change.oldDoc.channelId,
+      newChannelId: change.newDoc.channelId,
+    });
   }
   // delete: edge cleanup handled by cascade rules
 });
 
-// ── calendarEventInvitee → user "invites" edge ──────────────────────
-// Mirrors each (eventId, userId) join row into the polymorphic graph as
+// ── eventSeries → channel "hosted_in" edge ──────────────────────────
+// The same venue, the same edge. A series that meets in #standup is hosted in
+// it exactly the way a one-off is; the difference is only that one edge stands
+// for every Tuesday rather than for one. Registered after the series node
+// trigger above so `findNodeId` resolves the series' own node.
+
+triggers.register("eventSeries", async (ctx, change) => {
+  if (change.operation === "insert") {
+    await syncVenueEdge(ctx, {
+      sourceType: "eventSeries",
+      sourceId: change.id,
+      workspaceId: change.newDoc.workspaceId,
+      oldChannelId: undefined,
+      newChannelId: change.newDoc.channelId,
+    });
+  } else if (change.operation === "update") {
+    await syncVenueEdge(ctx, {
+      sourceType: "eventSeries",
+      sourceId: change.id,
+      workspaceId: change.newDoc.workspaceId,
+      oldChannelId: change.oldDoc.channelId,
+      newChannelId: change.newDoc.channelId,
+    });
+  }
+  // delete: edge cleanup handled by cascade rules
+});
+
+// ── invitee → user "invites" edge ───────────────────────────────────
+// Mirrors each (meeting, userId) join row into the polymorphic graph as
 // an `invites` edge. The trigger is the single source of truth — both
 // `calendarEvents.addInvitees` and the organiser-only
 // `calendarEvents.selfInvite` just write the join row, so neither mutation
@@ -618,53 +725,101 @@ triggers.register("calendarEvents", async (ctx, change) => {
 // the invitee rows AND `edges` rows directly — both paths converge on
 // a clean state.
 //
-// Registered after the calendarEvents + workspaceMembers node triggers
-// so `findNodeId` resolves both endpoints by the time we reach here.
+// Registered after the calendarEvents + eventSeries + workspaceMembers node
+// triggers so `findNodeId` resolves both endpoints by the time we reach here.
 
-triggers.register("calendarEventInvitees", async (ctx, change) => {
-  if (change.operation === "insert") {
-    const inv = change.newDoc;
-    if (!inv.userId) return; // guest invitee — no user node to link
+/**
+ * Connect (or disconnect) one invitee and the meeting they are invited to.
+ *
+ * Shared by the one-off event and the series for the same reason `syncVenueEdge`
+ * is: being invited to the standup means what being invited to one meeting
+ * means. The series is the resource a repeating meeting has (ADR 0002) — its
+ * occurrences are computed, so there is no per-occurrence row to hang a roster
+ * or an edge off — and that is the *only* difference between the two callers.
+ *
+ * `userId` undefined means a guest: they have no workspace user node to link
+ * to, so they get no edge either way.
+ */
+async function syncInviteEdge(
+  ctx: TriggerCtx,
+  args: {
+    invited: boolean;
+    sourceType: "calendarEvent" | "eventSeries";
+    sourceId: string;
+    workspaceId: Id<"workspaces">;
+    userId: Id<"users"> | undefined;
+  },
+): Promise<void> {
+  const { userId } = args;
+  if (!userId) return; // guest invitee — no user node to link
+
+  if (args.invited) {
     const [sourceNodeId, targetNodeId] = await Promise.all([
-      findNodeId(ctx, inv.eventId),
+      findNodeId(ctx, args.sourceId),
       // User nodes are per-membership, so the workspace-blind `findNodeId`
       // returns whichever workspace's node was created first — for an invitee
       // who belongs to more than one, that can disagree with the edge's own
       // `workspaceId`. Same scoping `insertChannelMentionEdge` uses for user
       // targets, and what the backfill migration special-cases.
-      findUserNodeId(ctx, inv.userId, inv.workspaceId),
+      findUserNodeId(ctx, userId, args.workspaceId),
     ]);
     await ctx.db.insert("edges", {
-      sourceType: "calendarEvent",
-      sourceId: inv.eventId,
+      sourceType: args.sourceType,
+      sourceId: args.sourceId,
       targetType: "user",
-      targetId: inv.userId,
+      targetId: userId,
       edgeType: "invites",
-      workspaceId: inv.workspaceId,
+      workspaceId: args.workspaceId,
       sourceNodeId,
       targetNodeId,
       createdAt: Date.now(),
     } as never);
-  } else if (change.operation === "delete") {
-    const inv = change.oldDoc;
-    const inviteeUserId = inv.userId;
-    if (!inviteeUserId) return;
-    // by_source_target narrows the scan; `find` picks our specific
-    // edge type so we don't tread on `hosted_in` etc. should the same
-    // (sourceId, targetId) pair ever appear under a different kind.
-    const candidates = await ctx.db
-      .query("edges")
-      .withIndex("by_source_target", (q) =>
-        q.eq("sourceId", inv.eventId).eq("targetId", inviteeUserId),
-      )
-      .collect();
-    const edge = candidates.find(
-      (e) => e.edgeType === "invites" && e.targetType === "user",
-    );
-    if (edge) await ctx.db.delete(edge._id);
+    return;
   }
+
+  // by_source_target narrows the scan; `find` picks our specific
+  // edge type so we don't tread on `hosted_in` etc. should the same
+  // (sourceId, targetId) pair ever appear under a different kind.
+  const candidates = await ctx.db
+    .query("edges")
+    .withIndex("by_source_target", (q) =>
+      q.eq("sourceId", args.sourceId).eq("targetId", userId),
+    )
+    .collect();
+  const edge = candidates.find(
+    (e) => e.edgeType === "invites" && e.targetType === "user",
+  );
+  if (edge) await ctx.db.delete(edge._id);
+}
+
+triggers.register("calendarEventInvitees", async (ctx, change) => {
+  if (change.operation === "update") return;
   // update: RSVP status flips don't affect edge existence under the
   // current row-exists semantic. See header comment.
+  const inv = change.newDoc ?? change.oldDoc;
+  await syncInviteEdge(ctx, {
+    invited: change.operation === "insert",
+    sourceType: "calendarEvent",
+    sourceId: inv.eventId,
+    workspaceId: inv.workspaceId,
+    userId: inv.userId,
+  });
+});
+
+// The series' roster, through the same door. An **override** never reaches
+// here: it is not a resource and has no roster of its own — the roster belongs
+// to the series, which is what keeps a rescheduled Tuesday from acquiring a
+// second set of edges to everyone invited.
+triggers.register("eventSeriesInvitees", async (ctx, change) => {
+  if (change.operation === "update") return;
+  const inv = change.newDoc ?? change.oldDoc;
+  await syncInviteEdge(ctx, {
+    invited: change.operation === "insert",
+    sourceType: "eventSeries",
+    sourceId: inv.seriesId,
+    workspaceId: inv.workspaceId,
+    userId: inv.userId,
+  });
 });
 
 // ── Channel mention edge helpers ────────────────────────────────────
@@ -677,7 +832,7 @@ triggers.register("calendarEventInvitees", async (ctx, change) => {
 // reader deduplicated the pile at query time.
 
 type MentionTarget = {
-  targetType: "user" | "task" | "project" | "document" | "diagram" | "spreadsheet" | "calendarEvent";
+  targetType: MessageTargetType;
   targetId: string;
 };
 

@@ -31,18 +31,26 @@ export function NotifyInviteesDialog({
   eventTitle,
   oldRangeLabel,
   newRangeLabel,
-  inviteeCount,
+  summary,
   onChoose,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   eventTitle: string;
-  oldRangeLabel: string;
-  newRangeLabel: string;
-  /** Non-organizer invitee count — drives the "X people" copy. */
-  inviteeCount: number;
+  /** The before/after times. Absent when the edit moved nothing — a rename
+   *  has no "was" and no "now" to show. */
+  oldRangeLabel?: string;
+  newRangeLabel?: string;
+  /**
+   * What this will actually send — "2 invitees, this occurrence". Both halves
+   * matter: the same sentence must not appear whether one Tuesday or
+   * forty-seven meetings are moving. Computed by `decideNotify`.
+   */
+  summary: string;
   onChoose: (choice: RescheduleChoice) => void;
 }) {
+  const movedInTime =
+    oldRangeLabel !== undefined && newRangeLabel !== undefined;
   // Wrapper so any path that closes the dialog without an explicit
   // choice (X button, ESC, click-outside) treats it as a revert. This
   // matches Google Calendar's behaviour and prevents accidental silent
@@ -58,30 +66,35 @@ export function NotifyInviteesDialog({
         <ResponsiveDialogHeader>
           <ResponsiveDialogTitle>Notify invitees?</ResponsiveDialogTitle>
           <ResponsiveDialogDescription>
-            {eventTitle ? `"${eventTitle}" has` : "This event has"}{" "}
-            {inviteeCount} {inviteeCount === 1 ? "invitee" : "invitees"}.
-            Choose whether to let them know about the new time.
+            {/* The two numbers that make the answer decidable: how many
+                people, and how much of the meeting. */}
+            {eventTitle ? `"${eventTitle}" — ` : ""}
+            {summary}. Choose whether to let them know
+            {movedInTime ? " about the new time" : " about the change"}.
           </ResponsiveDialogDescription>
         </ResponsiveDialogHeader>
         <ResponsiveDialogBody className="space-y-2">
           {/* Before/after summary — small, calm, gives a glance-able
-              confirmation of what changed before the user commits. */}
-          <div className="rounded-md border border-border/60 bg-muted/30 p-3 text-sm flex flex-col gap-1.5">
-            <div className="flex items-baseline gap-2">
-              <span className="text-xs text-muted-foreground uppercase tracking-wide w-12 shrink-0">
-                Was
-              </span>
-              <span className="text-muted-foreground line-through tabular-nums">
-                {oldRangeLabel}
-              </span>
+              confirmation of what changed before the user commits. Absent
+              when nothing moved, because there is nothing to compare. */}
+          {movedInTime && (
+            <div className="rounded-md border border-border/60 bg-muted/30 p-3 text-sm flex flex-col gap-1.5">
+              <div className="flex items-baseline gap-2">
+                <span className="text-xs text-muted-foreground uppercase tracking-wide w-12 shrink-0">
+                  Was
+                </span>
+                <span className="text-muted-foreground line-through tabular-nums">
+                  {oldRangeLabel}
+                </span>
+              </div>
+              <div className="flex items-baseline gap-2">
+                <span className="text-xs text-muted-foreground uppercase tracking-wide w-12 shrink-0">
+                  Now
+                </span>
+                <span className="font-medium tabular-nums">{newRangeLabel}</span>
+              </div>
             </div>
-            <div className="flex items-baseline gap-2">
-              <span className="text-xs text-muted-foreground uppercase tracking-wide w-12 shrink-0">
-                Now
-              </span>
-              <span className="font-medium tabular-nums">{newRangeLabel}</span>
-            </div>
-          </div>
+          )}
         </ResponsiveDialogBody>
         <ResponsiveDialogFooter className="flex-col-reverse sm:flex-row sm:justify-end gap-2">
           <Button

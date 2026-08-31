@@ -269,7 +269,9 @@ export type DataModel = {
       createdBy: Id<"users">;
       description?: string;
       endsAt: number;
+      originalStartMs?: number;
       sequence?: number;
+      seriesId?: Id<"eventSeries">;
       startsAt: number;
       tags?: Array<string>;
       timezone: string;
@@ -286,7 +288,9 @@ export type DataModel = {
       | "createdBy"
       | "description"
       | "endsAt"
+      | "originalStartMs"
       | "sequence"
+      | "seriesId"
       | "startsAt"
       | "tags"
       | "timezone"
@@ -296,6 +300,11 @@ export type DataModel = {
       by_id: ["_id"];
       by_creation_time: ["_creationTime"];
       by_channel: ["channelId", "_creationTime"];
+      by_series_original_start: [
+        "seriesId",
+        "originalStartMs",
+        "_creationTime",
+      ];
       by_workspace_starts: ["workspaceId", "startsAt", "_creationTime"];
     };
     searchIndexes: {
@@ -309,9 +318,12 @@ export type DataModel = {
   callSessions: {
     document: {
       active: boolean;
-      channelId: Id<"channels">;
+      channelId?: Id<"channels">;
       cloudflareMeetingId: string;
       cloudflareSessionId?: string;
+      eventId?: Id<"calendarEvents">;
+      occurrenceStartMs?: number;
+      seriesId?: Id<"eventSeries">;
       transcribe?: boolean;
       transcriptDocumentId?: Id<"documents">;
       _id: Id<"callSessions">;
@@ -324,6 +336,9 @@ export type DataModel = {
       | "channelId"
       | "cloudflareMeetingId"
       | "cloudflareSessionId"
+      | "eventId"
+      | "occurrenceStartMs"
+      | "seriesId"
       | "transcribe"
       | "transcriptDocumentId";
     indexes: {
@@ -331,7 +346,9 @@ export type DataModel = {
       by_creation_time: ["_creationTime"];
       by_active: ["active", "_creationTime"];
       by_channel_active: ["channelId", "active", "_creationTime"];
+      by_event_active: ["eventId", "active", "_creationTime"];
       by_meeting: ["cloudflareMeetingId", "_creationTime"];
+      by_series_active: ["seriesId", "active", "_creationTime"];
       by_transcript_document: ["transcriptDocumentId", "_creationTime"];
     };
     searchIndexes: {};
@@ -420,7 +437,8 @@ export type DataModel = {
         | "user"
         | "project"
         | "channel"
-        | "calendarEvent";
+        | "calendarEvent"
+        | "eventSeries";
       workspaceId: Id<"workspaces">;
       _id: Id<"channelMentionCounts">;
       _creationTime: number;
@@ -678,7 +696,8 @@ export type DataModel = {
         | "diagram"
         | "spreadsheet"
         | "channel"
-        | "calendarEvent";
+        | "calendarEvent"
+        | "eventSeries";
       targetId: string;
       targetNodeId?: Id<"nodes">;
       targetType:
@@ -689,7 +708,8 @@ export type DataModel = {
         | "user"
         | "project"
         | "channel"
-        | "calendarEvent";
+        | "calendarEvent"
+        | "eventSeries";
       workspaceId: Id<"workspaces">;
       _id: Id<"edges">;
       _creationTime: number;
@@ -731,7 +751,8 @@ export type DataModel = {
         | "diagram"
         | "spreadsheet"
         | "project"
-        | "calendarEvent";
+        | "calendarEvent"
+        | "eventSeries";
       tagId: Id<"tags">;
       tagName: string;
       workspaceId: Id<"workspaces">;
@@ -757,6 +778,117 @@ export type DataModel = {
         "resourceType",
         "_creationTime",
       ];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
+  eventSeries: {
+    document: {
+      activeUntil: number;
+      anchorDate: string;
+      anchorTime: string;
+      channelId?: Id<"channels">;
+      cloudflareMeetingId?: string;
+      createdBy: Id<"users">;
+      description?: string;
+      durationMs: number;
+      excludedStarts?: Array<number>;
+      rule: {
+        end:
+          | { kind: "never" }
+          | { date: string; kind: "onDate" }
+          | { count: number; kind: "afterCount" };
+        freq: "daily" | "weekly" | "monthly" | "yearly";
+        interval: number;
+        monthlyMode?: "dayOfMonth" | "nthWeekday";
+        weekdays?: Array<string>;
+      };
+      sequence?: number;
+      tags?: Array<string>;
+      timezone: string;
+      title: string;
+      workspaceId: Id<"workspaces">;
+      _id: Id<"eventSeries">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "activeUntil"
+      | "anchorDate"
+      | "anchorTime"
+      | "channelId"
+      | "cloudflareMeetingId"
+      | "createdBy"
+      | "description"
+      | "durationMs"
+      | "excludedStarts"
+      | "rule"
+      | "rule.end"
+      | "rule.end.count"
+      | "rule.end.date"
+      | "rule.end.kind"
+      | "rule.freq"
+      | "rule.interval"
+      | "rule.monthlyMode"
+      | "rule.weekdays"
+      | "sequence"
+      | "tags"
+      | "timezone"
+      | "title"
+      | "workspaceId";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_channel: ["channelId", "_creationTime"];
+      by_workspace_activeUntil: ["workspaceId", "activeUntil", "_creationTime"];
+    };
+    searchIndexes: {
+      by_title: {
+        searchField: "title";
+        filterFields: "workspaceId";
+      };
+    };
+    vectorIndexes: {};
+  };
+  eventSeriesInvitees: {
+    document: {
+      guestEmail?: string;
+      guestName?: string;
+      guestSub?: string;
+      lastRsvpDtstamp?: number;
+      lastRsvpSequence?: number;
+      originalStartMs?: number;
+      respondedAt?: number;
+      seriesId: Id<"eventSeries">;
+      shareId?: string;
+      status: "pending" | "accepted" | "declined" | "tentative";
+      userId?: Id<"users">;
+      workspaceId: Id<"workspaces">;
+      _id: Id<"eventSeriesInvitees">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "guestEmail"
+      | "guestName"
+      | "guestSub"
+      | "lastRsvpDtstamp"
+      | "lastRsvpSequence"
+      | "originalStartMs"
+      | "respondedAt"
+      | "seriesId"
+      | "shareId"
+      | "status"
+      | "userId"
+      | "workspaceId";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_series: ["seriesId", "_creationTime"];
+      by_series_user: ["seriesId", "userId", "_creationTime"];
+      by_share: ["shareId", "_creationTime"];
     };
     searchIndexes: {};
     vectorIndexes: {};
@@ -1026,7 +1158,8 @@ export type DataModel = {
         | "channel"
         | "task"
         | "user"
-        | "calendarEvent";
+        | "calendarEvent"
+        | "eventSeries";
       searchable?: boolean;
       tags?: Array<string>;
       workspaceId: Id<"workspaces">;
@@ -1410,7 +1543,8 @@ export type DataModel = {
         | "diagram"
         | "spreadsheet"
         | "channel"
-        | "calendarEvent";
+        | "calendarEvent"
+        | "eventSeries";
       revokedAt?: number;
       shareId: string;
       workspaceId: Id<"workspaces">;

@@ -21,6 +21,7 @@ export const resourceTypeSchema = v.union(
   v.literal("project"),
   v.literal("task"),
   v.literal("calendarEvent"),
+  v.literal("eventSeries"),
 );
 
 export type TaggableResourceType =
@@ -29,7 +30,8 @@ export type TaggableResourceType =
   | "spreadsheet"
   | "project"
   | "task"
-  | "calendarEvent";
+  | "calendarEvent"
+  | "eventSeries";
 
 /** Resources that flow through `syncTagsForResource` (excludes tasks, which
  *  are project-scoped and use `syncTaskTags` against the `taskTags` table,
@@ -38,7 +40,8 @@ export type ListableResourceType =
   | "document"
   | "diagram"
   | "spreadsheet"
-  | "calendarEvent";
+  | "calendarEvent"
+  | "eventSeries";
 
 /** Trim, lowercase, drop empties / over-length, dedupe. */
 export function normalizeTagList(raw: readonly string[]): string[] {
@@ -374,6 +377,14 @@ async function stripTagFromResource(
     }
     case "spreadsheet": {
       const id = resourceId as Id<"spreadsheets">;
+      const doc = await ctx.db.get(id);
+      if (!doc) return;
+      const next = (doc.tags ?? []).filter((t) => t !== tagName);
+      await ctx.db.patch(id, { tags: next });
+      return;
+    }
+    case "eventSeries": {
+      const id = resourceId as Id<"eventSeries">;
       const doc = await ctx.db.get(id);
       if (!doc) return;
       const next = (doc.tags ?? []).filter((t) => t !== tagName);

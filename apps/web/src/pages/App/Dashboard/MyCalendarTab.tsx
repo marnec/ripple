@@ -42,6 +42,10 @@ import {
   type DashboardCalendarView,
 } from "./calendar-header-context";
 import { EmptyOverlay } from "./EmptyOverlay";
+import {
+  formatScheduleXEventId,
+  parseScheduleXEventId,
+} from "../Calendar/scheduleXEventId";
 import { useEventDragCreate } from "./hooks/useEventDragCreate";
 import { useEventReschedule } from "./hooks/useEventReschedule";
 import { useScheduleXEventBinding } from "./hooks/useScheduleXEventBinding";
@@ -138,6 +142,15 @@ function MyCalendarTabContent({ workspaceId }: { workspaceId: Id<"workspaces"> }
     rangeStartMs,
     rangeEndMs,
   });
+  // Occurrences of the caller's series. A second query rather than a widening
+  // of the one above: that one's completeness rests on the 24-hour duration
+  // cap and it keeps carrying one-off events and overrides untouched, while
+  // this one reads the workspace's live series and expands them (ADR 0002).
+  const occurrences = useQuery(api.eventSeries.listMineInRange, {
+    workspaceId,
+    rangeStartMs,
+    rangeEndMs,
+  });
   // listByAssignee is the same query MyTasks uses — Convex deduplicates the
   // subscription, so we don't pay double even when both tabs are mounted.
   const tasks = useQuery(api.tasks.listByAssignee, {
@@ -189,6 +202,19 @@ function MyCalendarTabContent({ workspaceId }: { workspaceId: Id<"workspaces"> }
         }
       : "skip",
   );
+  // A colleague booked by a repeating meeting is just as booked. Same
+  // discretion as the lane above — timing and member id, nothing else.
+  const memberSeriesBusyBlocks = useQuery(
+    api.eventSeries.listForMembersInRange,
+    liveVisibleMemberIds.length > 0
+      ? {
+          workspaceId,
+          memberIds: liveVisibleMemberIds,
+          rangeStartMs,
+          rangeEndMs,
+        }
+      : "skip",
+  );
 
   const [openCreate, setOpenCreate] = useState(false);
   // Seeds the start-time defaults inside CreateEventDialog. `null` ⇒ the
@@ -218,6 +244,11 @@ function MyCalendarTabContent({ workspaceId }: { workspaceId: Id<"workspaces"> }
   const [selectedEventId, setSelectedEventId] = useState<Id<"calendarEvents"> | null>(
     () => (queryEventId ? (queryEventId as Id<"calendarEvents">) : null),
   );
+  // An occurrence has no id, so the selection carries the pair that names it.
+  const [selectedOccurrence, setSelectedOccurrence] = useState<{
+    seriesId: Id<"eventSeries">;
+    originalStartMs: number;
+  } | null>(null);
 
   // Sticky "has been opened at least once" flags. Sheets/dialogs need to
   // stay mounted while their `open` prop transitions back to false so the
@@ -297,7 +328,7 @@ function MyCalendarTabContent({ workspaceId }: { workspaceId: Id<"workspaces"> }
       start: Temporal.PlainDate | Temporal.ZonedDateTime;
       end: Temporal.PlainDate | Temporal.ZonedDateTime;
       calendarId: string;
-      _kind: "task" | "event";
+      _kind: "task" | "event" | "occurrence";
       _taskProjectId?: Id<"projects">;
     }> = [];
     if (tasks) {
@@ -319,7 +350,7 @@ function MyCalendarTabContent({ workspaceId }: { workspaceId: Id<"workspaces"> }
     if (events) {
       for (const e of events) {
         out.push({
-          id: `event-${e._id}`,
+          id: formatScheduleXEventId({ kind: "event", id: e._id }),
           title: e.title,
           start: msToZonedDateTime(e.startsAt),
           end: msToZonedDateTime(e.endsAt),
@@ -328,8 +359,26 @@ function MyCalendarTabContent({ workspaceId }: { workspaceId: Id<"workspaces"> }
         });
       }
     }
+    if (occurrences) {
+      for (const o of occurrences) {
+        // An occurrence has no row, so its id in this list is the
+        // (series, original start) pair — the only thing that names it.
+        out.push({
+          id: formatScheduleXEventId({
+            kind: "occurrence",
+            seriesId: o.seriesId,
+            originalStartMs: o.originalStartMs,
+          }),
+          title: o.title,
+          start: msToZonedDateTime(o.startsAt),
+          end: msToZonedDateTime(o.endsAt),
+          calendarId: CAL_EVENT,
+          _kind: "occurrence",
+        });
+      }
+    }
     return out;
-  }, [events, tasks]);
+  }, [events, occurrences, tasks]);
 
   // Background events derived from the member-calendar overlay query.
   // Title is intentionally empty: schedule-x renders BackgroundEvents
@@ -337,14 +386,15 @@ function MyCalendarTabContent({ workspaceId }: { workspaceId: Id<"workspaces"> }
   // — only their busy time. Per-member tinting comes from `style`,
   // hashed deterministically in `memberBlockStyle`.
   const backgroundEvents = useMemo<BackgroundEvent[]>(() => {
-    if (!memberBusyBlocks) return [];
-    return memberBusyBlocks.map((b) => ({
-      title: "",
-      start: msToZonedDateTime(b.startsAt),
-      end: msToZonedDateTime(b.endsAt),
-      style: memberBlockStyle(b.memberId),
-    }));
-  }, [memberBusyBlocks]);
+    return [...(memberBusyBlocks ?? []), ...(memberSeriesBusyBlocks ?? [])].map(
+      (b) => ({
+        title: "",
+        start: msToZonedDateTime(b.startsAt),
+        end: msToZonedDateTime(b.endsAt),
+        style: memberBlockStyle(b.memberId),
+      }),
+    );
+  }, [memberBusyBlocks, memberSeriesBusyBlocks]);
 
   // Calendar-controls plugin — exposes getDate/setDate + getView/setView so
   // our custom header can drive nav. `rangeVersion` is bumped on every range
@@ -433,6 +483,9 @@ function MyCalendarTabContent({ workspaceId }: { workspaceId: Id<"workspaces"> }
   // Mutation handle for the reschedule hook (drag/resize commit) and
   // for any other inline persistence path the tab might grow later.
   const updateEventMutation = useMutation(api.calendarEvents.update);
+  // Dragging one occurrence of a series writes an override for that occurrence
+  // and never edits the rule — see `useEventReschedule`.
+  const overrideOccurrenceMutation = useMutation(api.eventSeries.updateOccurrence);
 
   // Ref-trampoline for schedule-x's drag/resize commit callback. The
   // calendar instance is built once in `useState`'s lazy initializer
@@ -508,7 +561,10 @@ function MyCalendarTabContent({ workspaceId }: { workspaceId: Id<"workspaces"> }
         // before any persistence happens.
         onBeforeEventUpdate(oldEvent) {
           if (!oldEvent || typeof oldEvent.id !== "string") return false;
-          return oldEvent.id.startsWith("event-");
+          // Occurrences of a series are draggable too — the commit writes an
+          // override for that one occurrence rather than editing the rule.
+          const kind = parseScheduleXEventId(oldEvent.id)?.kind;
+          return kind === "event" || kind === "occurrence";
         },
         // Drag/resize commit. Dispatched through the ref trampoline so
         // the callback always reads the freshest events array, mutation
@@ -594,7 +650,9 @@ function MyCalendarTabContent({ workspaceId }: { workspaceId: Id<"workspaces"> }
     revertReschedule,
   } = useEventReschedule({
     events,
+    occurrences,
     updateEvent: updateEventMutation,
+    overrideOccurrence: overrideOccurrenceMutation,
     calendarApp,
     eventCalendarId: CAL_EVENT,
   });
@@ -626,6 +684,9 @@ function MyCalendarTabContent({ workspaceId }: { workspaceId: Id<"workspaces"> }
     onEventClick: (eventId) => {
       setSelectedEventId(eventId);
     },
+    onOccurrenceClick: (seriesId, originalStartMs) => {
+      setSelectedOccurrence({ seriesId, originalStartMs });
+    },
   });
 
   // Resolve the user's choice from the notify-invitees dialog.
@@ -652,6 +713,18 @@ function MyCalendarTabContent({ workspaceId }: { workspaceId: Id<"workspaces"> }
     return (
       <Navigate
         to={`/workspaces/${workspaceId}/events/${selectedEventId}`}
+        replace
+      />
+    );
+  }
+
+  // An occurrence goes to the page on every device, not just mobile: it is
+  // addressed by a (series, original start) pair rather than by a row id, and
+  // the desktop sheet is built around an event row it does not have.
+  if (selectedOccurrence) {
+    return (
+      <Navigate
+        to={`/workspaces/${workspaceId}/events/${selectedOccurrence.seriesId}?on=${selectedOccurrence.originalStartMs}`}
         replace
       />
     );
@@ -804,7 +877,7 @@ function MyCalendarTabContent({ workspaceId }: { workspaceId: Id<"workspaces"> }
             pendingReschedule.newStartsAt,
             pendingReschedule.newEndsAt,
           )}
-          inviteeCount={pendingReschedule.inviteeCount}
+          summary={pendingReschedule.summary}
           onChoose={handleRescheduleChoice}
         />
       )}

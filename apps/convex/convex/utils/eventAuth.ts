@@ -25,9 +25,14 @@ import type { Doc, Id } from "../_generated/dataModel";
  * `verb` is interpolated into the error message so callers don't have
  * to write per-mutation copy ("Only the organizer can update / cancel /
  * remove / add invitees / remove invitees").
+ *
+ * Takes `{ createdBy }` rather than a `calendarEvents` doc so an `eventSeries`
+ * row goes through the same gate: a series is organizer-owned for exactly the
+ * reasons a one-off event is, and a second copy of this rule would be a second
+ * place to get it wrong.
  */
 export function assertOrganizer(
-  event: Doc<"calendarEvents">,
+  event: { createdBy: Id<"users"> },
   userId: Id<"users">,
   membership: Doc<"workspaceMembers">,
   verb: string,

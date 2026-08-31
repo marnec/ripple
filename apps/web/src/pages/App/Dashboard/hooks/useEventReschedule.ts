@@ -2,7 +2,6 @@ import { useState } from "react";
 import { Temporal } from "temporal-polyfill";
 import { toast } from "sonner";
 
-import { isHistoricalReschedule } from "@/lib/calendar-utils";
 import { getErrorMessage } from "@/lib/errors";
 import type { Id } from "@convex/_generated/dataModel";
 
@@ -10,6 +9,7 @@ import {
   msToZonedDateTime,
   temporalToMs,
 } from "../../Calendar/event-time-utils";
+import { decideNotify } from "../../Calendar/notify-scope";
 import { parseScheduleXEventId } from "../../Calendar/scheduleXEventId";
 
 /**
@@ -26,7 +26,28 @@ export type ReschedulableEvent = {
   /**
    * Number of invitees other than the organizer. When 0 we silent-write;
    * when > 0 we stage the notify-invitees dialog (unless the edit is
-   * historical — see `isHistoricalReschedule`).
+   * historical — see `affectsOnlyThePast`).
+   */
+  nonOrganizerInviteeCount: number;
+};
+
+/**
+ * The narrow shape this hook reads off the series-occurrences query result.
+ * An occurrence has no row, so it is named by the (series, original start)
+ * pair — the original start is the coordinate an override is filed under, and
+ * it does not move when the occurrence does.
+ */
+export type ReschedulableOccurrence = {
+  seriesId: Id<"eventSeries">;
+  originalStartMs: number;
+  startsAt: number;
+  endsAt: number;
+  title: string;
+  /**
+   * The **series'** roster, minus the organizer — stamped on every occurrence
+   * the rule produces, because everyone invited to the standup is invited to
+   * all of it. Drives the same silent-vs-prompted branch a one-off event's
+   * invitee count does.
    */
   nonOrganizerInviteeCount: number;
 };
@@ -48,7 +69,18 @@ export type RescheduleSnapshot = {
  * choice. The parent reads this to mount `<NotifyInviteesDialog />`.
  */
 export type RescheduleAttempt = {
-  eventId: Id<"calendarEvents">;
+  /**
+   * What is being moved. An occurrence has no row until this write makes one,
+   * so it is named by the (series, original start) pair rather than by an id —
+   * and it goes to a different mutation.
+   */
+  target:
+    | { kind: "event"; eventId: Id<"calendarEvents"> }
+    | {
+        kind: "occurrence";
+        seriesId: Id<"eventSeries">;
+        originalStartMs: number;
+      };
   /** Original schedule-x event we can restore on a revert. */
   original: RescheduleSnapshot;
   oldStartsAt: number;
@@ -57,6 +89,8 @@ export type RescheduleAttempt = {
   newEndsAt: number;
   title: string;
   inviteeCount: number;
+  /** "2 invitees, this occurrence" — what the prompt says it will send. */
+  summary: string;
 };
 
 /**
@@ -82,11 +116,25 @@ export type UpdateEventMutation = (args: {
   notifyInvitees: boolean;
 }) => Promise<unknown>;
 
+/** Convex `eventSeries.updateOccurrence` handle, narrowed to the drag/resize
+ *  case. Injected for the same reason `updateEvent` is. */
+export type OverrideOccurrenceMutation = (args: {
+  seriesId: Id<"eventSeries">;
+  originalStartMs: number;
+  startsAt: number;
+  endsAt: number;
+  notifyInvitees: boolean;
+}) => Promise<unknown>;
+
 export type UseEventRescheduleArgs = {
   /** Events list from `api.calendarEvents.listMineInRange`. May be undefined while loading. */
   events: ReschedulableEvent[] | undefined;
+  /** Occurrences list from `api.eventSeries.listMineInRange`. May be undefined while loading. */
+  occurrences: ReschedulableOccurrence[] | undefined;
   /** Convex `calendarEvents.update` handle. */
   updateEvent: UpdateEventMutation;
+  /** Convex `eventSeries.updateOccurrence` handle. */
+  overrideOccurrence: OverrideOccurrenceMutation;
   /** Schedule-x calendar app — used only to roll back the visual on revert. */
   calendarApp: CalendarAppRescheduleHandle;
   /** Schedule-x `calendarId` of the dashboard's event lane. Stamped on the
@@ -124,7 +172,7 @@ export type UseEventRescheduleResult = {
  *
  * Responsibilities:
  *   - Decide between silent persist and the notify-invitees prompt based
- *     on (a) invitee count and (b) the `isHistoricalReschedule` predicate
+ *     on (a) invitee count and (b) the `affectsOnlyThePast` predicate
  *     (past → past edits are organizer history-cleanup, never prompted).
  *   - Stage the modal state + a snapshot of the original schedule-x event
  *     so the "Revert" button can roll back without a refetch.
@@ -141,13 +189,83 @@ export type UseEventRescheduleResult = {
  */
 export function useEventReschedule({
   events,
+  occurrences,
   updateEvent,
+  overrideOccurrence,
   calendarApp,
   eventCalendarId,
   now = () => Date.now(),
 }: UseEventRescheduleArgs): UseEventRescheduleResult {
   const [pendingReschedule, setPendingReschedule] =
     useState<RescheduleAttempt | null>(null);
+
+  /**
+   * A drag or resize on one occurrence of a series. It always writes an
+   * override for that occurrence alone and never edits the rule, so there is
+   * no **scope** to ask about — the cheapest gesture on the calendar stays the
+   * one with the smallest blast radius (ADR 0002).
+   *
+   * The "notify invitees?" question is a different one and is still asked,
+   * exactly as it is for a one-off event: next Tuesday moving is next
+   * Tuesday moving, whether or not it is part of a pattern.
+   */
+  function handleOccurrenceUpdate(
+    id: string,
+    parsed: { seriesId: Id<"eventSeries">; originalStartMs: number },
+    updated: { start: unknown; end: unknown },
+  ): void {
+    const source = occurrences?.find(
+      (o) =>
+        o.seriesId === parsed.seriesId &&
+        o.originalStartMs === parsed.originalStartMs,
+    );
+    if (!source) return;
+
+    const startsAt = temporalToMs(updated.start);
+    const endsAt = temporalToMs(updated.end);
+    if (startsAt === source.startsAt && endsAt === source.endsAt) return;
+
+    const decision = decideNotify(
+      { scope: "occurrence", instants: [source.startsAt, startsAt] },
+      { inviteeCount: source.nonOrganizerInviteeCount, nowMs: now() },
+    );
+    if (!decision.ask) {
+      void overrideOccurrence({
+        seriesId: parsed.seriesId,
+        originalStartMs: parsed.originalStartMs,
+        startsAt,
+        endsAt,
+        notifyInvitees: false,
+      }).catch((err: unknown) => {
+        toast.error("Could not reschedule", {
+          description: getErrorMessage(err),
+        });
+      });
+      return;
+    }
+
+    setPendingReschedule({
+      target: {
+        kind: "occurrence",
+        seriesId: parsed.seriesId,
+        originalStartMs: parsed.originalStartMs,
+      },
+      original: {
+        id,
+        start: msToZonedDateTime(source.startsAt),
+        end: msToZonedDateTime(source.endsAt),
+        title: source.title,
+        calendarId: eventCalendarId,
+      },
+      oldStartsAt: source.startsAt,
+      oldEndsAt: source.endsAt,
+      newStartsAt: startsAt,
+      newEndsAt: endsAt,
+      title: source.title,
+      inviteeCount: source.nonOrganizerInviteeCount,
+      summary: decision.summary,
+    });
+  }
 
   function handleEventUpdate(updated: {
     id: string | number;
@@ -156,6 +274,10 @@ export function useEventReschedule({
   }): void {
     const id = String(updated.id);
     const parsed = parseScheduleXEventId(id);
+    if (parsed?.kind === "occurrence") {
+      handleOccurrenceUpdate(id, parsed, updated);
+      return;
+    }
     if (parsed?.kind !== "event") return; // tasks blocked at onBeforeEventUpdate
     const eventId = parsed.id;
     const sourceEvent = events?.find((e) => e._id === eventId);
@@ -172,17 +294,19 @@ export function useEventReschedule({
     }
 
     const inviteeCount = sourceEvent.nonOrganizerInviteeCount;
-    // Past→past edits are organizer history-cleanup, not real schedule
-    // changes — silent write regardless of invitee count. Server applies
-    // the same predicate as a safety net for non-dashboard edit paths.
-    const historical = isHistoricalReschedule(
-      sourceEvent.startsAt,
-      newStartsAt,
-      now(),
+    // Nobody to tell, or a past→past edit that is organizer history-cleanup
+    // rather than a real schedule change: both mean write straight through.
+    // The server runs the very same decision as a safety net for the edit
+    // paths that are not this one — `decideNotify` and the mutation both
+    // reach the shared recurrence module, which is why there is no client
+    // copy of the rule to drift.
+    const decision = decideNotify(
+      { scope: "occurrence", instants: [sourceEvent.startsAt, newStartsAt] },
+      { inviteeCount, nowMs: now() },
     );
     // No external eyes on the event → just write through. The organizer's
     // own calendar updates reactively from convex.
-    if (inviteeCount === 0 || historical) {
+    if (!decision.ask) {
       void updateEvent({
         eventId,
         startsAt: newStartsAt,
@@ -200,7 +324,7 @@ export function useEventReschedule({
     // original event so a "Revert" action can roll the visual back without
     // a refetch.
     setPendingReschedule({
-      eventId,
+      target: { kind: "event", eventId },
       original: {
         id,
         start: msToZonedDateTime(sourceEvent.startsAt),
@@ -214,6 +338,7 @@ export function useEventReschedule({
       newEndsAt,
       title: sourceEvent.title,
       inviteeCount,
+      summary: decision.summary,
     });
   }
 
@@ -226,12 +351,22 @@ export function useEventReschedule({
     const attempt = pendingReschedule;
     if (!attempt) return;
     setPendingReschedule(null);
-    void updateEvent({
-      eventId: attempt.eventId,
-      startsAt: attempt.newStartsAt,
-      endsAt: attempt.newEndsAt,
-      notifyInvitees,
-    }).catch((err: unknown) => {
+    const write =
+      attempt.target.kind === "event"
+        ? updateEvent({
+            eventId: attempt.target.eventId,
+            startsAt: attempt.newStartsAt,
+            endsAt: attempt.newEndsAt,
+            notifyInvitees,
+          })
+        : overrideOccurrence({
+            seriesId: attempt.target.seriesId,
+            originalStartMs: attempt.target.originalStartMs,
+            startsAt: attempt.newStartsAt,
+            endsAt: attempt.newEndsAt,
+            notifyInvitees,
+          });
+    void write.catch((err: unknown) => {
       try {
         calendarApp.events.update(attempt.original);
       } catch {

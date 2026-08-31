@@ -27,19 +27,14 @@ import {
   Clock,
   Hash,
   Pencil,
-  UserPlus,
 } from "lucide-react";
 
 import { UserAvatar } from "@/components/UserAvatar";
-import { Button } from "@ripple/ui/components/button";
 import { Input } from "@ripple/ui/components/input";
 import { Textarea } from "@ripple/ui/components/textarea";
 import { cn } from "@/lib/utils";
-import { InviteeMultiSelect } from "@/components/InviteeMultiSelect";
 
 import type { Id } from "@convex/_generated/dataModel";
-import { parseEmailChips } from "../Dashboard/dashboard-calendar-utils";
-import { Chip } from "./Chip";
 import { ChannelCombobox, DatePopover, TimeSelect } from "./event-fields";
 import { combineDateAndTime, msToExactTime } from "./event-time-utils";
 import { ONE_DAY_MS, formatRange } from "./event-detail-data";
@@ -316,160 +311,6 @@ export function EditableDescription({
         </button>
       )}
     </section>
-  );
-}
-
-// ───────────────────────────────────────────────────────────────────────────
-// InviteAdder — add-invitees affordance with a collapse/expand cycle.
-// ───────────────────────────────────────────────────────────────────────────
-
-export function InviteAdder({
-  members,
-  existingUserIds,
-  existingGuestEmails,
-  organizerId,
-  onSubmit,
-}: {
-  members:
-    | { userId: Id<"users">; name?: string; email?: string; image?: string }[]
-    | undefined;
-  existingUserIds: Set<Id<"users">>;
-  existingGuestEmails: Set<string>;
-  organizerId: Id<"users">;
-  onSubmit: (
-    userIds: Id<"users">[],
-    guestEmails: string[],
-  ) => void | Promise<void>;
-}) {
-  const [open, setOpen] = useState(false);
-  const [memberIds, setMemberIds] = useState<Id<"users">[]>([]);
-  const [guestEmails, setGuestEmails] = useState<string[]>([]);
-  const [invalidEmail, setInvalidEmail] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
-
-  const memberOptions = (members ?? [])
-    .filter((m) => m.userId !== organizerId && !existingUserIds.has(m.userId))
-    .map((m) => ({
-      userId: m.userId,
-      name: m.name ?? m.email ?? "Unknown",
-      email: m.email,
-      image: m.image,
-    }));
-
-  const reset = () => {
-    setMemberIds([]);
-    setGuestEmails([]);
-    setInvalidEmail(null);
-  };
-
-  const handleAddEmail = (raw: string) => {
-    const { valid, invalid } = parseEmailChips(raw);
-    setInvalidEmail(invalid[0] ?? null);
-    if (valid.length === 0) return;
-    setGuestEmails((prev) =>
-      Array.from(
-        new Set([
-          ...prev,
-          ...valid.filter((v) => !existingGuestEmails.has(v.toLowerCase())),
-        ]),
-      ),
-    );
-  };
-
-  const totalQueued = memberIds.length + guestEmails.length;
-
-  const handleSubmit = async () => {
-    if (totalQueued === 0) return;
-    setSubmitting(true);
-    try {
-      await onSubmit(memberIds, guestEmails);
-      reset();
-      setOpen(false);
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  if (!open) {
-    return (
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="mt-3 inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
-      >
-        <UserPlus className="h-3.5 w-3.5" />
-        Invite people
-      </button>
-    );
-  }
-
-  return (
-    <div className="mt-3 rounded-md border border-border/60 bg-muted/30 p-3 flex flex-col gap-2">
-      <InviteeMultiSelect
-        members={memberOptions}
-        selectedMemberIds={memberIds}
-        onSelectedMemberIdsChange={setMemberIds}
-        guestEmails={guestEmails}
-        onAddEmail={handleAddEmail}
-        onRemoveEmail={(email) =>
-          setGuestEmails((prev) => prev.filter((e) => e !== email))
-        }
-      />
-      {invalidEmail && (
-        <p className="text-xs text-destructive">
-          "{invalidEmail}" doesn't look like a valid email
-        </p>
-      )}
-      {(memberIds.length > 0 || guestEmails.length > 0) && (
-        <div className="flex flex-wrap gap-1.5">
-          {memberIds.map((uid) => {
-            const m = memberOptions.find((mo) => mo.userId === uid);
-            return (
-              <Chip
-                key={uid}
-                label={m?.name ?? "Member"}
-                onRemove={() =>
-                  setMemberIds((prev) => prev.filter((x) => x !== uid))
-                }
-              />
-            );
-          })}
-          {guestEmails.map((email) => (
-            <Chip
-              key={email}
-              label={email}
-              onRemove={() =>
-                setGuestEmails((prev) => prev.filter((e) => e !== email))
-              }
-            />
-          ))}
-        </div>
-      )}
-      <div className="flex items-center justify-end gap-1.5 mt-1">
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          onClick={() => {
-            reset();
-            setOpen(false);
-          }}
-        >
-          Cancel
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          disabled={totalQueued === 0 || submitting}
-          onClick={() => void handleSubmit()}
-        >
-          <UserPlus className="h-3.5 w-3.5 mr-1" />
-          {totalQueued === 0
-            ? "Add"
-            : `Add ${totalQueued} ${totalQueued === 1 ? "person" : "people"}`}
-        </Button>
-      </div>
-    </div>
   );
 }
 

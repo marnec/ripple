@@ -2,6 +2,7 @@ import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import { fakeDoc } from "@/test/collab-fakes";
+import { FocusModeProvider } from "@/contexts/FocusModeContext";
 import type { HydratedSurface, SurfaceMeta } from "./CollaborativeSurface";
 import { SurfaceHeader } from "./SurfaceHeader";
 
@@ -49,17 +50,19 @@ function surfaceOf(overrides: Partial<HydratedSurface<Meta>> = {}): HydratedSurf
 function renderHeader(surface: HydratedSurface<Meta>) {
   return render(
     <MemoryRouter>
-      <SurfaceHeader<Meta>
-        surface={surface}
-        resourceType="doc"
-        resourceId="doc-1"
-        workspaceId={"ws-1" as never}
-        onTagsChange={() => {}}
-        settingsTitle="Document settings"
-        tools={<div data-testid="tools" />}
-        actions={(meta) => <div data-testid="actions">{meta.name}</div>}
-        activeUsers={() => <div data-testid="active-users" />}
-      />
+      <FocusModeProvider>
+        <SurfaceHeader<Meta>
+          surface={surface}
+          resourceType="doc"
+          resourceId="doc-1"
+          workspaceId={"ws-1" as never}
+          onTagsChange={() => {}}
+          settingsTitle="Document settings"
+          tools={<div data-testid="tools" />}
+          actions={(meta) => <div data-testid="actions">{meta.name}</div>}
+          activeUsers={() => <div data-testid="active-users" />}
+        />
+      </FocusModeProvider>
     </MemoryRouter>,
   );
 }

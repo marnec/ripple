@@ -428,6 +428,10 @@ export default defineSchema({
       v.literal("spreadsheet"),
       v.literal("project"),
       v.literal("calendarEvent"),
+      // A repeating meeting's tags live on the **series** and nowhere else:
+      // an occurrence has no row to tag, and tagging fifty-two Tuesdays
+      // "planning" is what makes a workspace's tag lists useless (ADR 0002).
+      v.literal("eventSeries"),
     ),
     resourceId: v.string(),
   })
@@ -704,8 +708,22 @@ export default defineSchema({
     .index("undeleted_by_task", ["taskId", "deleted"]),
 
 
+  // One row per *call*, filed under the venue the call happened in. A channel
+  // has a persistent room, so its calls are successive rows on the same
+  // channelId; a standalone calendar event hosts its own. Exactly one of
+  // channelId / eventId is set.
+  //
+  // The venue is polymorphic rather than channel-only because a standalone
+  // event call used to have no session at all — and the transcript ingest
+  // resolves a meeting to a session, so those calls silently produced no
+  // transcript.
   callSessions: defineTable({
-    channelId: v.id("channels"),
+    channelId: v.optional(v.id("channels")),
+    eventId: v.optional(v.id("calendarEvents")),
+    // A **series** is one room for the life of the series — the same shape a
+    // channel's persistent room has — so successive occurrences' calls are
+    // successive session rows here rather than one meeting reused forever.
+    seriesId: v.optional(v.id("eventSeries")),
     cloudflareMeetingId: v.string(),
     active: v.boolean(),
     // Whether this call was started with transcription on. Decided by the first
@@ -722,8 +740,17 @@ export default defineSchema({
     // The document seeded from this call's transcript. Set once by the webhook
     // ingest; doubles as the idempotency guard against duplicate deliveries.
     transcriptDocumentId: v.optional(v.id("documents")),
+    // Which occurrence of a series this call happened in, resolved from the
+    // join window when the session was created. Deliberately a **record**, not
+    // a key: a call that starts three minutes early or runs twenty minutes long
+    // must not have to decide what it is before it can exist, and two calls in
+    // the same occurrence are still two sessions. Unset when the clock landed
+    // nowhere near an occurrence — a stamp we cannot justify is worse than none.
+    occurrenceStartMs: v.optional(v.number()),
   })
     .index("by_channel_active", ["channelId", "active"])
+    .index("by_event_active", ["eventId", "active"])
+    .index("by_series_active", ["seriesId", "active"])
     // The sweep's index: active rows oldest-first (Convex appends
     // `_creationTime` to every index), so `expireStaleCallSessions` can range
     // straight to the ones past their age limit instead of scanning the table.
@@ -843,12 +870,23 @@ export default defineSchema({
     endsAt: v.number(),    // ms UTC timestamp
     timezone: v.string(),  // IANA, e.g. "Europe/Rome" — organizer's tz at creation
     channelId: v.optional(v.id("channels")),
-    cloudflareMeetingId: v.optional(v.string()), // lazy on first join (standalone events)
+    // Legacy. A standalone event's calls are `callSessions` rows filed under
+    // its venue now, one per call, so nothing reads or writes this — it used
+    // to pin one meeting to the event forever, which is why a second call on
+    // the same event could never have a transcript of its own. Kept only
+    // because clearing it needs a migration; do not read it.
+    cloudflareMeetingId: v.optional(v.string()),
     createdBy: v.id("users"),
     // iCalendar SEQUENCE — bumped each time we email guests about a
     // change (reschedule, cancel). Mail clients use this to dedupe and
     // to apply ICS updates in order. Treat undefined as 0 for legacy rows.
     sequence: v.optional(v.number()),
+    // An **override**: the series this row belongs to, and the original start
+    // it is filed under. Both set together or not at all. An override stops
+    // tracking its series entirely, and is NOT a resource — it gets no graph
+    // node and no mention-autocomplete entry (see ADR 0002).
+    seriesId: v.optional(v.id("eventSeries")),
+    originalStartMs: v.optional(v.number()),
     // Denormalized tag list, mirrors documents/diagrams. Authoritative tag
     // membership lives in `entityTags` (with `resourceType: "calendarEvent"`).
     // Sync via `syncTagsForResource` in tagSync.ts; the calendarEvents
@@ -860,12 +898,125 @@ export default defineSchema({
     // 24h before it. Both calendar range queries scan only this index.
     .index("by_workspace_starts", ["workspaceId", "startsAt"])
     .index("by_channel", ["channelId"])
+    // An override, by the coordinate it is filed under.
+    .index("by_series_original_start", ["seriesId", "originalStartMs"])
     // For @event mention autocomplete: title search filtered to the active
     // workspace. Empty queries still use by_workspace_starts (browse mode).
     .searchIndex("by_title", {
       searchField: "title",
       filterFields: ["workspaceId"],
     }),
+
+  // A **series**: one repeating meeting, as a rule plus a local anchor. Its
+  // **occurrences** are computed at read time and never stored — see ADR 0002.
+  // Only an occurrence that has been *edited* becomes a row (a `calendarEvents`
+  // row carrying seriesId + originalStartMs); only a *cancelled* one becomes an
+  // entry in `excludedStarts`.
+  //
+  // The anchor is a local date + wall-clock time + IANA zone rather than a UTC
+  // instant, and that is the whole point: "every Tuesday at 09:00" must survive
+  // a daylight-saving transition, which adding a fixed millisecond stride to an
+  // instant does not.
+  eventSeries: defineTable({
+    workspaceId: v.id("workspaces"),
+    title: v.string(),
+    description: v.optional(v.string()),
+    // Local anchor, in `timezone`.
+    anchorDate: v.string(), // "YYYY-MM-DD"
+    anchorTime: v.string(), // "HH:mm"
+    durationMs: v.number(),
+    timezone: v.string(), // IANA, e.g. "Europe/Rome"
+    // The structured rule. Never an RRULE string: text is a wire format
+    // produced for ICS and never parsed back.
+    rule: v.object({
+      freq: v.union(
+        v.literal("daily"),
+        v.literal("weekly"),
+        v.literal("monthly"),
+        v.literal("yearly"),
+      ),
+      interval: v.number(),
+      weekdays: v.optional(v.array(v.string())), // weekly only
+      monthlyMode: v.optional(
+        v.union(v.literal("dayOfMonth"), v.literal("nthWeekday")),
+      ), // monthly only
+      end: v.union(
+        v.object({ kind: v.literal("never") }),
+        v.object({ kind: v.literal("onDate"), date: v.string() }),
+        v.object({ kind: v.literal("afterCount"), count: v.number() }),
+      ),
+    }),
+    // Original starts of cancelled occurrences — iCalendar's EXDATE.
+    excludedStarts: v.optional(v.array(v.number())),
+    channelId: v.optional(v.id("channels")),
+    // Unused, and deliberately so. A series is a call **venue**: each
+    // occurrence's call is its own `callSessions` row with its own Cloudflare
+    // meeting, which is what gives every occurrence its own transcript. Pinning
+    // one meeting to the series here would make every week's call the same
+    // meeting, and the transcript ingest resolves a meeting to exactly one
+    // session — so the second week's notes would be discarded as a duplicate of
+    // the first's. That is the bug `calendarEvents.cloudflareMeetingId` had.
+    cloudflareMeetingId: v.optional(v.string()),
+    createdBy: v.id("users"),
+    sequence: v.optional(v.number()),
+    tags: v.optional(v.array(v.string())),
+    // Denormalized "this series has nothing after this instant" — the last
+    // occurrence's end for a bounded rule, and a far-future sentinel
+    // (SERIES_NO_END) for one that names no end. It exists so the range read
+    // can drop series that have finished instead of reading every series the
+    // workspace has ever had.
+    activeUntil: v.number(),
+  })
+    .index("by_workspace_activeUntil", ["workspaceId", "activeUntil"])
+    .index("by_channel", ["channelId"])
+    .searchIndex("by_title", {
+      searchField: "title",
+      filterFields: ["workspaceId"],
+    }),
+
+  // Per-recipient invite + RSVP state for a **series**. The mirror of
+  // `calendarEventInvitees`, keyed on the series rather than on one of its
+  // occurrences, because the series is the resource: you are invited to the
+  // standup, you RSVP to the standup, and you are removed from the standup —
+  // each in one action, whichever Tuesday you were looking at.
+  //
+  // A separate table rather than a widening of `calendarEventInvitees` because
+  // that table's `eventId` is required and every one of its readers relies on
+  // it; making it optional would push an `undefined` through the whole one-off
+  // event surface to buy nothing a second table does not.
+  eventSeriesInvitees: defineTable({
+    seriesId: v.id("eventSeries"),
+    workspaceId: v.id("workspaces"), // denormalized, as on calendarEventInvitees
+    // The occurrence this row is narrowed to, named by its original start.
+    // **Unset means "the series"**, and every write path today leaves it
+    // unset — the field exists from day one so that per-occurrence decline
+    // ("I can't make this Tuesday") later becomes a UI and index change
+    // rather than a migration of every roster in every workspace.
+    originalStartMs: v.optional(v.number()),
+    userId: v.optional(v.id("users")),
+    guestEmail: v.optional(v.string()),
+    guestName: v.optional(v.string()),
+    guestSub: v.optional(v.string()),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("accepted"),
+      v.literal("declined"),
+      v.literal("tentative"),
+    ),
+    respondedAt: v.optional(v.number()),
+    shareId: v.optional(v.string()), // FK to resourceShares.shareId (guest rows only)
+    // Replay guards for inbound ICS RSVP replies, the same pair
+    // `calendarEventInvitees` carries and for the same reason: a mail client
+    // echoes the original UID with a fresh DTSTAMP/SEQUENCE on every Yes /
+    // Maybe / No click, and Outlook re-sends old replies on resync. A reply
+    // about *one occurrence* has its RECURRENCE-ID dropped and lands here, so
+    // these guard the series-level answer.
+    lastRsvpDtstamp: v.optional(v.number()),
+    lastRsvpSequence: v.optional(v.number()),
+  })
+    .index("by_series", ["seriesId"])
+    .index("by_series_user", ["seriesId", "userId"])
+    .index("by_share", ["shareId"]),
 
   // Per-recipient invite + RSVP state for calendar events. Exactly one of
   // userId / guestEmail is set. For guest rows, shareId references a
@@ -1004,6 +1155,10 @@ export default defineSchema({
       v.literal("spreadsheet"),
       v.literal("channel"),
       v.literal("calendarEvent"),
+      // A repeating meeting's venue edge starts here. Its occurrences are
+      // computed, so there is no per-occurrence row to hang it off — the
+      // series is the resource and it owns the one edge (ADR 0002).
+      v.literal("eventSeries"),
     ),
     sourceId: v.string(),
     targetType: v.union(
@@ -1015,6 +1170,9 @@ export default defineSchema({
       v.literal("project"),
       v.literal("channel"),
       v.literal("calendarEvent"),
+      // `@`-mentioning a repeating meeting points at the series, never at one
+      // of its occurrences (ADR 0002).
+      v.literal("eventSeries"),
     ),
     targetId: v.string(),
     edgeType: v.union(
@@ -1090,6 +1248,7 @@ export default defineSchema({
       v.literal("project"),
       v.literal("channel"),
       v.literal("calendarEvent"),
+      v.literal("eventSeries"),
     ),
     targetId: v.string(),
     // The single `edges` row this counter keeps alive. Holding the id makes the
@@ -1120,6 +1279,10 @@ export default defineSchema({
       v.literal("task"),
       v.literal("user"),
       v.literal("calendarEvent"),
+      // A repeating meeting. One node per **series**, never one per
+      // occurrence: occurrences are computed, not stored, and an override is
+      // not a resource (ADR 0002).
+      v.literal("eventSeries"),
     ),
     resourceId: v.string(), // typed Convex ID cast to string (polymorphic)
     name: v.string(),       // tasks map title→name
@@ -1188,6 +1351,10 @@ export default defineSchema({
       v.literal("spreadsheet"),
       v.literal("channel"),
       v.literal("calendarEvent"),
+      // A guest's link to a repeating meeting. One link for the whole series
+      // — an occurrence has no row to hang a share off, and issuing one link
+      // per Tuesday is exactly the flood the series exists to prevent.
+      v.literal("eventSeries"),
     ),
     resourceId: v.string(),
     workspaceId: v.id("workspaces"),

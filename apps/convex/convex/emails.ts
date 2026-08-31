@@ -63,7 +63,96 @@ function icsUtcStamp(ms: number): string {
   );
 }
 
+/**
+ * Format ms-since-epoch as iCalendar's *local* form in `timeZone`:
+ * YYYYMMDDTHHMMSS, with no trailing Z. Paired with a `TZID` parameter this is
+ * what makes a repeating meeting keep its wall-clock time — see
+ * `IcsRecurrence` for why the master entry uses it and nothing else does.
+ */
+function icsLocalStamp(ms: number, timeZone: string): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(new Date(ms));
+  const at = (type: string) => parts.find((p) => p.type === type)!.value;
+  return (
+    `${at("year")}${at("month")}${at("day")}` +
+    `T${at("hour")}${at("minute")}${at("second")}`
+  );
+}
+
 type IcsMethod = "REQUEST" | "CANCEL";
+
+/**
+ * One occurrence that has been moved or re-worded away from its series — an
+ * **override**. Each becomes a second `VEVENT` under the same UID, identified
+ * by the `RECURRENCE-ID` of the start the rule originally placed it at, so the
+ * recipient's client shows that Tuesday at its new time instead of the
+ * pattern's.
+ */
+interface IcsOverride {
+  /** The start the rule placed it at — its name, forever. */
+  originalStartMs: number;
+  startsAt: number;
+  endsAt: number;
+  title: string;
+  description?: string;
+}
+
+/**
+ * What turns a single `VEVENT` into a whole repeating pattern.
+ *
+ * `rrule` and `exdate` are produced by `@ripple/shared/recurrence`
+ * (`toRRule` / `toExDate`) and passed through untouched: the rule text has one
+ * home and this file is not it.
+ *
+ * **On timezones.** The master `DTSTART`/`DTEND` go out as local wall-clock
+ * times with a `TZID` parameter rather than as UTC instants, because that is
+ * the only encoding under which a 09:00 standup is still at 09:00 after the
+ * clocks change — which is the whole reason a series is anchored to a local
+ * time (ADR 0002). The `EXDATE`s and `RECURRENCE-ID`s stay UTC instants, which
+ * is what the recurrence module produces and what our own expansion means;
+ * both sides land on the same instants because both use the same IANA rules.
+ *
+ * No `VTIMEZONE` component is emitted: every mail client we care about
+ * resolves a well-known IANA `TZID` from its own database, and writing our own
+ * transition rules would mean shipping a second, staler copy of tzdata.
+ */
+interface IcsRecurrence {
+  /** RRULE value, e.g. "FREQ=WEEKLY;BYDAY=TU". */
+  rrule: string;
+  /** EXDATE value — cancelled occurrences — when the series has skipped any. */
+  exdate?: string;
+  /** IANA zone the series' wall-clock anchor is expressed in. */
+  timezone: string;
+  overrides: IcsOverride[];
+}
+
+/**
+ * The recurrence block as it crosses the action boundary. Mirrors
+ * `IcsRecurrence`, and sits next to it so that changing one is changing a
+ * validator three lines away.
+ */
+const recurrenceValidator = v.object({
+  rrule: v.string(),
+  exdate: v.optional(v.string()),
+  timezone: v.string(),
+  overrides: v.array(
+    v.object({
+      originalStartMs: v.number(),
+      startsAt: v.number(),
+      endsAt: v.number(),
+      title: v.string(),
+      description: v.optional(v.string()),
+    }),
+  ),
+});
 
 interface BuildIcsOpts {
   uid: string;                    // stable across the event's lifetime
@@ -78,6 +167,8 @@ interface BuildIcsOpts {
   attendeeEmail: string;
   attendeeName?: string;
   url?: string;                   // back-link to the Ripple share page
+  /** Present exactly when this UID names a **series** rather than one event. */
+  recurrence?: IcsRecurrence;
 }
 
 function buildEventIcs(opts: BuildIcsOpts): string {
@@ -91,6 +182,44 @@ function buildEventIcs(opts: BuildIcsOpts): string {
     (opts.attendeeName ? `;CN=${icsEscapeText(opts.attendeeName)}` : "") +
     `:mailto:${opts.attendeeEmail}`;
 
+  const recurrence = opts.recurrence;
+  const tz = recurrence?.timezone;
+
+  const start = tz
+    ? `DTSTART;TZID=${tz}:${icsLocalStamp(opts.startsAt, tz)}`
+    : `DTSTART:${icsUtcStamp(opts.startsAt)}`;
+  const end = tz
+    ? `DTEND;TZID=${tz}:${icsLocalStamp(opts.endsAt, tz)}`
+    : `DTEND:${icsUtcStamp(opts.endsAt)}`;
+
+  // One extra VEVENT per override, all under the same UID. A CANCEL carries
+  // none: withdrawing the series withdraws every occurrence of it, and naming
+  // the moved ones separately would only ask the client to reconcile entries
+  // it is about to delete.
+  const overrideEvents =
+    opts.method === "CANCEL" || !tz
+      ? []
+      : (recurrence?.overrides ?? []).flatMap((o) => [
+          "BEGIN:VEVENT",
+          `UID:${opts.uid}`,
+          `RECURRENCE-ID:${icsUtcStamp(o.originalStartMs)}`,
+          `DTSTAMP:${icsUtcStamp(Date.now())}`,
+          `DTSTART;TZID=${tz}:${icsLocalStamp(o.startsAt, tz)}`,
+          `DTEND;TZID=${tz}:${icsLocalStamp(o.endsAt, tz)}`,
+          `SUMMARY:${icsEscapeText(o.title)}`,
+          ...(o.description ? [`DESCRIPTION:${icsEscapeText(o.description)}`] : []),
+          ...(opts.url ? [`URL:${opts.url}`] : []),
+          organizer,
+          attendee,
+          // The series' own counter, deliberately: there is one SEQUENCE for
+          // the whole pattern (spec 0003, "Email and ICS"), and an override
+          // row's own `sequence` field is left unwritten.
+          `SEQUENCE:${opts.sequence}`,
+          "STATUS:CONFIRMED",
+          "TRANSP:OPAQUE",
+          "END:VEVENT",
+        ]);
+
   const lines: string[] = [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
@@ -100,8 +229,10 @@ function buildEventIcs(opts: BuildIcsOpts): string {
     "BEGIN:VEVENT",
     `UID:${opts.uid}`,
     `DTSTAMP:${icsUtcStamp(Date.now())}`,
-    `DTSTART:${icsUtcStamp(opts.startsAt)}`,
-    `DTEND:${icsUtcStamp(opts.endsAt)}`,
+    start,
+    end,
+    ...(recurrence ? [`RRULE:${recurrence.rrule}`] : []),
+    ...(recurrence?.exdate ? [`EXDATE:${recurrence.exdate}`] : []),
     `SUMMARY:${icsEscapeText(opts.title)}`,
     ...(opts.description
       ? [`DESCRIPTION:${icsEscapeText(opts.description)}`]
@@ -113,6 +244,7 @@ function buildEventIcs(opts: BuildIcsOpts): string {
     `STATUS:${status}`,
     "TRANSP:OPAQUE",
     "END:VEVENT",
+    ...overrideEvents,
     "END:VCALENDAR",
   ];
 
@@ -281,6 +413,10 @@ export const sendEventInvite = internalAction({
      *  outcome. Optional: a recipient may have no invitee row (a member
      *  notified by preference rather than by invitation). */
     inviteeId: v.optional(v.id("calendarEventInvitees")),
+    /** Set when `eventId` names a **series**: the whole repeating pattern
+     *  travels in this one message, so the recipient's client files it as one
+     *  entry rather than one per occurrence. */
+    recurrence: v.optional(recurrenceValidator),
   },
   returns: v.null(),
   handler: async (
@@ -297,6 +433,7 @@ export const sendEventInvite = internalAction({
       timezone,
       sequence,
       inviteeId,
+      recurrence,
     },
   ) => {
     const when = formatEventDateTime(startsAt, endsAt, timezone);
@@ -313,6 +450,7 @@ export const sendEventInvite = internalAction({
       organizerName: inviterName,
       attendeeEmail: recipientEmail,
       url: targetUrl,
+      recurrence,
     });
 
     const html = renderEventEmailLayout({
@@ -370,6 +508,10 @@ export const sendEventReschedule = internalAction({
      *  outcome. Optional: a recipient may have no invitee row (a member
      *  notified by preference rather than by invitation). */
     inviteeId: v.optional(v.id("calendarEventInvitees")),
+    /** Set when `eventId` names a **series**: the update re-states the whole
+     *  pattern, including every override, so a moved occurrence lands at its
+     *  new time in the recipient's client. */
+    recurrence: v.optional(recurrenceValidator),
   },
   returns: v.null(),
   handler: async (
@@ -384,6 +526,7 @@ export const sendEventReschedule = internalAction({
       endsAt,
       sequence,
       inviteeId,
+      recurrence,
     },
   ) => {
     const ics = buildEventIcs({
@@ -396,6 +539,7 @@ export const sendEventReschedule = internalAction({
       organizerEmail: organizerAddress(),
       organizerName: inviterName,
       attendeeEmail: recipientEmail,
+      recurrence,
     });
 
     const html = renderEventEmailLayout({
@@ -441,6 +585,9 @@ export const sendEventCancellation = internalAction({
      *  outcome. Optional: a recipient may have no invitee row (a member
      *  notified by preference rather than by invitation). */
     inviteeId: v.optional(v.id("calendarEventInvitees")),
+    /** Set when `eventId` names a **series**: the CANCEL has to carry the same
+     *  RRULE the client stored, or it withdraws only the first occurrence. */
+    recurrence: v.optional(recurrenceValidator),
   },
   returns: v.null(),
   handler: async (
@@ -454,6 +601,7 @@ export const sendEventCancellation = internalAction({
       endsAt,
       sequence,
       inviteeId,
+      recurrence,
     },
   ) => {
     const ics = buildEventIcs({
@@ -466,6 +614,7 @@ export const sendEventCancellation = internalAction({
       organizerEmail: organizerAddress(),
       organizerName: inviterName,
       attendeeEmail: recipientEmail,
+      recurrence,
     });
 
     const html = renderEventEmailLayout({

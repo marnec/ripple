@@ -1,4 +1,4 @@
-import { CalendarDays } from "lucide-react";
+import { CalendarDays, Repeat } from "lucide-react";
 import { useConvex } from "convex/react";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
@@ -24,6 +24,12 @@ type EventSuggestionsOptions = {
  * so every workspace member sees the same suggestion set. The server query
  * uses a full-text search index on title when the user types text and a
  * tight `[now − 7d, now + 30d]` range scan for the empty-query browse case.
+ *
+ * Two lanes, concatenated: one-off events, and **series**. A repeating meeting
+ * appears once under the pattern's own name — mentioning the standup means the
+ * ritual, not one Tuesday of it — and its overrides appear in neither lane
+ * (ADR 0002). Series come first because a named ritual is nearly always the
+ * thing someone reaching for `@` means.
  */
 export function useEventSuggestions({
   workspaceId,
@@ -35,13 +41,30 @@ export function useEventSuggestions({
   return async (query: string) => {
     if (!workspaceId) return [];
     const trimmed = query.trim();
-    const results = await convex.query(api.calendarEvents.listForMentionAutocomplete, {
+    const args = {
       workspaceId,
       query: trimmed.length > 0 ? trimmed : undefined,
       limit,
-    });
+    };
+    const [events, series] = await Promise.all([
+      convex.query(api.calendarEvents.listForMentionAutocomplete, args),
+      convex.query(api.eventSeries.listForMentionAutocomplete, args),
+    ]);
 
-    return results.map((e) => ({
+    const seriesItems = series.map((s) => ({
+      title: s.title,
+      subtext: s.nextStartsAt === null ? "No dates left" : formatWhen(s.nextStartsAt),
+      onItemClick: () => {
+        editor.insertInlineContent([
+          { type: mentionType, props: { seriesId: s.seriesId } },
+          " ",
+        ]);
+      },
+      icon: <Repeat className="h-4 w-4 text-purple-600 dark:text-purple-400" />,
+      group: "Repeating",
+    }));
+
+    const eventItems = events.map((e) => ({
       title: e.title,
       subtext: formatWhen(e.startsAt),
       onItemClick: () => {
@@ -53,6 +76,8 @@ export function useEventSuggestions({
       icon: <CalendarDays className="h-4 w-4 text-purple-600 dark:text-purple-400" />,
       group: e.group === "upcoming" ? "Upcoming" : "Recent",
     }));
+
+    return [...seriesItems, ...eventItems];
   };
 }
 

@@ -10,6 +10,13 @@ import { toast } from "sonner";
 import { Button } from "@ripple/ui/components/button";
 import { Input } from "@ripple/ui/components/input";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@ripple/ui/components/select";
+import {
   Form,
   FormControl,
   FormField,
@@ -19,10 +26,20 @@ import {
 } from "@/components/ui/form";
 import { cn } from "@/lib/utils";
 
+import type { RecurrenceRule, SeriesAnchor } from "@ripple/shared/recurrence";
+
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 import { parseEmailChips } from "../Dashboard/dashboard-calendar-utils";
 import { Chip } from "./Chip";
+import {
+  customRuleSeed,
+  previewRecurrence,
+  repeatPresetOptions,
+  ruleForPreset,
+  type RepeatPreset,
+} from "./recurrence-presets";
+import { RecurrenceDialog } from "./RecurrenceDialog";
 import { InviteeMultiSelect } from "@/components/InviteeMultiSelect";
 import {
   ChannelCombobox,
@@ -35,6 +52,7 @@ import {
   combineDateAndTime,
   msToTimeSlot,
   timeToMinutes,
+  toLocalIsoDate,
 } from "./event-time-utils";
 
 const ONE_HOUR_MS = 60 * 60 * 1000;
@@ -73,6 +91,19 @@ type FormValues = z.infer<typeof formSchema>;
  */
 function roundUpToSlot(d: Date): Date {
   return new Date(Math.ceil(d.getTime() / SLOT_MS) * SLOT_MS);
+}
+
+/**
+ * The duration the two time pickers currently describe, mirroring the
+ * persistence rule that an end at or before the start means the next day.
+ * Falls back to an hour while a field is mid-edit, so the live occurrence
+ * count never flickers on a half-typed time.
+ */
+function liveDurationMs(startTime: string, endTime: string): number {
+  if (!TIME_RE.test(startTime) || !TIME_RE.test(endTime)) return ONE_HOUR_MS;
+  const minutes =
+    (timeToMinutes(endTime) - timeToMinutes(startTime) + 24 * 60) % (24 * 60);
+  return (minutes || 60) * 60 * 1000;
 }
 
 function midnightOf(d: Date): Date {
@@ -137,6 +168,10 @@ export function CreateEventForm({
   className,
 }: CreateEventFormProps) {
   const create = useMutation(api.calendarEvents.create);
+  // A repeating meeting is a different resource, not an event with a flag —
+  // so it is a different mutation. "Does not repeat" writes exactly the row
+  // it always did (ADR 0002).
+  const createSeries = useMutation(api.eventSeries.create);
   // `listHostable` returns open + closed channels only; DMs can't host events.
   const channels = useQuery(api.channels.listHostable, { workspaceId });
   const members = useQuery(api.workspaceMembers.membersWithRoles, { workspaceId });
@@ -150,6 +185,15 @@ export function CreateEventForm({
     () => initialMemberIds ?? [],
   );
   const [guestEmails, setGuestEmails] = useState<string[]>([]);
+  const [repeat, setRepeat] = useState<RepeatPreset>("none");
+  // The custom rule the *Custom…* dialog last confirmed. It is not the repeat
+  // choice — choosing *Custom…* opens the dialog, and only pressing Done in it
+  // moves the choice, so cancelling leaves the previous preset standing.
+  const [customRule, setCustomRule] = useState<RecurrenceRule | null>(null);
+  const [customOpen, setCustomOpen] = useState(false);
+  // Bumped on every opening so the dialog remounts and reseeds its draft from
+  // whatever the form is on now, rather than syncing props into state.
+  const [customOpening, setCustomOpening] = useState(0);
   const [invalidEmail, setInvalidEmail] = useState<string | null>(null);
 
   // Seed defaults exactly once at mount. The clock read for the
@@ -194,6 +238,37 @@ export function CreateEventForm({
   const watchedEnd = useWatch({ control: form.control, name: "endTime" });
   const watchedDate = useWatch({ control: form.control, name: "date" });
   const spansMidnight = !!watchedStart && !!watchedEnd && watchedEnd <= watchedStart;
+
+  // What a series created from the form as it stands right now would be. The
+  // anchor is the picked local date and wall-clock time, never the instant —
+  // that is what keeps a 09:00 meeting at 09:00 across a daylight-saving
+  // change — so the count the organizer is shown is the count they will get.
+  const repeatDate = watchedDate ?? defaults.date;
+  const repeatRule = ruleForPreset(repeat, repeatDate, customRule);
+  const repeatAnchor: SeriesAnchor = {
+    date: toLocalIsoDate(repeatDate),
+    time: TIME_RE.test(watchedStart) ? watchedStart : defaults.startTime,
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
+    durationMs: liveDurationMs(watchedStart, watchedEnd),
+  };
+  const repeatPreview = repeatRule
+    ? previewRecurrence(repeatRule, repeatAnchor)
+    : null;
+
+  const openCustomDialog = () => {
+    setCustomOpening((n) => n + 1);
+    setCustomOpen(true);
+  };
+
+  const handleRepeatChange = (next: RepeatPreset) => {
+    // *Custom…* is not a choice until the dialog says so. Committing it here
+    // would leave a half-configured rule behind the moment someone cancelled.
+    if (next === "custom") {
+      openCustomDialog();
+      return;
+    }
+    setRepeat(next);
+  };
 
   // Mirror live form values to the parent so a ghost overlay can stay
   // in sync as the user nudges the time pickers. We skip the very
@@ -270,20 +345,56 @@ export function CreateEventForm({
       if (endsAt <= startsAt) endsAt += 24 * ONE_HOUR_MS;
 
       const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
-      await create({
-        workspaceId,
-        title: values.title,
-        description: values.description || undefined,
-        startsAt,
-        endsAt,
-        timezone: tz,
-        channelId:
-          values.channelId && values.channelId !== ""
-            ? (values.channelId as Id<"channels">)
-            : undefined,
-        invitees: { userIds: memberIds, guestEmails },
-      });
-      toast.success("Event created");
+      const channelId =
+        values.channelId && values.channelId !== ""
+          ? (values.channelId as Id<"channels">)
+          : undefined;
+      const rule = ruleForPreset(repeat, values.date, customRule);
+
+      // A rule past a limit is refused, never trimmed to fit: a series quietly
+      // cut short is indistinguishable from one that was always that length,
+      // and the organizer would only find out weeks later.
+      if (rule && repeatPreview && !repeatPreview.ok) {
+        toast.error("This repeat can't be saved", {
+          description: repeatPreview.message,
+        });
+        return;
+      }
+
+      if (rule) {
+        // The anchor is the picked local date and wall-clock time, never the
+        // instant — that is what keeps a 09:00 meeting at 09:00 across a
+        // daylight-saving change.
+        await createSeries({
+          workspaceId,
+          title: values.title,
+          description: values.description || undefined,
+          anchorDate: toLocalIsoDate(values.date),
+          anchorTime: values.startTime,
+          durationMs: endsAt - startsAt,
+          timezone: tz,
+          rule,
+          channelId,
+          // The roster travels with the series rather than following it in a
+          // second call: one mutation means the invitations went out *because*
+          // the series was created with people on it, and an organizer who
+          // pressed Create once is never left with a standup their team was
+          // never told about.
+          invitees: { userIds: memberIds, guestEmails },
+        });
+      } else {
+        await create({
+          workspaceId,
+          title: values.title,
+          description: values.description || undefined,
+          startsAt,
+          endsAt,
+          timezone: tz,
+          channelId,
+          invitees: { userIds: memberIds, guestEmails },
+        });
+      }
+      toast.success(rule ? "Repeating event created" : "Event created");
       onSuccess();
     } catch (e) {
       toast.error("Could not create event", {
@@ -422,6 +533,57 @@ export function CreateEventForm({
             </div>
           </div>
 
+          {/* One inline select. The four presets need no configuration at all;
+              intervals and end dates live behind "Custom…", so someone booking
+              a one-off never has to look at a rule editor. */}
+          <FormItem className="flex flex-col">
+            <FormLabel>Repeat</FormLabel>
+            <div className="flex gap-2">
+              <Select value={repeat} onValueChange={(v) => handleRepeatChange(v as RepeatPreset)}>
+                <SelectTrigger className="flex-1">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {repeatPresetOptions(repeatDate, customRule).map((o) => (
+                    <SelectItem key={o.value} value={o.value}>
+                      {o.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {/* Re-picking the option the select is already on fires nothing,
+                  so getting back into the rule editor needs its own way in. */}
+              {repeat === "custom" && (
+                <Button type="button" variant="outline" onClick={openCustomDialog}>
+                  Edit
+                </Button>
+              )}
+            </div>
+            {repeatPreview && (
+              <p
+                className={cn(
+                  "text-xs",
+                  repeatPreview.ok ? "text-muted-foreground" : "text-destructive",
+                )}
+              >
+                {repeatPreview.ok ? repeatPreview.text : repeatPreview.message}
+              </p>
+            )}
+          </FormItem>
+
+          <RecurrenceDialog
+            key={customOpening}
+            open={customOpen}
+            onOpenChange={setCustomOpen}
+            date={repeatDate}
+            anchor={repeatAnchor}
+            initialRule={customRuleSeed(repeat, repeatDate, customRule)}
+            onConfirm={(rule) => {
+              setCustomRule(rule);
+              setRepeat("custom");
+            }}
+          />
+
           <FormField
             control={form.control}
             name="channelId"
@@ -459,6 +621,11 @@ export function CreateEventForm({
                 )}
               />
 
+              {/* One picker, whether or not the event repeats. A repeating
+                  meeting's roster belongs to the series rather than to one
+                  occurrence, but that is a fact about where the rows are
+                  written, not about who the organizer is allowed to name — so
+                  the field asks the same question either way. */}
               <div className="space-y-2">
                 <FormLabel>Invitees</FormLabel>
                 <InviteeMultiSelect

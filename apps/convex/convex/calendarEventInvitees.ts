@@ -13,6 +13,7 @@
 // stays where it is — this file is the parallel email path.
 import { v } from "convex/values";
 import { internalMutation } from "./functions";
+import type { MutationCtx } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
 import { EMAIL_RSVP_DOMAIN } from "@ripple/shared/constants";
 import { notify } from "./utils/notify";
@@ -73,6 +74,32 @@ export const recordEmailRsvp = internalMutation({
     const uidDomain = uid.slice(atIdx + 1);
     if (uidDomain !== EMAIL_RSVP_DOMAIN) {
       return { applied: false, reason: "unknown_event" as const };
+    }
+
+    // A **series** names itself in the UID exactly as an event does, so the
+    // same mailbox carries both and the id decides which. Its roster is a
+    // different table, which is why it gets its own branch rather than a
+    // widened one.
+    //
+    // Whatever `RECURRENCE-ID` the reply carried has already been dropped at
+    // the worker boundary (packages/rsvp-worker/src/parser.ts), so what
+    // arrives here is an answer to the *series* even when the guest clicked
+    // Yes on one Tuesday. That is knowingly asymmetric with what we send:
+    // outbound mail does carry a RECURRENCE-ID VEVENT per override, because
+    // outbound correctness is free while honouring an inbound per-occurrence
+    // answer needs the per-occurrence invitee coordinate this release defers
+    // (`eventSeriesInvitees.originalStartMs`, unset by every write path
+    // today). See ADR 0002 and spec 0003 "Email and ICS"; do not "fix" the
+    // asymmetry without per-occurrence RSVP.
+    const seriesId = ctx.db.normalizeId("eventSeries", rawEventId);
+    if (seriesId) {
+      return await recordSeriesEmailRsvp(ctx, {
+        seriesId,
+        attendeeEmail,
+        partstat,
+        dtstamp,
+        sequence,
+      });
     }
 
     // ctx.db.normalizeId returns null when the string isn't a valid Id of
@@ -159,6 +186,130 @@ export const recordEmailRsvp = internalMutation({
 // ---------------------------------------------------------------------------
 // Internals
 // ---------------------------------------------------------------------------
+
+/**
+ * The series half of `recordEmailRsvp`, applying the same three idempotency
+ * rules against the series' own `sequence` and the roster row's own replay
+ * columns. An answer is one answer for the whole pattern: you are invited to
+ * the standup, so you accept the standup.
+ */
+async function recordSeriesEmailRsvp(
+  ctx: MutationCtx,
+  args: {
+    seriesId: Id<"eventSeries">;
+    attendeeEmail: string;
+    partstat: "ACCEPTED" | "DECLINED" | "TENTATIVE";
+    dtstamp: number;
+    sequence: number;
+  },
+): Promise<{ applied: boolean; reason?: "stale" | "unknown_event" | "unknown_attendee" }> {
+  // Cancelling a series is a hard delete, exactly as an event's is: no row to
+  // update and no organizer to tell, so the reply is dropped silently.
+  const series = await ctx.db.get(args.seriesId);
+  if (!series) return { applied: false, reason: "unknown_event" as const };
+
+  const emailLower = args.attendeeEmail.toLowerCase();
+  const invitee = await locateSeriesInvitee(ctx, args.seriesId, emailLower);
+  if (!invitee) return { applied: false, reason: "unknown_attendee" as const };
+
+  if (args.sequence < (series.sequence ?? 0)) {
+    return { applied: false, reason: "stale" as const };
+  }
+  if (
+    invitee.lastRsvpSequence !== undefined &&
+    args.sequence < invitee.lastRsvpSequence
+  ) {
+    return { applied: false, reason: "stale" as const };
+  }
+  if (
+    invitee.lastRsvpSequence !== undefined &&
+    args.sequence === invitee.lastRsvpSequence &&
+    invitee.lastRsvpDtstamp !== undefined &&
+    args.dtstamp <= invitee.lastRsvpDtstamp
+  ) {
+    return { applied: false, reason: "stale" as const };
+  }
+
+  const newStatus = PARTSTAT_TO_STATUS[args.partstat];
+  await ctx.db.patch(invitee._id, {
+    status: newStatus,
+    respondedAt: Date.now(),
+    lastRsvpDtstamp: args.dtstamp,
+    lastRsvpSequence: args.sequence,
+    // `originalStartMs` is deliberately left as it was — unset, meaning "the
+    // series". Writing the replied-to occurrence here is what per-occurrence
+    // RSVP would mean, and it is out of scope for this release.
+  });
+
+  const isSelf =
+    invitee.userId !== undefined && invitee.userId === series.createdBy;
+  if (!isSelf) {
+    const responderName = await resolveSeriesResponderName(ctx, invitee);
+    const guestSuffix = invitee.userId ? "" : " (guest)";
+    await notify(ctx, {
+      category: "eventResponseChanged",
+      userId: invitee.userId ?? series.createdBy,
+      userName: responderName,
+      title: "Event RSVP",
+      body: `${responderName}${guestSuffix} ${newStatus} your invitation to ${series.title}`,
+      // A **bare** series link: the answer is about the ritual, not about one
+      // Tuesday of it, so it opens whichever occurrence is next.
+      url: `/workspaces/${series.workspaceId}/events/${series._id}`,
+      recipientIds: [series.createdBy],
+    });
+  }
+
+  return { applied: true };
+}
+
+/**
+ * The series roster row for an address. Members are matched through their
+ * `users` row and the `by_series_user` index; guests fall back to a scan of
+ * the roster, which the invitee cap bounds at 200 — the same bound and the
+ * same reasoning as every other read of it.
+ */
+async function locateSeriesInvitee(
+  ctx: MutationCtx,
+  seriesId: Id<"eventSeries">,
+  emailLower: string,
+): Promise<Doc<"eventSeriesInvitees"> | null> {
+  const userRows = await ctx.db
+    .query("users")
+    .withIndex("email", (q) => q.eq("email", emailLower))
+    .take(2);
+  for (const u of userRows) {
+    const memberInvitee = await ctx.db
+      .query("eventSeriesInvitees")
+      .withIndex("by_series_user", (q) =>
+        q.eq("seriesId", seriesId).eq("userId", u._id),
+      )
+      .first();
+    if (memberInvitee) return memberInvitee;
+  }
+
+  // eslint-disable-next-line @convex-dev/no-collect-in-query
+  const roster = await ctx.db
+    .query("eventSeriesInvitees")
+    .withIndex("by_series", (q) => q.eq("seriesId", seriesId))
+    .collect();
+  return (
+    roster.find((r) => r.guestEmail?.toLowerCase() === emailLower) ?? null
+  );
+}
+
+async function resolveSeriesResponderName(
+  ctx: MutationCtx,
+  invitee: Doc<"eventSeriesInvitees">,
+): Promise<string> {
+  if (invitee.userId) {
+    const user = await ctx.db.get(invitee.userId);
+    if (user?.name) return user.name;
+    if (user?.email) return user.email;
+  }
+  if (invitee.guestName) return invitee.guestName;
+  if (invitee.guestEmail) return invitee.guestEmail;
+  return "Someone";
+}
 
 async function locateInvitee(
   ctx: { db: import("./_generated/server").MutationCtx["db"] },

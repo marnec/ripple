@@ -124,6 +124,10 @@ function describeAccess(
   accessLevel: string | undefined,
 ): string {
   if (resourceType === "channel") return "You will join the channel call as a guest.";
+  if (resourceType === "calendarEvent") return "You have been invited to this meeting.";
+  if (resourceType === "eventSeries") {
+    return "You have been invited to this repeating meeting.";
+  }
   if (accessLevel === "edit") return "You can view and edit this resource.";
   return "You can view this resource.";
 }

@@ -191,3 +191,44 @@ describe("parseRsvp", () => {
     expect(r!.rsvp.partstat).toBe("TENTATIVE");
   });
 });
+
+// ---------------------------------------------------------------------------
+// Recurring series: a reply that names one occurrence.
+// ---------------------------------------------------------------------------
+
+/** A REPLY the way a mail client sends one for a single occurrence of a
+ *  recurring series: the series' own UID, plus a RECURRENCE-ID naming the
+ *  occurrence the guest was looking at when they clicked. */
+const occurrenceReplyIcs = [
+  "BEGIN:VCALENDAR",
+  "VERSION:2.0",
+  "PRODID:-//Test//Test//EN",
+  "METHOD:REPLY",
+  "BEGIN:VEVENT",
+  "UID:k17series999@conduits.space",
+  "RECURRENCE-ID:20260915T070000Z",
+  "DTSTAMP:20260908T120000Z",
+  "DTSTART:20260915T070000Z",
+  "DTEND:20260915T073000Z",
+  "ATTENDEE;PARTSTAT=DECLINED;CN=Alice:mailto:alice@example.com",
+  "SEQUENCE:3",
+  "END:VEVENT",
+  "END:VCALENDAR",
+].join("\r\n") + "\r\n";
+
+describe("a reply that names one occurrence of a series", () => {
+  it("applies to the series, carrying no occurrence coordinate", () => {
+    const r = extractRsvp(occurrenceReplyIcs);
+    expect(r).not.toBeNull();
+    expect(r!.uid).toBe("k17series999@conduits.space");
+    expect(r!.partstat).toBe("DECLINED");
+    expect(r).not.toHaveProperty("originalStartMs");
+    expect(r).not.toHaveProperty("recurrenceId");
+  });
+
+  it("keeps the replay guards' inputs intact", () => {
+    const r = extractRsvp(occurrenceReplyIcs);
+    expect(r!.sequence).toBe(3);
+    expect(r!.dtstamp).toBe(Date.UTC(2026, 8, 8, 12, 0, 0));
+  });
+});

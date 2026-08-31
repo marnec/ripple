@@ -255,3 +255,56 @@ dismissed and restarts when a message arrives newer than `hiddenAt`. Private
 channels are left, never dismissed. Per-user and cross-device — the opposite of
 **visibility** on both counts, which is why it does not live in device storage.
 _Avoid_: hiding, visibility, archiving, muting, closing
+
+**Series**:
+The resource behind a repeating meeting: one title, one roster, one venue, one
+recurrence rule, and one local anchor (start date, wall-clock time, IANA
+timezone) with a duration. It is the thing that has an id — the thing you open,
+tag, `@`-mention, invite people to, and hold a graph node for. A one-off event
+is not a series with one occurrence; the two are different rows and only one of
+them has a rule.
+_Avoid_: recurring event, repeating event, recurrent event, master, parent event
+
+**Occurrence**:
+One dated appearance of a [series](#), identified by the pair
+(series, **original start**) — never by a row id, because in the general case
+there is no row. The calendar computes occurrences from the rule at read time,
+the way a [reference chip](#) resolves its name at read time rather than
+storing it. "Next Tuesday's standup" is an occurrence; it is a projection of
+the series, not a second resource.
+_Avoid_: instance, event, repeat, expansion
+
+**Original start**:
+The instant the rule *would* place an [occurrence](#) at, which is that
+occurrence's name for as long as it exists — it does not move when the
+occurrence is rescheduled, and it survives the occurrence being cancelled. The
+coordinate an [override](#) is filed under and the one a URL carries.
+_Avoid_: start time, recurrence id, slot, original date
+
+**Override**:
+The single occurrence that has been edited away from its series — moved,
+renamed, or otherwise changed — and so has become a row of its own, filed under
+its [original start](#). Frozen where a plain [occurrence](#) is computed, which
+is the [snapshot embed](#) / [reference chip](#) split again: it stops tracking
+the series entirely, so renaming the series leaves the override showing its old
+name. It is not a resource — no graph node, no tag rows, no `@`-mention entry —
+because the resource is the series and an override is that series, on one date,
+differing. A *cancelled* occurrence is not an override: it is an entry in the
+series' excluded starts, which costs no row at all.
+_Avoid_: exception, detached instance, modified occurrence, edited event
+
+**Split**:
+What "this and following" does to a [series](#): truncate the original so it
+ends before the chosen [occurrence](#), and create a second series carrying the
+change. The second series is a genuinely separate resource — its own id, node,
+share links and mention target — which is why the choice is worth a name rather
+than being described as an edit.
+_Avoid_: fork, branch, detach, this-and-future
+
+**Horizon**:
+How far past the requested window a [series](#) is ever expanded (24 months),
+and therefore the answer to what an unbounded series means at read time. A rule
+with no end date is a statement about the rule; the horizon is the statement
+that no read is unbounded because of it. Distinct from the series' own end,
+which the organizer sets.
+_Avoid_: lookahead, expansion limit, max date, window

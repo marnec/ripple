@@ -202,6 +202,17 @@ export const router = createBrowserRouter(
                     })),
                 },
                 {
+                  // The **series** itself, as distinct from any one
+                  // occurrence of it. `/events/:id` resolves to the next
+                  // occurrence, which is what a bare link should open; this
+                  // is where "change the pattern" leads instead.
+                  path: ":eventId/series",
+                  lazy: () =>
+                    import("./pages/App/Calendar/SeriesDetailPage").then((m) => ({
+                      Component: m.SeriesDetailPage,
+                    })),
+                },
+                {
                   path: ":eventId/videocall",
                   lazy: () =>
                     import("./pages/App/Calendar/EventVideoCall").then((m) => ({

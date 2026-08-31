@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   extractEventMentionIds,
+  extractEventSeriesMentionIds,
   extractMessageTargets,
   extractPlainTextFromBody,
 } from "../convex/utils/blocknote";
@@ -8,6 +9,12 @@ import {
 const eventInline = (eventId: string) => ({
   type: "eventMention",
   props: { eventId },
+});
+
+/** The same chip, pointing at a series rather than at an event row. */
+const seriesInline = (seriesId: string) => ({
+  type: "eventMention",
+  props: { seriesId },
 });
 
 const textBlock = (children: any[]) => ({
@@ -112,6 +119,33 @@ describe("blocknote utils — @event mention helpers", () => {
     it("falls back to '@event' when title is missing", () => {
       const body = JSON.stringify([textBlock([eventInline("missing")])]);
       expect(extractPlainTextFromBody(body)).toBe("@event");
+    });
+
+    it("names a mentioned series, whose id sits under a different prop", () => {
+      // The one place a mention's text escapes the app entirely — onto a lock
+      // screen — so "@event" where the sender wrote "@Standup" is a real loss.
+      const body = JSON.stringify([textBlock([seriesInline("ser-1")])]);
+      const titles = new Map([["ser-1", "Standup"]]);
+      expect(extractPlainTextFromBody(body, undefined, undefined, titles)).toBe(
+        "@Standup",
+      );
+    });
+  });
+
+  describe("mentions of a series", () => {
+    it("are collected apart from event mentions", () => {
+      const body = JSON.stringify([
+        textBlock([eventInline("evt-1"), seriesInline("ser-1")]),
+      ]);
+      expect(extractEventMentionIds(body)).toEqual(["evt-1"]);
+      expect(extractEventSeriesMentionIds(body)).toEqual(["ser-1"]);
+    });
+
+    it("are classified as targetType=eventSeries", () => {
+      const body = JSON.stringify([textBlock([seriesInline("ser-1")])]);
+      expect(extractMessageTargets(body)).toEqual([
+        { targetType: "eventSeries", targetId: "ser-1" },
+      ]);
     });
   });
 });

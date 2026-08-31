@@ -32,6 +32,7 @@ const shareResourceTypeValidator = v.union(
   v.literal("spreadsheet"),
   v.literal("channel"),
   v.literal("calendarEvent"),
+  v.literal("eventSeries"),
 );
 
 const shareAccessLevelValidator = v.union(
@@ -115,7 +116,9 @@ async function resolveResourceWorkspaceId(
         ? ctx.db.get(resourceId as Id<"diagrams">)
         : resourceType === "spreadsheet"
           ? ctx.db.get(resourceId as Id<"spreadsheets">)
-          : ctx.db.get(resourceId as Id<"calendarEvents">));
+          : resourceType === "eventSeries"
+            ? ctx.db.get(resourceId as Id<"eventSeries">)
+            : ctx.db.get(resourceId as Id<"calendarEvents">));
   if (!resource) throw new ConvexError(`${resourceType} not found`);
   return resource.workspaceId;
 }
@@ -137,6 +140,10 @@ async function resolveResourceLabel(
   if (resourceType === "calendarEvent") {
     const e = await ctx.db.get(resourceId as Id<"calendarEvents">);
     return e?.title;
+  }
+  if (resourceType === "eventSeries") {
+    const s = await ctx.db.get(resourceId as Id<"eventSeries">);
+    return s?.title;
   }
   const r = await ctx.db.get(resourceId as Id<"documents">);
   return (r as { name?: string } | null)?.name;
@@ -371,6 +378,13 @@ export const getShareInfo = query({
       const event = await ctx.db.get(share.resourceId as Id<"calendarEvents">);
       if (!event) return { status: "revoked" as const };
       resourceName = event.title;
+    } else if (share.resourceType === "eventSeries") {
+      // Same reasoning as the branch above: deleting the series cascades the
+      // share row, so a surviving row pointing at nothing is the race, and it
+      // degrades to "no longer available" rather than to an error.
+      const series = await ctx.db.get(share.resourceId as Id<"eventSeries">);
+      if (!series) return { status: "revoked" as const };
+      resourceName = series.title;
     } else {
       const resource = await ctx.db.get(share.resourceId as Id<"documents">);
       if (!resource) return { status: "not_found" as const };
@@ -433,7 +447,9 @@ export const loadActiveShare = internalQuery({
         ? await ctx.db.get(share.resourceId as Id<"channels">)
         : share.resourceType === "calendarEvent"
           ? await ctx.db.get(share.resourceId as Id<"calendarEvents">)
-          : await ctx.db.get(share.resourceId as Id<"documents">);
+          : share.resourceType === "eventSeries"
+            ? await ctx.db.get(share.resourceId as Id<"eventSeries">)
+            : await ctx.db.get(share.resourceId as Id<"documents">);
     if (!resource) return null;
 
     return {

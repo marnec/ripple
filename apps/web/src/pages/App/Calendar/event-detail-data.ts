@@ -157,10 +157,10 @@ export function useEventDetail({
    *  separate "delete" verb — cancellation is the only removal path. */
   const handleCancel = async (): Promise<boolean> => {
     if (!eventId) return false;
-    const msg = hasGuests
-      ? "Cancel this event? Invitees will be notified and the event will be removed."
-      : "Cancel this event? This cannot be undone.";
-    if (!confirm(msg)) return false;
+    // No confirmation here: this hook cannot render one, and a `confirm()` is
+    // the wrong shape anyway. The caller asks first (`ConfirmDialog`), then
+    // calls this — which is why `hasGuests` is returned, since it decides what
+    // the question says.
     try {
       await cancel({ eventId });
       toast.success("Event cancelled");
@@ -234,5 +234,50 @@ export function useEventDetail({
     handleAddInvitees,
     handleSelfInvite,
     handleRemoveInvitee,
+  };
+}
+
+/**
+ * What the removal question asks, for both detail surfaces so they ask it
+ * identically.
+ *
+ * Two things vary. Whether anyone is told — `willNotifyAnyone` is the hook's
+ * `hasGuests`, which despite the name means "somebody other than me is on the
+ * roster", members included. And whether this row is an **override**: an edited
+ * occurrence of a repeating event, which the product navigates to straight
+ * after the edit. Removing one of those skips a single occurrence and leaves
+ * the series running, so calling it "Cancel event" told the organizer they were
+ * deleting a meeting when they were dropping one week of it.
+ */
+export function removeEventDialogCopy({
+  willNotifyAnyone,
+  isOccurrenceOfSeries,
+}: {
+  willNotifyAnyone: boolean;
+  isOccurrenceOfSeries: boolean;
+}): {
+  title: string;
+  description: string;
+  confirmLabel: string;
+  dismissLabel: string;
+} {
+  if (isOccurrenceOfSeries) {
+    return {
+      title: "Skip this occurrence?",
+      // No claim about who hears: the series roster is not on this row to
+      // count, and a skip of an occurrence already past tells nobody.
+      description:
+        "Only this occurrence is removed. The rest of the repeating event carries on unchanged.",
+      confirmLabel: "Skip occurrence",
+      dismissLabel: "Keep it",
+    };
+  }
+  return {
+    title: "Cancel this event?",
+    description: willNotifyAnyone
+      ? "Invitees will be notified and the event will be removed. This cannot be undone."
+      : "This cannot be undone.",
+    confirmLabel: "Cancel event",
+    dismissLabel: "Keep event",
   };
 }

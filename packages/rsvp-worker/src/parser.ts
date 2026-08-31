@@ -117,6 +117,23 @@ export function extractRsvp(icsText: string): ParsedRsvp | null {
   const vevent = vcal.getFirstSubcomponent("vevent");
   if (!vevent) return null;
 
+  // RECURRENCE-ID is deliberately **not** read.
+  //
+  // A mail client replying about one occurrence of a recurring series sends
+  // the series' own UID plus a RECURRENCE-ID naming the occurrence. We drop
+  // that coordinate and let the reply stand for the series, so "I can't make
+  // this Tuesday" is recorded as an answer to the standup.
+  //
+  // That is knowingly asymmetric with the outbound side, which *does* carry
+  // per-occurrence RECURRENCE-ID VEVENTs (apps/convex/convex/emails.ts). The
+  // asymmetry is the point: outbound correctness is free — the overrides are
+  // already rows — while honouring an inbound per-occurrence answer needs the
+  // per-occurrence invitee coordinate this release defers
+  // (`eventSeriesInvitees.originalStartMs`, unset by every write path today).
+  // Reading it here without that would let a decline about one Tuesday
+  // silently overwrite the guest's answer for the whole series. See ADR 0002
+  // and spec 0003 "Email and ICS"; do not "fix" this without per-occurrence
+  // RSVP.
   const uid = vevent.getFirstPropertyValue("uid");
   if (typeof uid !== "string" || uid.length === 0) return null;
 

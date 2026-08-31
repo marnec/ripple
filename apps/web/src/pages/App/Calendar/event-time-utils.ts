@@ -203,3 +203,17 @@ export function formatRescheduleRange(startsAt: number, endsAt: number): string 
   const end = new Date(endsAt);
   return `${dateFmt.format(start)} · ${timeFmt.format(start)} – ${timeFmt.format(end)}`;
 }
+
+/**
+ * A picked date as "YYYY-MM-DD" in the *local* calendar.
+ *
+ * Deliberately not `toISOString().slice(0, 10)`: that reads the date in UTC,
+ * so a series anchored at 23:30 on the 1st in any positive-offset zone would
+ * be stored as starting on the 2nd — and every occurrence after it would land
+ * a day late, forever.
+ */
+export function toLocalIsoDate(date: Date): string {
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${date.getFullYear()}-${month}-${day}`;
+}

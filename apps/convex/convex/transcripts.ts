@@ -64,13 +64,13 @@ export const ingestTranscript = internalAction({
       return null;
     }
 
-    const channel = await ctx.runQuery(
-      internal.callSessions.getChannelForTranscript,
-      { channelId: session.channelId },
+    const venue = await ctx.runQuery(
+      internal.callSessions.getVenueForTranscript,
+      { sessionId: session._id },
     );
-    if (!channel) {
+    if (!venue) {
       console.warn(
-        `ingestTranscript: channel ${session.channelId} gone; skipping transcript doc.`,
+        `ingestTranscript: venue for session ${session._id} gone; skipping transcript doc.`,
       );
       return null;
     }
@@ -93,7 +93,7 @@ export const ingestTranscript = internalAction({
       return null;
     }
 
-    // Name carries the channel + when (date & time, to disambiguate multiple
+    // Name carries the venue + when (date & time, to disambiguate multiple
     // calls in a day). The word "transcript" lives on the `transcript` tag, not
     // the name. No `# heading` inside the body — the doc title is the name.
     const stamp = new Date().toLocaleString("en-US", {
@@ -103,10 +103,10 @@ export const ingestTranscript = internalAction({
       hour: "numeric",
       minute: "2-digit",
     });
-    // `channel.name` is already the derived label for a DM: this runs in an
+    // `venue.name` is already the derived label for a DM: this runs in an
     // action with no `ctx.db`, and the query that supplied it
-    // (`callSessions.getChannelForTranscript`) resolves it.
-    const name = `${channel.name} call — ${stamp}`;
+    // (`callSessions.getVenueForTranscript`) resolves it.
+    const name = `${venue.name} call — ${stamp}`;
 
     // Markdown → Yjs cold-start snapshot via the headless editor (it owns the
     // JSDOM shim + BlockNote/Yjs encoding). `null` would mean the markdown
@@ -123,7 +123,11 @@ export const ingestTranscript = internalAction({
     if (!documentId) {
       documentId = await ctx.runMutation(
         internal.documents.createForTranscript,
-        { workspaceId: channel.workspaceId, name, channelId: session.channelId },
+        {
+          workspaceId: venue.workspaceId,
+          name,
+          ...(venue.channelId ? { channelId: venue.channelId } : {}),
+        },
       );
 
       const won = await ctx.runMutation(

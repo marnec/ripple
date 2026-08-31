@@ -2,7 +2,6 @@ import { describe, it, expect } from "vitest";
 import {
   estimateToDays,
   isDateConflict,
-  isHistoricalReschedule,
   resolveEffectiveDueDate,
   computeCycleAggregates,
   computeHofstadterLabels,
@@ -98,30 +97,6 @@ describe("computeCycleAggregates", () => {
   });
 });
 
-describe("isHistoricalReschedule", () => {
-  const NOW = 1_700_000_000_000;
-
-  it("returns true when both old and new starts are in the past", () => {
-    expect(isHistoricalReschedule(NOW - 10_000, NOW - 5_000, NOW)).toBe(true);
-  });
-
-  it("returns false when the new start is in the future", () => {
-    expect(isHistoricalReschedule(NOW - 10_000, NOW + 5_000, NOW)).toBe(false);
-  });
-
-  it("returns false when the old start is in the future (rescheduling an upcoming event)", () => {
-    expect(isHistoricalReschedule(NOW + 1_000, NOW + 5_000, NOW)).toBe(false);
-  });
-
-  it("returns false when either side equals now (strict less-than boundary)", () => {
-    expect(isHistoricalReschedule(NOW, NOW - 1, NOW)).toBe(false);
-    expect(isHistoricalReschedule(NOW - 1, NOW, NOW)).toBe(false);
-  });
-
-  it("returns false when both are in the future", () => {
-    expect(isHistoricalReschedule(NOW + 1_000, NOW + 2_000, NOW)).toBe(false);
-  });
-});
 
 describe("computeHofstadterLabels", () => {
   it("returns plan (×1.6) and commit (×5) label strings for a given estimate", () => {
