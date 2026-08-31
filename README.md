@@ -5,6 +5,8 @@ NEXT STEPS:
 - fix links in chat, especially around activation state and relative links
 - add file attachment in chats
 - drag&drop in chat to attach images or files
+- improve snapshotted embedded spreadhseet ranges in chats
+
 
 - improve reactivity around embedding in docs, first we should use optimistic edit using the indexeddb local-storage, also I'm pretty sure we can improve UI independently from optimistic ally update results
 

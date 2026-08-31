@@ -10,6 +10,7 @@ import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 import { FileText } from "lucide-react";
 import { tableCellContent, tableCellSpans } from "@/lib/blocknote-table";
+import { normalizeLinkUrl } from "@/lib/link-url";
 
 // BlockNote JSON types (simplified for rendering)
 export type Style = {
@@ -256,24 +257,39 @@ function renderInlineArray(items: InlineContent[]): React.ReactNode {
   return items.map((item, i) => <InlineRenderer key={`inline-${i}`} content={item} />);
 }
 
+/**
+ * Bodies are stored as JSON and rendered as anchors, so the href is re-checked
+ * here and not only where the link was created: messages predate the composer's
+ * validation, and a hand-crafted body never went through it at all. An href
+ * that cannot be made absolute renders as plain text rather than as a link into
+ * our own routes (or, for a `javascript:` payload, into our own origin).
+ */
+function LinkRenderer({ content }: { content: LinkContent }) {
+  const text = content.content.map((c, i) => (
+    <StyledText key={`link-text-${i}`} text={c.text} styles={c.styles} />
+  ));
+  const href = normalizeLinkUrl(content.href);
+  if (!href) return <>{text}</>;
+
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="text-primary underline underline-offset-2 hover:text-primary/80"
+    >
+      {text}
+    </a>
+  );
+}
+
 function InlineRenderer({ content }: { content: InlineContent }) {
   switch (content.type) {
     case "text":
       return <StyledText text={content.text} styles={content.styles} />;
 
     case "link":
-      return (
-        <a
-          href={content.href}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-primary underline underline-offset-2 hover:text-primary/80"
-        >
-          {content.content.map((c, i) => (
-            <StyledText key={`link-text-${i}`} text={c.text} styles={c.styles} />
-          ))}
-        </a>
-      );
+      return <LinkRenderer content={content} />;
 
     case "taskMention":
       return <TaskMentionChip taskId={content.props.taskId} />;

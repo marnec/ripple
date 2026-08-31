@@ -152,3 +152,40 @@ describe("MessageRenderer tables", () => {
     expect(screen.getByRole("cell", { name: "wide" })).toHaveAttribute("colspan", "2");
   });
 });
+
+const linkBlock = (href: string, text: string): Block => ({
+  type: "paragraph",
+  content: [{ type: "link", href, content: [{ type: "text", text, styles: {} }] }],
+} as unknown as Block);
+
+describe("MessageRenderer links", () => {
+  it("renders an absolute link as-is", () => {
+    render(<MessageRenderer blocks={[linkBlock("https://example.com/a", "docs")]} />);
+
+    expect(screen.getByRole("link", { name: "docs" })).toHaveAttribute(
+      "href",
+      "https://example.com/a",
+    );
+  });
+
+  it("makes a scheme-less href external instead of a route into the app", () => {
+    // Messages sent before the composer validated URLs carry the selected text
+    // as the href, which the browser resolved against the current channel URL.
+    render(<MessageRenderer blocks={[linkBlock("example.com", "site")]} />);
+
+    expect(screen.getByRole("link", { name: "site" })).toHaveAttribute(
+      "href",
+      "https://example.com/",
+    );
+  });
+
+  it("drops the anchor entirely for a relative or hostile href, keeping the text", () => {
+    for (const href of ["/workspace/settings", "javascript:alert(1)"]) {
+      cleanup();
+      render(<MessageRenderer blocks={[linkBlock(href, "click me")]} />);
+
+      expect(screen.queryByRole("link")).not.toBeInTheDocument();
+      expect(screen.getByText("click me")).toBeInTheDocument();
+    }
+  });
+});
