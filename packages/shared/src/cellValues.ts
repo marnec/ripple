@@ -74,3 +74,17 @@ export function extractCellValues(
   if (cell.row >= rowCount) return [[""]];
   return [[displayValue(read(cell.row, cell.col), cell.row, cell.col, formulaValue)]];
 }
+
+/**
+ * True when a grid holds nothing anyone would read.
+ *
+ * Whitespace counts as blank: a cell holding a space looks identical to an
+ * empty one wherever these values are rendered, so a caller deciding whether
+ * there is anything to show must not be told otherwise.
+ *
+ * A grid with no rows at all — what a range entirely past the last row clips
+ * down to — is blank by the same reasoning.
+ */
+export function isBlankGrid(values: string[][]): boolean {
+  return values.every((row) => row.every((cell) => cell.trim() === ""));
+}

@@ -29,6 +29,14 @@ interface CellRefDialogProps {
   spreadsheetName: string;
   onInsert: (cellRef: string | null) => void;
   /**
+   * Asked about each ref that passes validation, for anything worth saying
+   * about it that the string alone cannot answer — the dialog holds the ref,
+   * the caller holds the data. A returned message is shown as a warning and
+   * never blocks the insert: it describes what the user is about to get, not
+   * a reason they can't have it.
+   */
+  rangeWarning?: (cellRef: string) => string | null;
+  /**
    * Whether a range can be confirmed right now. False while the caller is still
    * getting hold of the data a range would resolve against — the blank-field
    * "insert as link" path stays available either way. Defaults to true for
@@ -43,12 +51,21 @@ export function CellRefDialog({
   spreadsheetId,
   spreadsheetName,
   onInsert,
+  rangeWarning,
   rangeReady = true,
 }: CellRefDialogProps) {
   const [cellRef, setCellRef] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Only a ref that would actually be inserted is worth describing: an
+  // unparseable or oversized one already has an error of its own, and asking
+  // the caller about a half-typed "A" would flash a warning at every keystroke.
+  const typed = normalizeCellRef(cellRef.trim());
+  const insertable =
+    typed !== "" && rangeReady && isValidCellRef(typed) && !exceedsMaxCells(typed);
+  const warning = insertable ? (rangeWarning?.(typed) ?? null) : null;
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
@@ -141,6 +158,11 @@ export function CellRefDialog({
               </InputGroup>
               {error && (
                 <p className="text-sm text-destructive">{error}</p>
+              )}
+              {!error && warning && (
+                <p className="text-sm text-amber-600 dark:text-amber-400 animate-fade-in">
+                  {warning}
+                </p>
               )}
             </div>
             <DialogFooter>

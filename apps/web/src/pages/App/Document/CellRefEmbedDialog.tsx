@@ -1,4 +1,5 @@
 import { useResourceDoc } from "@/hooks/use-collab-session";
+import { isBlankGrid } from "@ripple/shared/cellValues";
 import { readGridRange, stableRefForCell } from "@ripple/shared/spreadsheetDoc";
 import type { CellRefEmbedPick } from "@/lib/embed-insert";
 import { CellRefDialog } from "./CellRefDialog";
@@ -47,6 +48,17 @@ export function CellRefEmbedDialog({
       // a cell can't be confirmed against it yet. Inserting the spreadsheet as
       // a plain link needs nothing from the room and stays available.
       rangeReady={isHydrated}
+      // An embed tracks its cells, so an empty range is a legitimate thing to
+      // want — you can reference cells you are about to fill in. It is also
+      // the shape of a mistake (an off-by-one row, the wrong sheet), and the
+      // block gives no hint either way once inserted: a blank grid looks the
+      // same as one that is still loading. So: say it, don't prevent it.
+      rangeWarning={(cellRef) => {
+        const values = readGridRange(yDoc, cellRef);
+        return values && isBlankGrid(values)
+          ? `${cellRef} is empty — the embed stays blank until those cells have values.`
+          : null;
+      }}
       onInsert={(cellRef) => {
         onPick(
           cellRef

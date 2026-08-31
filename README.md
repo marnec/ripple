@@ -6,6 +6,8 @@ NEXT STEPS:
 
 - add a dependency view to tasks
 
+- add timezone setting to workspace, this should be inherited by all time-related values in the app.
+
 - add drag to create range in spreadsheet while editing a formula
 
 - add warning when embedding an empty spreadsheet range in doc
