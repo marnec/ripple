@@ -65,6 +65,7 @@ const LazyTaskDetailSheet = React.lazy(taskDetailSheetImporter);
 // already in the page's bundle through other surfaces). Static imports
 // keep the open animation snappy without bloating the chunk meaningfully.
 import { EventDetailSheet } from "../Calendar/EventDetailSheet";
+import { OccurrenceDetailSheet } from "../Calendar/OccurrenceDetailSheet";
 import { CreateEventDialog } from "../Calendar/CreateEventDialog";
 import { InlineEventCreator } from "../Calendar/InlineEventCreator";
 import { CursorTimeIndicator } from "../Calendar/CursorTimeIndicator";
@@ -259,9 +260,12 @@ function MyCalendarTabContent({ workspaceId }: { workspaceId: Id<"workspaces"> }
   // the same ratcheting pattern.
   const [taskSheetMounted, setTaskSheetMounted] = useState(false);
   const [eventSheetMounted, setEventSheetMounted] = useState(false);
+  const [occurrenceSheetMounted, setOccurrenceSheetMounted] = useState(false);
   const [createMounted, setCreateMounted] = useState(false);
   if (selectedTaskId && !taskSheetMounted) setTaskSheetMounted(true);
   if (selectedEventId && !eventSheetMounted) setEventSheetMounted(true);
+  if (selectedOccurrence && !occurrenceSheetMounted)
+    setOccurrenceSheetMounted(true);
   if (openCreate && !createMounted) setCreateMounted(true);
 
   // First-mount animation guard for the event detail Sheet. Mounting and
@@ -288,6 +292,16 @@ function MyCalendarTabContent({ workspaceId }: { workspaceId: Id<"workspaces"> }
     return () => cancelAnimationFrame(handle);
   }, [eventSheetMounted, eventSheetReady]);
   const eventSheetOpen = !!selectedEventId && eventSheetReady;
+
+  // The occurrence sheet needs the same one-shot deferred-true ratchet, for
+  // the same reason: mounting with `open=true` skips base-ui's slide-in.
+  const [occurrenceSheetReady, setOccurrenceSheetReady] = useState(false);
+  useEffect(() => {
+    if (!occurrenceSheetMounted || occurrenceSheetReady) return;
+    const handle = requestAnimationFrame(() => setOccurrenceSheetReady(true));
+    return () => cancelAnimationFrame(handle);
+  }, [occurrenceSheetMounted, occurrenceSheetReady]);
+  const occurrenceSheetOpen = !!selectedOccurrence && occurrenceSheetReady;
 
   // Warm the heavy TaskDetailSheet chunk after the calendar has rendered
   // so the first click on a task event opens with a smooth animation
@@ -718,10 +732,12 @@ function MyCalendarTabContent({ workspaceId }: { workspaceId: Id<"workspaces"> }
     );
   }
 
-  // An occurrence goes to the page on every device, not just mobile: it is
-  // addressed by a (series, original start) pair rather than by a row id, and
-  // the desktop sheet is built around an event row it does not have.
-  if (selectedOccurrence) {
+  // An occurrence takes the same route as an event: the page on mobile, the
+  // side panel on desktop (with its own Maximize2 to the page). It is
+  // addressed by a (series, original start) pair rather than by a row id,
+  // which is the only thing that differs — `OccurrenceDetailSheet` reads the
+  // series, not an event row.
+  if (isMobile && selectedOccurrence) {
     return (
       <Navigate
         to={`/workspaces/${workspaceId}/events/${selectedOccurrence.seriesId}?on=${selectedOccurrence.originalStartMs}`}
@@ -796,6 +812,23 @@ function MyCalendarTabContent({ workspaceId }: { workspaceId: Id<"workspaces"> }
             if (!open) setSelectedEventId(null);
           }}
           workspaceId={workspaceId}
+        />
+      )}
+      {occurrenceSheetMounted && (
+        <OccurrenceDetailSheet
+          occurrence={selectedOccurrence}
+          open={occurrenceSheetOpen}
+          onOpenChange={(open) => {
+            if (!open) setSelectedOccurrence(null);
+          }}
+          workspaceId={workspaceId}
+          // A single-occurrence edit gives this Tuesday an event row of its
+          // own, which is the other sheet's subject — swap panels rather than
+          // throwing the viewer onto a full page they did not ask for.
+          onOverrideCreated={(eventId) => {
+            setSelectedOccurrence(null);
+            setSelectedEventId(eventId);
+          }}
         />
       )}
       {createMounted && (

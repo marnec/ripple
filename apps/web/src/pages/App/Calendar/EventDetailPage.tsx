@@ -86,15 +86,28 @@ function BareEventLink({
   const landing = useQuery(api.eventSeries.resolveLink, { linkId });
 
   // Replace rather than push: the bare URL is a redirect, not a stop on the
-  // way, so Back must not bounce the viewer through it again. A series with no
-  // occurrence left to land on goes to the series itself — still a page about
-  // the thing the link named.
+  // way, so Back must not bounce the viewer through it again.
+  if (landing?.originalStartMs != null) {
+    return (
+      <Navigate
+        to={`/workspaces/${workspaceId}/events/${landing.seriesId}?on=${landing.originalStartMs}`}
+        replace
+      />
+    );
+  }
+
+  // A series with no occurrence left to land on is shown here, on the URL that
+  // named it, rather than redirected: there is no coordinate to redirect to,
+  // and the surface is the same one minus a date. (This is what the separate
+  // `/events/:id/series` page used to be for.)
   if (landing) {
-    const to =
-      landing.originalStartMs === null
-        ? `/workspaces/${workspaceId}/events/${landing.seriesId}/series`
-        : `/workspaces/${workspaceId}/events/${landing.seriesId}?on=${landing.originalStartMs}`;
-    return <Navigate to={to} replace />;
+    return (
+      <OccurrenceDetailPage
+        workspaceId={workspaceId}
+        seriesId={landing.seriesId}
+        originalStartMs={null}
+      />
+    );
   }
 
   // The event page cannot start loading before this answers, however much we

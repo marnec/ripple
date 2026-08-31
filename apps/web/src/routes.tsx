@@ -98,6 +98,27 @@ function RedirectToFlatVideocall() {
   );
 }
 
+/**
+ * Bridge for `/events/:eventId/series`, the series' former page. Its fields
+ * are on the occurrence surface now (see `OccurrenceDetailContent`), which the
+ * bare `/events/:eventId` link resolves to — the next occurrence, or the
+ * series itself once the rule has run out. Kept so a notification, a bookmark
+ * or an open tab from before the merge still lands somewhere real.
+ */
+// eslint-disable-next-line react-refresh/only-export-components -- see the note on RedirectToFlatVideocall
+function RedirectToSeriesLanding() {
+  const { workspaceId, eventId } = useParams<{
+    workspaceId?: string;
+    eventId?: string;
+  }>();
+  if (!workspaceId || !eventId) {
+    return <Navigate to="/workspaces" replace />;
+  }
+  return (
+    <Navigate to={`/workspaces/${workspaceId}/events/${eventId}`} replace />
+  );
+}
+
 export const router = createBrowserRouter(
   [
     {
@@ -202,15 +223,14 @@ export const router = createBrowserRouter(
                     })),
                 },
                 {
-                  // The **series** itself, as distinct from any one
-                  // occurrence of it. `/events/:id` resolves to the next
-                  // occurrence, which is what a bare link should open; this
-                  // is where "change the pattern" leads instead.
+                  // The series used to have a page of its own here, holding
+                  // the half of "what is this meeting" an occurrence did not.
+                  // Both halves are on the occurrence now, so this is only a
+                  // bridge for links already in the wild: `/events/:id`
+                  // resolves to the next occurrence, and to the series itself
+                  // when the rule has run out.
                   path: ":eventId/series",
-                  lazy: () =>
-                    import("./pages/App/Calendar/SeriesDetailPage").then((m) => ({
-                      Component: m.SeriesDetailPage,
-                    })),
+                  element: <RedirectToSeriesLanding />,
                 },
                 {
                   path: ":eventId/videocall",
