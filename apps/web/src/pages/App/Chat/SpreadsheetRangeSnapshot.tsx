@@ -65,7 +65,9 @@ export function SpreadsheetRangeSnapshot({
 
   return (
     <figure className="my-1 w-fit max-w-full overflow-hidden rounded-md border border-foreground/15 bg-foreground/5 first:mt-0">
-      <figcaption className="flex min-w-0 items-center border-b border-foreground/12 px-2 py-1">
+      {/* `px-2.5` matches the cells' padding, so the header's icon starts on
+          the same rule as the first column's text. */}
+      <figcaption className="flex min-w-0 items-center border-b border-foreground/12 px-2.5 py-1">
         <ResourceReferenceChip
           resourceId={spreadsheetId}
           resourceType="spreadsheet"
@@ -78,7 +80,15 @@ export function SpreadsheetRangeSnapshot({
         className="overflow-auto overscroll-contain"
         style={{ maxHeight: MAX_GRID_HEIGHT }}
       >
-        <table className="w-auto border-collapse text-[13px] leading-tight">
+        {/*
+         * `min-w-full`, not `w-auto`: the header names the sheet and the range,
+         * so it is regularly the widest thing in the panel, and a grid sized to
+         * its own content then stopped short of the right edge with the row
+         * rules ending in mid-air. The columns absorb the slack instead, which
+         * is what a sheet does anyway. A grid wider than the panel still grows
+         * past this and scrolls.
+         */}
+        <table className="min-w-full border-collapse text-[13px] leading-tight">
           <caption className="sr-only">
             {spreadsheetName ? `${spreadsheetName}, cells ${cellRef}` : `Cells ${cellRef}`}
           </caption>
