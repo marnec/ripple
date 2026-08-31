@@ -28,6 +28,19 @@ describe("taskImportRowSchema", () => {
     expect(row.tags).toEqual(["prj2", "fornitore", "alimentazione"]);
   });
 
+  // Regression: the template teaches `;`, but a quoted `a,b` cell is ordinary
+  // CSV and people type it — it used to import as one tag named "a,b".
+  it("splits tags on commas too, including a mixed cell", () => {
+    expect(
+      taskImportRowSchema.parse(csvRow({ tags: "prj2,alimentazione,impianto" }))
+        .tags,
+    ).toEqual(["prj2", "alimentazione", "impianto"]);
+    expect(
+      taskImportRowSchema.parse(csvRow({ tags: "prj2; sicurezza,sto,ss1" }))
+        .tags,
+    ).toEqual(["prj2", "sicurezza", "sto", "ss1"]);
+  });
+
   it("nulls blank cells and coerces estimate", () => {
     const row = taskImportRowSchema.parse(
       csvRow({ tags: "", priority: "", estimate: "3.5" }),
@@ -86,7 +99,7 @@ describe("taskImportRowOutputSchema", () => {
     );
     expect(byField.title).toBe("title is required");
     expect(byField.priority).toMatch(/^priority must be one of: /);
-    expect(byField.tags).toBe("tags must be text separated by ;");
+    expect(byField.tags).toBe("tags must be text separated by ; or ,");
     expect(byField.estimate).toBe("estimate must be a positive number");
   });
 });

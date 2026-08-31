@@ -306,7 +306,7 @@ describe("taskImports.runImport (end-to-end)", () => {
     // pre-rename `labels`), and each bad column is reported on its own.
     expect(job?.rowErrors).toEqual([
       { row: 2, field: "title", message: "title is required" },
-      { row: 2, field: "tags", message: "tags must be text separated by ;" },
+      { row: 2, field: "tags", message: "tags must be text separated by ; or ," },
     ]);
   });
 

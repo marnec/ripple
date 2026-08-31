@@ -43,8 +43,12 @@ const nullable = <T extends z.ZodTypeAny>(s: T) =>
  * (comments) is excluded from v1. Status is also excluded — the project's
  * default status is applied at create-time.
  *
- * Empty cells become null. Tags are split on `;` and trimmed; an entirely
- * blank cell yields null (no tags), a cell with only separators yields [].
+ * Empty cells become null. Tags are split on `;` or `,` and trimmed; an
+ * entirely blank cell yields null (no tags), a cell with only separators
+ * yields []. Both separators are accepted because a spreadsheet that quotes
+ * the cell makes `a,b` a perfectly ordinary single CSV field, and people
+ * type it — the template teaches `;` (no quoting needed) but rejecting the
+ * comma silently imported whole tag lists as one tag.
  *
  * Note: the column is "tags" (user-facing terminology), but the underlying
  * task field is still named "labels" — that's the denormalized storage
@@ -65,7 +69,7 @@ export const taskImportRowSchema = z.object({
       .string()
       .transform((s) =>
         s
-          .split(";")
+          .split(/[;,]/)
           .map((l) => l.trim())
           .filter(Boolean),
       ),
@@ -120,7 +124,7 @@ export const taskImportRowOutputSchema = z.object({
       message: `priority must be one of: ${PRIORITY_VALUES.join(", ")}`,
     })
     .nullable(),
-  tags: z.array(z.string(), "tags must be text separated by ;").nullable(),
+  tags: z.array(z.string(), "tags must be text separated by ; or ,").nullable(),
   dueDate: z.string("dueDate must be a date (YYYY-MM-DD)").nullable(),
   plannedStartDate: z
     .string("plannedStartDate must be a date (YYYY-MM-DD)")
@@ -171,7 +175,7 @@ export function toRowError(
  *
  * The template used to be a bare header line, which says the column *names*
  * but not what goes in them — the formats that actually get rejected (dates,
- * the `;` tag separator, the priority vocabulary) were only discoverable by
+ * the tag separator, the priority vocabulary) were only discoverable by
  * failing an import. So the template carries one filled-in row instead, and
  * this prefix is what lets the import drop that row if it is still there at
  * upload time: an example that has to be deleted before use is a trap, not a
