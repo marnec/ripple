@@ -1,6 +1,5 @@
 import { useResourceDoc } from "@/hooks/use-collab-session";
-import { readRangeValues } from "@/lib/spreadsheet-range-read";
-import { resolveStableRefLocally } from "@/lib/spreadsheet-stable-ref";
+import { readGridRange, stableRefForCell } from "@ripple/shared/spreadsheetDoc";
 import type { CellRefEmbedPick } from "@/lib/embed-insert";
 import { CellRefDialog } from "./CellRefDialog";
 import type { Id } from "@convex/_generated/dataModel";
@@ -53,8 +52,8 @@ export function CellRefEmbedDialog({
           cellRef
             ? {
                 cellRef,
-                stableRef: resolveStableRefLocally(yDoc, cellRef),
-                values: readRangeValues(yDoc, cellRef),
+                stableRef: stableRefForCell(yDoc, cellRef),
+                values: readGridRange(yDoc, cellRef),
               }
             : { cellRef: null, stableRef: null, values: null },
         );

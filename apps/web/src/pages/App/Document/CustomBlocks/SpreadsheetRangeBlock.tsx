@@ -67,7 +67,7 @@ const ResizableSpreadsheetRange = ({
     api.spreadsheets.get,
     spreadsheetId ? { id: spreadsheetId as Id<"spreadsheets"> } : "skip",
   );
-  const { values: localValues, isLoading: localLoading, orphan, liveCellRef } =
+  const { values: localValues, isLoading, orphan, liveCellRef } =
     useSpreadsheetCellPreview(
       spreadsheetId as Id<"spreadsheets">,
       stableRef ?? "",
@@ -203,11 +203,10 @@ const ResizableSpreadsheetRange = ({
     );
   }
 
-  // The cells are what this block is; the spreadsheet's name is a second,
-  // slower query that only feeds the caption. Waiting for it held the grid
-  // back on every load even when the values were already on the device.
-  const isLoading = localLoading && !localValues;
-
+  // `isLoading` is the only gate: it already means "no cells to show", and the
+  // spreadsheet's *name* is a second, slower query that only feeds the caption.
+  // Waiting for that held the grid back on every load even when the values
+  // were already on the device.
   if (isLoading) {
     return (
       <div aria-hidden="true" className="invisible" style={{ width: block.props.width, maxWidth: "100%" }}>

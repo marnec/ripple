@@ -54,13 +54,24 @@ export interface InsertCellRefEmbedArgs {
   }) => Promise<string>;
 }
 
+/**
+ * Resolves once the embed is in the document.
+ *
+ * A pick the replica could resolve is inserted **synchronously**, before this
+ * returns — that is the whole point of resolving locally, and no caller should
+ * have to await it to see the block. The promise exists for the fallback path,
+ * and it **rejects** when the server refuses to make the reference (a sheet
+ * with no order arrays, a ref past the end of the grid). Nothing is inserted
+ * in that case, so a caller that ignores the rejection leaves the user with a
+ * dialog that closed and did nothing.
+ */
 export function insertCellRefEmbed({
   editor,
   spreadsheetId,
   pick,
   ensureCellRef,
   prepareStableRef,
-}: InsertCellRefEmbedArgs): void {
+}: InsertCellRefEmbedArgs): Promise<void> {
   const { cellRef, values } = pick;
   editor.focus();
 
@@ -69,7 +80,7 @@ export function insertCellRefEmbed({
       { type: "spreadsheetLink", props: { spreadsheetId } },
       " ",
     ]);
-    return;
+    return Promise.resolve();
   }
 
   const place = (stableRef: string) => {
@@ -99,12 +110,13 @@ export function insertCellRefEmbed({
   // The replica answered — nothing to wait for.
   if (pick.stableRef) {
     place(pick.stableRef);
-    return;
+    return Promise.resolve();
   }
 
   // It could not (a sheet with no order arrays, a ref past the end of the
-  // grid). Ask the server, which reports the reason properly.
-  void prepareStableRef({ spreadsheetId, cellRef }).then(place);
+  // grid). Ask the server, which reports the reason properly, and let the
+  // rejection carry it back to whoever can show it.
+  return prepareStableRef({ spreadsheetId, cellRef }).then(place);
 }
 
 export interface InsertBlockEmbedArgs {

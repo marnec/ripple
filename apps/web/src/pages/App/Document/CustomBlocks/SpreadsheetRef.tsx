@@ -140,7 +140,7 @@ function SpreadsheetCellRefView({
   onRepoint: (cellRef: string, stableRef: string | null) => void;
 }) {
   const spreadsheet = useQuery(api.spreadsheets.get, { id: spreadsheetId });
-  const { values: localValues, isLoading: localLoading, orphan, liveCellRef } =
+  const { values: localValues, isLoading, orphan, liveCellRef } =
     useSpreadsheetCellPreview(spreadsheetId, stableRef ?? "");
   const navigate = useNavigate();
   const { workspaceId } = useParams();
@@ -170,7 +170,7 @@ function SpreadsheetCellRefView({
 
   // Reserved space until the value itself is known. The spreadsheet's *name*
   // only feeds the tooltip, so it is not worth holding the chip back for.
-  if (localLoading && !localValues) {
+  if (isLoading) {
     return <span className="inline-block h-5 w-8 align-middle" />;
   }
 

@@ -6,7 +6,7 @@ import {
   cellPreviewKey,
   clearEmbedPreviewMemory,
   loadEmbedPreview,
-  readEmbedPreview,
+  readEmbedPreviewSync,
   saveEmbedPreview,
   seedBlockPreview,
   seedCellPreview,
@@ -36,11 +36,11 @@ describe("embed preview cache", () => {
     // The async read is what populates the mirror.
     await loadEmbedPreview("cell:a:b");
 
-    expect(readEmbedPreview("cell:a:b")).toEqual({ values: [["42"]] });
+    expect(readEmbedPreviewSync("cell:a:b")).toEqual({ values: [["42"]] });
   });
 
   it("has nothing to say about a key it has never stored", async () => {
-    expect(readEmbedPreview("cell:never:seen")).toBeUndefined();
+    expect(readEmbedPreviewSync("cell:never:seen")).toBeUndefined();
     await expect(loadEmbedPreview("cell:never:seen")).resolves.toBeNull();
   });
 
@@ -57,7 +57,7 @@ describe("embed preview cache", () => {
   it("seeds a cell embed with what the picker was showing", () => {
     seedCellPreview("sheet1", "stable-1", "A1", [["42"]]);
 
-    expect(readEmbedPreview(cellPreviewKey("sheet1", "stable-1"))).toMatchObject({
+    expect(readEmbedPreviewSync(cellPreviewKey("sheet1", "stable-1"))).toMatchObject({
       values: [["42"]],
       cellRef: "A1",
       stableRef: "stable-1",
@@ -68,7 +68,7 @@ describe("embed preview cache", () => {
   it("seeds a block embed with what the picker was showing", () => {
     seedBlockPreview("doc1", "block-1", "heading", "Quarterly goals");
 
-    expect(readEmbedPreview(blockPreviewKey("doc1", "block-1"))).toMatchObject({
+    expect(readEmbedPreviewSync(blockPreviewKey("doc1", "block-1"))).toMatchObject({
       blockType: "heading",
       textContent: "Quarterly goals",
     });
@@ -78,10 +78,10 @@ describe("embed preview cache", () => {
     seedCellPreview("sheet1", "stable-1", "A1", [["42"]]);
     seedCellPreview("sheet2", "stable-1", "A1", [["7"]]);
 
-    expect(readEmbedPreview(cellPreviewKey("sheet1", "stable-1"))).toMatchObject({
+    expect(readEmbedPreviewSync(cellPreviewKey("sheet1", "stable-1"))).toMatchObject({
       values: [["42"]],
     });
-    expect(readEmbedPreview(cellPreviewKey("sheet2", "stable-1"))).toMatchObject({
+    expect(readEmbedPreviewSync(cellPreviewKey("sheet2", "stable-1"))).toMatchObject({
       values: [["7"]],
     });
   });

@@ -1,19 +1,13 @@
 import { useEffect, useState } from "react";
 import {
   loadEmbedPreview,
-  readEmbedPreview,
+  readEmbedPreviewSync,
   saveEmbedPreview,
 } from "@/lib/embed-preview-cache";
 
-export interface EmbedPreview<T> {
-  /** What to render: the server's answer, or this device's copy of it. */
-  value: T | undefined;
-  /** Whether the server has answered on this page load. */
-  isLive: boolean;
-}
-
 /**
- * The last projection the server gave for one embed, kept on the device.
+ * What to render for one embed: the server's answer, or this device's copy of
+ * it while the server is still answering.
  *
  * Unlike `useRoomCached`, a live `null` here does **not** clear the copy. The
  * rows these queries read — `spreadsheetCellRefs`, `documentBlockRefs` — are
@@ -26,9 +20,9 @@ export interface EmbedPreview<T> {
 export function useEmbedPreview<T>(
   key: string | null,
   live: T | null | undefined,
-): EmbedPreview<T> {
+): T | undefined {
   const [cached, setCached] = useState<T | undefined>(() =>
-    key ? readEmbedPreview<T>(key) : undefined,
+    key ? readEmbedPreviewSync<T>(key) : undefined,
   );
 
   // A copy kept for one embed says nothing about the next. Reset while
@@ -37,7 +31,7 @@ export function useEmbedPreview<T>(
   const [cachedKey, setCachedKey] = useState(key);
   if (cachedKey !== key) {
     setCachedKey(key);
-    setCached(key ? readEmbedPreview<T>(key) : undefined);
+    setCached(key ? readEmbedPreviewSync<T>(key) : undefined);
   }
 
   useEffect(() => {
@@ -56,8 +50,5 @@ export function useEmbedPreview<T>(
     saveEmbedPreview(key, live);
   }, [key, live]);
 
-  return {
-    value: live ?? cached,
-    isLive: live !== undefined,
-  };
+  return live ?? cached;
 }

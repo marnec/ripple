@@ -10,7 +10,7 @@ import {
   blockPreviewKey,
   cellPreviewKey,
   clearEmbedPreviewMemory,
-  readEmbedPreview,
+  readEmbedPreviewSync,
 } from "./embed-preview-cache";
 
 /**
@@ -43,7 +43,7 @@ describe("insertCellRefEmbed", () => {
     const ensureCellRef = vi.fn().mockResolvedValue(null);
     const prepareStableRef = vi.fn();
 
-    insertCellRefEmbed({
+    void insertCellRefEmbed({
       editor,
       spreadsheetId: SPREADSHEET_ID,
       pick: { cellRef: "A1", stableRef: "stable-1", values: [["42"]] },
@@ -58,7 +58,7 @@ describe("insertCellRefEmbed", () => {
       },
       " ",
     ]);
-    expect(readEmbedPreview(cellPreviewKey(SPREADSHEET_ID, "stable-1"))).toMatchObject(
+    expect(readEmbedPreviewSync(cellPreviewKey(SPREADSHEET_ID, "stable-1"))).toMatchObject(
       { values: [["42"]] },
     );
     expect(ensureCellRef).toHaveBeenCalledWith({
@@ -74,7 +74,7 @@ describe("insertCellRefEmbed", () => {
   it("inserts a block for a range", () => {
     const editor = fakeEditor();
 
-    insertCellRefEmbed({
+    void insertCellRefEmbed({
       editor,
       spreadsheetId: SPREADSHEET_ID,
       pick: { cellRef: "A1:B2", stableRef: "stable-2", values: [["a", "b"]] },
@@ -99,7 +99,7 @@ describe("insertCellRefEmbed", () => {
     const editor = fakeEditor();
     const ensureCellRef = vi.fn();
 
-    insertCellRefEmbed({
+    void insertCellRefEmbed({
       editor,
       spreadsheetId: SPREADSHEET_ID,
       pick: { cellRef: null, stableRef: null, values: null },
@@ -119,7 +119,7 @@ describe("insertCellRefEmbed", () => {
     const ensureCellRef = vi.fn().mockResolvedValue(null);
     const prepareStableRef = vi.fn().mockResolvedValue("stable-from-server");
 
-    insertCellRefEmbed({
+    void insertCellRefEmbed({
       editor,
       spreadsheetId: SPREADSHEET_ID,
       pick: { cellRef: "A1", stableRef: null, values: null },
@@ -141,6 +141,28 @@ describe("insertCellRefEmbed", () => {
       stableRef: "stable-from-server",
       values: undefined,
     });
+  });
+
+  it("rejects, inserting nothing, when the server refuses the reference", async () => {
+    const editor = fakeEditor();
+    const ensureCellRef = vi.fn();
+
+    const inserted = insertCellRefEmbed({
+      editor,
+      spreadsheetId: SPREADSHEET_ID,
+      pick: { cellRef: "A1", stableRef: null, values: null },
+      ensureCellRef,
+      prepareStableRef: vi
+        .fn()
+        .mockRejectedValue(new Error("Cell reference is out of bounds")),
+    });
+
+    // The reason has to reach the caller: by the time this settles the dialog
+    // has closed, so a swallowed rejection is a user staring at a document
+    // that gained nothing and said nothing.
+    await expect(inserted).rejects.toThrow("Cell reference is out of bounds");
+    expect(editor.insertInlineContent).not.toHaveBeenCalled();
+    expect(ensureCellRef).not.toHaveBeenCalled();
   });
 });
 
@@ -166,7 +188,7 @@ describe("insertBlockEmbed", () => {
       { id: "cursor-block" },
       "after",
     );
-    expect(readEmbedPreview(blockPreviewKey(DOCUMENT_ID, "block-1"))).toMatchObject({
+    expect(readEmbedPreviewSync(blockPreviewKey(DOCUMENT_ID, "block-1"))).toMatchObject({
       blockType: "heading",
       textContent: "Quarterly goals",
     });

@@ -1,6 +1,6 @@
 import { useResourceDoc } from "@/hooks/use-collab-session";
 import { CellRefDialog } from "@/pages/App/Document/CellRefDialog";
-import { readRangeValues } from "@/lib/spreadsheet-range-read";
+import { readGridRange } from "@ripple/shared/spreadsheetDoc";
 import type { Id } from "@convex/_generated/dataModel";
 
 export interface SpreadsheetRangePick {
@@ -61,7 +61,7 @@ export function SpreadsheetRangeDialog({
       onInsert={(cellRef) => {
         onPick({
           cellRef,
-          values: cellRef ? readRangeValues(yDoc, cellRef) : null,
+          values: cellRef ? readGridRange(yDoc, cellRef) : null,
         });
         onClose();
       }}

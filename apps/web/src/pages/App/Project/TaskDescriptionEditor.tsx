@@ -6,7 +6,7 @@ import "@blocknote/shadcn/style.css";
 import { FileText, PenTool, Table } from "lucide-react";
 import { NotAvailableOffline } from "@/components/NotAvailableOffline";
 import { RippleSpinner } from "@/components/RippleSpinner";
-import { useAction, useConvex, useMutation } from "convex/react";
+import { useConvex } from "convex/react";
 import { useState } from "react";
 import { useTheme } from "next-themes";
 import { useMemberSuggestions } from "../../../hooks/use-member-suggestions";
@@ -16,11 +16,8 @@ import { SUGGESTION_MENU_FLOATING_OPTIONS } from "@/lib/blocknote/floating";
 import { useMediaDropGuard } from "@/hooks/use-media-drop-guard";
 import { BlockPickerDialog } from "../Document/BlockPickerDialog";
 import { CellRefEmbedDialog } from "../Document/CellRefEmbedDialog";
-import {
-  insertBlockEmbed,
-  insertCellRefEmbed,
-  type CellRefEmbedPick,
-} from "@/lib/embed-insert";
+import { useEmbedInsert } from "@/hooks/use-embed-insert";
+import type { CellRefEmbedPick } from "@/lib/embed-insert";
 import type { BlockPreview } from "@ripple/shared/blockRef";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
@@ -61,9 +58,7 @@ export function TaskDescriptionEditor({
 }: TaskDescriptionEditorProps) {
   const { resolvedTheme } = useTheme();
   const convex = useConvex();
-  const ensureBlockRef = useMutation(api.documentBlockRefs.ensureBlockRef);
-  const ensureCellRef = useMutation(api.spreadsheetCellRefs.ensureCellRef);
-  const prepareStableRef = useAction(api.spreadsheetCellRefsNode.prepareStableRef);
+  const { insertCellRef, insertBlock } = useEmbedInsert();
 
   // Descriptions take images, not attachments — see `rich-text-schema.ts`.
   const mediaDropGuard = useMediaDropGuard(
@@ -177,24 +172,13 @@ export function TaskDescriptionEditor({
 
   const handleBlockPickerInsert = (block: BlockPreview) => {
     if (!editor || !blockPickerDialog) return;
-    insertBlockEmbed({
-      editor,
-      documentId: blockPickerDialog.documentId,
-      block,
-      ensureBlockRef,
-    });
+    insertBlock(editor, blockPickerDialog.documentId, block);
     setBlockPickerDialog(null);
   };
 
   const handleCellRefInsert = (pick: CellRefEmbedPick) => {
     if (!editor || !cellRefDialog) return;
-    insertCellRefEmbed({
-      editor,
-      spreadsheetId: cellRefDialog.spreadsheetId,
-      pick,
-      ensureCellRef,
-      prepareStableRef,
-    });
+    insertCellRef(editor, cellRefDialog.spreadsheetId, pick);
     setCellRefDialog(null);
   };
 

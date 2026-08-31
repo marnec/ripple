@@ -24,14 +24,14 @@ export function useDocumentBlockPreview(
       : "skip",
   );
 
-  const { value } = useEmbedPreview<BlockRefPreview>(
+  const preview = useEmbedPreview<BlockRefPreview>(
     documentId && blockId ? blockPreviewKey(documentId, blockId) : null,
     live,
   );
 
   return {
-    blockType: value?.blockType ?? null,
-    textContent: value?.textContent ?? null,
-    isLoading: value === undefined,
+    blockType: preview?.blockType ?? null,
+    textContent: preview?.textContent ?? null,
+    isLoading: preview === undefined,
   };
 }

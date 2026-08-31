@@ -1,4 +1,5 @@
 import * as Y from "yjs";
+import { gridTypes } from "@ripple/shared/spreadsheetDoc";
 
 /** The grid every spreadsheet starts life with. */
 export const DEFAULT_ROWS = 100;
@@ -19,10 +20,8 @@ export const DEFAULT_COLS = 30;
 export const EMPTY_SPREADSHEET_UPDATE: Uint8Array = (() => {
   const doc = new Y.Doc();
   doc.clientID = 1; // Fixed ID → applying this update is always idempotent
-  const data = doc.getArray<Y.Map<string>>("data");
+  const { data, rowOrder, colOrder } = gridTypes(doc);
   const meta = doc.getMap<unknown>("meta");
-  const rowOrder = doc.getArray<string>("rowOrder");
-  const colOrder = doc.getArray<string>("colOrder");
   doc.transact(() => {
     meta.set("colCount", DEFAULT_COLS);
     for (let r = 0; r < DEFAULT_ROWS; r++) {
@@ -55,7 +54,7 @@ export const EMPTY_SPREADSHEET_UPDATE: Uint8Array = (() => {
  * on a live sync — mounted it immediately.
  */
 export function seedEmptyGrid(yDoc: Y.Doc, origin: unknown): boolean {
-  if (yDoc.getArray<Y.Map<string>>("data").length > 0) return false;
+  if (gridTypes(yDoc).data.length > 0) return false;
   Y.applyUpdate(yDoc, EMPTY_SPREADSHEET_UPDATE, origin);
   return true;
 }

@@ -1,15 +1,10 @@
 import type { BlockPreview } from "@ripple/shared/blockRef";
-import { useAction } from "convex/react";
 import { Clock, FileText, PenTool, Search, Table } from "lucide-react";
 import { createElement } from "react";
-import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 import type { RecentItem } from "@/hooks/use-local-recents";
-import {
-  insertBlockEmbed,
-  insertCellRefEmbed,
-  type CellRefEmbedPick,
-} from "@/lib/embed-insert";
+import { useEmbedInsert } from "@/hooks/use-embed-insert";
+import type { CellRefEmbedPick } from "@/lib/embed-insert";
 import type { DocumentSchemaEditor } from "./schema";
 
 interface NodeResult {
@@ -69,8 +64,6 @@ export function useDocumentSuggestions({
   hasSearch,
   isStale,
   editor,
-  ensureCellRef,
-  ensureBlockRef,
   setCellRefDialog,
   setBlockPickerDialog,
   setFramePickerDialog,
@@ -82,25 +75,13 @@ export function useDocumentSuggestions({
   hasSearch: boolean;
   isStale: boolean;
   editor: DocumentSchemaEditor | null;
-  ensureCellRef: (args: {
-    spreadsheetId: Id<"spreadsheets">;
-    cellRef: string;
-    stableRef: string;
-    values?: string[][];
-  }) => Promise<null>;
-  ensureBlockRef: (args: {
-    documentId: Id<"documents">;
-    blockId: string;
-    blockType?: string;
-    textContent?: string;
-  }) => Promise<null>;
   setCellRefDialog: (state: CellRefDialogState) => void;
   setBlockPickerDialog: (state: BlockPickerDialogState) => void;
   setFramePickerDialog: (state: FramePickerDialogState) => void;
   onSearchChange: (query: string) => void;
   currentDocumentId?: Id<"documents">;
 }) {
-  const prepareStableRef = useAction(api.spreadsheetCellRefsNode.prepareStableRef);
+  const { insertCellRef, insertBlock } = useEmbedInsert();
   function makeItem(resourceType: string, resourceId: string, name: string, group: string) {
     const icon = isEmbeddable(resourceType)
       ? RESOURCE_ICON[resourceType]
@@ -179,13 +160,7 @@ export function useDocumentSuggestions({
     cellRefDialog: CellRefDialogOpen,
   ) => {
     if (!editor) return;
-    insertCellRefEmbed({
-      editor,
-      spreadsheetId: cellRefDialog.spreadsheetId,
-      pick,
-      ensureCellRef,
-      prepareStableRef,
-    });
+    insertCellRef(editor, cellRefDialog.spreadsheetId, pick);
     setCellRefDialog(null);
   };
 
@@ -214,12 +189,7 @@ export function useDocumentSuggestions({
     blockPickerDialog: BlockPickerDialogOpen,
   ) => {
     if (!editor) return;
-    insertBlockEmbed({
-      editor,
-      documentId: blockPickerDialog.documentId,
-      block,
-      ensureBlockRef,
-    });
+    insertBlock(editor, blockPickerDialog.documentId, block);
     setBlockPickerDialog(null);
   };
 

@@ -22,8 +22,7 @@ describe("useEmbedPreview", () => {
   it("has nothing before either source answers", () => {
     const { result } = renderHook(() => useEmbedPreview("k1", undefined));
 
-    expect(result.current.value).toBeUndefined();
-    expect(result.current.isLive).toBe(false);
+    expect(result.current).toBeUndefined();
   });
 
   it("paints the stored copy while the query is still out", async () => {
@@ -32,8 +31,7 @@ describe("useEmbedPreview", () => {
 
     const { result } = renderHook(() => useEmbedPreview("k2", undefined));
 
-    await waitFor(() => expect(result.current.value).toEqual({ text: "stored" }));
-    expect(result.current.isLive).toBe(false);
+    await waitFor(() => expect(result.current).toEqual({ text: "stored" }));
   });
 
   it("prefers the server's answer over the stored copy", async () => {
@@ -42,8 +40,7 @@ describe("useEmbedPreview", () => {
 
     const { result } = renderHook(() => useEmbedPreview("k3", { text: "live" }));
 
-    expect(result.current.value).toEqual({ text: "live" });
-    expect(result.current.isLive).toBe(true);
+    expect(result.current).toEqual({ text: "live" });
   });
 
   it("keeps every answer for the next page load", async () => {
@@ -62,7 +59,7 @@ describe("useEmbedPreview", () => {
 
     const { result } = renderHook(() => useEmbedPreview("k5", null));
 
-    await waitFor(() => expect(result.current.value).toEqual({ text: "stored" }));
+    await waitFor(() => expect(result.current).toEqual({ text: "stored" }));
   });
 
   it("never shows one embed's content under another's key", async () => {
@@ -72,9 +69,9 @@ describe("useEmbedPreview", () => {
       ({ key }: { key: string }) => useEmbedPreview(key, undefined),
       { initialProps: { key: "k6" } },
     );
-    await waitFor(() => expect(result.current.value).toEqual({ text: "six" }));
+    await waitFor(() => expect(result.current).toEqual({ text: "six" }));
 
     rerender({ key: "k7" });
-    expect(result.current.value).toBeUndefined();
+    expect(result.current).toBeUndefined();
   });
 });

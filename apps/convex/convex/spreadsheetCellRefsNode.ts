@@ -5,7 +5,8 @@ import * as Y from "yjs";
 import { action, internalAction } from "./_generated/server";
 import { api, internal } from "./_generated/api";
 import { normalizeCellRef } from "@ripple/shared/cellRef";
-import { extractCellValues, type CellSource } from "@ripple/shared/cellValues";
+import { extractCellValues } from "@ripple/shared/cellValues";
+import { gridOrders, gridSource } from "@ripple/shared/spreadsheetDoc";
 import {
   a1ToStable,
   parseStableRef,
@@ -43,10 +44,7 @@ export const populateFromSnapshot = internalAction({
 
     const yDoc = new Y.Doc();
     Y.applyUpdate(yDoc, new Uint8Array(arrayBuffer));
-    const yData = yDoc.getArray<Y.Map<string>>("data");
-    const yFormulaValues = yDoc.getMap<string>("formulaValues");
-    const rowOrder = yDoc.getArray<string>("rowOrder").toArray();
-    const colOrder = yDoc.getArray<string>("colOrder").toArray();
+    const { rowOrder, colOrder } = gridOrders(yDoc);
 
     const stableRef = parseStableRef(stableRefIn);
     if (!stableRef) {
@@ -60,7 +58,7 @@ export const populateFromSnapshot = internalAction({
     const values =
       orphan || !liveA1
         ? [[""]]
-        : extractCellValues(liveA1, cellSource(yData, yFormulaValues)) ?? [[""]];
+        : extractCellValues(liveA1, gridSource(yDoc)) ?? [[""]];
 
     yDoc.destroy();
 
@@ -116,8 +114,7 @@ export const prepareStableRef = action({
 
     const yDoc = new Y.Doc();
     Y.applyUpdate(yDoc, new Uint8Array(arrayBuffer));
-    const rowOrder = yDoc.getArray<string>("rowOrder").toArray();
-    const colOrder = yDoc.getArray<string>("colOrder").toArray();
+    const { rowOrder, colOrder } = gridOrders(yDoc);
     yDoc.destroy();
 
     if (rowOrder.length === 0 || colOrder.length === 0) {
@@ -132,15 +129,3 @@ export const prepareStableRef = action({
     return serializeStableRef(stable);
   },
 });
-
-/** Grid accessors for a spreadsheet room's Yjs shape. */
-function cellSource(
-  yData: Y.Array<Y.Map<string>>,
-  yFormulaValues?: Y.Map<string>,
-): CellSource {
-  return {
-    rowCount: yData.length,
-    read: (row, col) => yData.get(row)?.get(String(col)) ?? "",
-    formulaValue: (row, col) => yFormulaValues?.get(`${row},${col}`),
-  };
-}

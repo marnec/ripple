@@ -91,8 +91,16 @@ function prune(db: IDBDatabase): void {
   }
 }
 
-/** The value already in memory for this key, if this session has seen it. */
-export function readEmbedPreview<T>(key: string): T | undefined {
+/**
+ * The value already in memory for this key, without touching IndexedDB.
+ *
+ * Answers only for a key this session has already saved or loaded, which is
+ * what makes it worth having: it lets a remount paint on its first render
+ * instead of after an await. It is an optimisation over `loadEmbedPreview`,
+ * never a substitute — a caller that only calls this will miss everything
+ * stored by previous page loads.
+ */
+export function readEmbedPreviewSync<T>(key: string): T | undefined {
   return memory.get(key) as T | undefined;
 }
 

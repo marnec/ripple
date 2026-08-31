@@ -5,22 +5,11 @@ import { removeAwarenessStates } from "y-protocols/awareness";
 import { AwarenessOwnership } from "./awareness-ownership";
 import type { ServerMessage } from "@ripple/shared/protocol";
 import { DOCUMENT_FRAGMENT } from "@ripple/shared/blockRef";
-import { extractCellValues, type CellSource } from "@ripple/shared/cellValues";
+import { extractCellValues } from "@ripple/shared/cellValues";
+import { gridOrders, gridSource, gridTypes } from "@ripple/shared/spreadsheetDoc";
 import { parseStableRef, resolveStableRef } from "@ripple/shared/stableRef";
 import { extractBlocksFromFragment } from "@ripple/shared/blockRef";
 import type { ShareAccessLevel } from "@ripple/shared/shareTypes";
-
-/** Grid accessors for a spreadsheet room's Yjs shape. */
-function cellSource(
-  yData: Y.Array<Y.Map<string>>,
-  yFormulaValues?: Y.Map<string>,
-): CellSource {
-  return {
-    rowCount: yData.length,
-    read: (row, col) => yData.get(row)?.get(String(col)) ?? "",
-    formulaValue: (row, col) => yFormulaValues?.get(`${row},${col}`),
-  };
-}
 
 /**
  * The connection id behind an awareness update's origin, or null when the
@@ -521,7 +510,7 @@ export default class CollaborationServer extends YServer {
   private setupCellRefObserver(roomId: string): void {
     if (this.cellRefObserver) return; // Already attached
 
-    const yData = this.document.getArray("data");
+    const grid = gridTypes(this.document);
 
     const schedulePush = () => {
       if (this.cellRefPushTimeout) clearTimeout(this.cellRefPushTimeout);
@@ -531,18 +520,17 @@ export default class CollaborationServer extends YServer {
     };
 
     this.cellRefObserver = () => schedulePush();
-    yData.observeDeep(this.cellRefObserver);
+    grid.data.observeDeep(this.cellRefObserver);
 
     // Also observe formulaValues changes
-    const yFormulaValues = this.document.getMap<string>("formulaValues");
     this.formulaValuesObserver = () => schedulePush();
-    yFormulaValues.observe(this.formulaValuesObserver);
+    grid.formulaValues.observe(this.formulaValuesObserver);
 
     // Observe rowOrder/colOrder so structural changes (insert/delete row/col)
     // re-resolve stableRef → currentA1 and update cache rows accordingly.
     this.orderObserver = () => schedulePush();
-    this.document.getArray<string>("rowOrder").observe(this.orderObserver);
-    this.document.getArray<string>("colOrder").observe(this.orderObserver);
+    grid.rowOrder.observe(this.orderObserver);
+    grid.colOrder.observe(this.orderObserver);
 
     console.log(`Cell ref observer attached for room ${roomId}`);
   }
@@ -580,10 +568,8 @@ export default class CollaborationServer extends YServer {
     if (!this.trackedCellRefs || this.trackedCellRefs.length === 0) return;
 
     // Extract current values from Yjs
-    const yData = this.document.getArray<Y.Map<string>>("data");
-    const yFormulaValues = this.document.getMap<string>("formulaValues");
-    const rowOrder = this.document.getArray<string>("rowOrder").toArray();
-    const colOrder = this.document.getArray<string>("colOrder").toArray();
+    const grid = gridSource(this.document);
+    const { rowOrder, colOrder } = gridOrders(this.document);
 
     const updates: Array<{
       stableRef: string;
@@ -606,7 +592,7 @@ export default class CollaborationServer extends YServer {
         continue;
       }
 
-      const values = extractCellValues(result.a1, cellSource(yData, yFormulaValues));
+      const values = extractCellValues(result.a1, grid);
       if (values) {
         updates.push({
           stableRef: tracked.stableRef,
@@ -751,17 +737,21 @@ export default class CollaborationServer extends YServer {
   }
 
   private cleanupCellRefObserver(): void {
+    // Detached through the same handles they were attached through: an
+    // `unobserve` on a differently-spelled type is a silent no-op, and the
+    // observer leaks with the room.
+    const grid = gridTypes(this.document);
     if (this.cellRefObserver) {
-      this.document.getArray("data").unobserveDeep(this.cellRefObserver);
+      grid.data.unobserveDeep(this.cellRefObserver);
       this.cellRefObserver = null;
     }
     if (this.formulaValuesObserver) {
-      this.document.getMap<string>("formulaValues").unobserve(this.formulaValuesObserver);
+      grid.formulaValues.unobserve(this.formulaValuesObserver);
       this.formulaValuesObserver = null;
     }
     if (this.orderObserver) {
-      this.document.getArray<string>("rowOrder").unobserve(this.orderObserver);
-      this.document.getArray<string>("colOrder").unobserve(this.orderObserver);
+      grid.rowOrder.unobserve(this.orderObserver);
+      grid.colOrder.unobserve(this.orderObserver);
       this.orderObserver = null;
     }
     if (this.cellRefPushTimeout) {

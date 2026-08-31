@@ -232,9 +232,7 @@ function DocumentBody({
   const workspaceMembers = useQuery(api.workspaceMembers.membersByWorkspace, {
     workspaceId,
   });
-  const ensureCellRef = useMutation(api.spreadsheetCellRefs.ensureCellRef);
   const removeCellRef = useMutation(api.spreadsheetCellRefs.removeCellRef);
-  const ensureBlockRef = useMutation(api.documentBlockRefs.ensureBlockRef);
   const removeBlockRef = useMutation(api.documentBlockRefs.removeBlockRef);
   const syncEdges = useMutation(api.edges.syncEdges);
   const syncMentionEdges = useMutation(api.edges.syncMentionEdges);
@@ -403,8 +401,6 @@ function DocumentBody({
     hasSearch: hasHashSearch,
     isStale: isHashSearchStale,
     editor,
-    ensureCellRef,
-    ensureBlockRef,
     setCellRefDialog,
     setBlockPickerDialog,
     setFramePickerDialog,

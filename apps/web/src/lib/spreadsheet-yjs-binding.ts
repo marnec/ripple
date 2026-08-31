@@ -7,6 +7,7 @@ import { SpreadsheetRemoteCursors } from "@/lib/spreadsheet-remote-cursors";
 import { ensureSpreadsheetStyles } from "@/lib/spreadsheet-table-viewport";
 import { DEFAULT_COLS, DEFAULT_ROWS } from "@/lib/collab/empty-grid";
 import * as Y from "yjs";
+import { gridTypes } from "@ripple/shared/spreadsheetDoc";
 
 
 /** Safe `String(v)` for jspreadsheet-supplied cell values, which are typed as
@@ -45,14 +46,19 @@ function makeStableId(prefix: "r" | "c"): string {
 /**
  * Two-way binding between a jspreadsheet-ce v5 worksheet and a Yjs document.
  *
- * Yjs document structure:
+ * Yjs document structure. The four types every *reader* of a spreadsheet also
+ * needs — data, formulaValues, rowOrder, colOrder — are named in
+ * `@ripple/shared/spreadsheetDoc` and taken from `gridTypes`; the rest are the
+ * editor's own presentation state, which nothing outside this binding reads:
  *   "data"          → Y.Array<Y.Map<string>>    (rows of cells, Y.Map keys are col indices)
+ *   "formulaValues" → Y.Map<string>             ("row,col" → computed display value)
+ *   "rowOrder"      → Y.Array<string>           (stable row ids, visual order)
+ *   "colOrder"      → Y.Array<string>           (stable col ids, visual order)
  *   "styles"        → Y.Map<string>             ("row,col" → CSS style)
  *   "colWidths"     → Y.Map<number>             (col index → width px)
  *   "rowHeights"    → Y.Map<number>             (row index → height px)
  *   "merges"        → Y.Map<string>             (cellName → "colspan,rowspan")
  *   "meta"          → Y.Map<unknown>            ("colCount" → number)
- *   "formulaValues" → Y.Map<string>             ("row,col" → computed display value)
  *
  * The class is a thin coordinator. Subsystems own their state:
  *   - `SpreadsheetOverlayManager`   → ref + edit highlights
@@ -120,15 +126,16 @@ export class SpreadsheetYjsBinding {
     this.worksheet = worksheet;
     this.awareness = awareness;
 
-    this.yData = yDoc.getArray<Y.Map<string>>("data");
+    const grid = gridTypes(yDoc);
+    this.yData = grid.data;
     this.yStyles = yDoc.getMap<string>("styles");
     this.yColWidths = yDoc.getMap<number>("colWidths");
     this.yRowHeights = yDoc.getMap<number>("rowHeights");
     this.yMerges = yDoc.getMap<string>("merges");
     this.yMeta = yDoc.getMap<unknown>("meta");
-    this.yFormulaValues = yDoc.getMap<string>("formulaValues");
-    this.yRowOrder = yDoc.getArray<string>("rowOrder");
-    this.yColOrder = yDoc.getArray<string>("colOrder");
+    this.yFormulaValues = grid.formulaValues;
+    this.yRowOrder = grid.rowOrder;
+    this.yColOrder = grid.colOrder;
 
     // The empty root is *not* seeded here. It is `seedEmptyGrid`'s job, run by
     // the caller against a replica it knows is hydrated — see

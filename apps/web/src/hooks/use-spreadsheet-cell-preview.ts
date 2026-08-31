@@ -38,15 +38,15 @@ export function useSpreadsheetCellPreview(
     stableRef ? { spreadsheetId, stableRef } : "skip",
   );
 
-  const { value } = useEmbedPreview<CellPreview>(
+  const preview = useEmbedPreview<CellPreview>(
     stableRef ? cellPreviewKey(spreadsheetId, stableRef) : null,
     live,
   );
 
   return {
-    values: value?.values ?? null,
-    isLoading: value === undefined,
-    orphan: value?.orphan === true,
-    liveCellRef: value?.cellRef ?? null,
+    values: preview?.values ?? null,
+    isLoading: preview === undefined,
+    orphan: preview?.orphan === true,
+    liveCellRef: preview?.cellRef ?? null,
   };
 }

@@ -2,11 +2,15 @@ NEXT STEPS:
 
 - cascade delete collection phase is bounded even for batched deletes and will hit a ceiling for extremely large cascaded entities.
 
-- improve reactivity around embedding in docs, first we should use optimistic edit using the indexeddb local-storage, also I'm pretty sure we can improve UI independently from optimistic ally update results.
-
 - consider introducing document snapshots
 
 - add a dependency view to tasks
+
+- add drag to create range in spreadsheet while editing a formula
+
+- add warning when embedding an empty spreadsheet range in doc
+
+- reduce default initial n cols and rows in spreadhseet, this improves client performance, add btn to add quickly col and rows at the ends
 
 keyboard accessiblity
     - when pressing tab in a chat, it must focus the message composer
