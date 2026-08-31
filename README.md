@@ -2,9 +2,19 @@ NEXT STEPS:
 
 - cascade delete collection phase is bounded even for batched deletes and will hit a ceiling for extremely large cascaded entities.
 
-- add a dependency view to tasks
+- fix links in chat, especially around activation state and relative links
+- add file attachment in chats
+- drag&drop in chat to attach images or files
+
+- improve reactivity around embedding in docs, first we should use optimistic edit using the indexeddb local-storage, also I'm pretty sure we can improve UI independently from optimistic ally update results
+
+- fix unknown user for users with a known email
+
+- fix spreadhseet embedding
 
 - consider introducing document snapshots
+
+- add a dependency view to tasks
 
 keyboard accessiblity
     - when pressing tab in a chat, it must focus the message composer

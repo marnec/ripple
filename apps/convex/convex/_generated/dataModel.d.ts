@@ -1780,6 +1780,7 @@ export type DataModel = {
       processedRows: number;
       projectId: Id<"projects">;
       projectIntegrationLinkId?: Id<"projectIntegrationLinks">;
+      rowErrors?: Array<{ field?: string; message: string; row: number }>;
       rows: Array<any>;
       sourceType?: "csv" | "github_integration";
       status: "queued" | "running" | "completed" | "failed";
@@ -1800,6 +1801,7 @@ export type DataModel = {
       | "processedRows"
       | "projectId"
       | "projectIntegrationLinkId"
+      | "rowErrors"
       | "rows"
       | "sourceType"
       | "status"

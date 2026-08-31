@@ -665,6 +665,19 @@ export default defineSchema({
     processedRows: v.number(),
     failedRows: v.number(),
     errorMessage: v.optional(v.string()), // top-level failure (e.g. all rows rejected)
+    // Why individual rows were dropped, newest job-run last. `failedRows` is
+    // the exact count; this is the human-readable *reason*, capped at
+    // TASK_IMPORT_MAX_ROW_ERRORS because a malformed CSV fails identically on
+    // every row and the whole job doc (payload included) has to fit in 1MB.
+    rowErrors: v.optional(
+      v.array(
+        v.object({
+          row: v.number(), // 1-based over the CSV's data rows
+          field: v.optional(v.string()),
+          message: v.string(),
+        }),
+      ),
+    ),
     completedAt: v.optional(v.number()),
     // Liveness heartbeat: stamped by every unit of work an import does (a
     // GitHub page applied, a CSV row created or failed). A queued/running job

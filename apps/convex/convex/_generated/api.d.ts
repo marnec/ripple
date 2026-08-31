@@ -3059,6 +3059,7 @@ export declare const api: {
         processedRows: number;
         projectId: Id<"projects">;
         projectIntegrationLinkId?: Id<"projectIntegrationLinks">;
+        rowErrors?: Array<{ field?: string; message: string; row: number }>;
         sourceType?: "csv" | "github_integration";
         status: "queued" | "running" | "completed" | "failed";
         totalRows: number;
@@ -3081,6 +3082,7 @@ export declare const api: {
         processedRows: number;
         projectId: Id<"projects">;
         projectIntegrationLinkId?: Id<"projectIntegrationLinks">;
+        rowErrors?: Array<{ field?: string; message: string; row: number }>;
         sourceType?: "csv" | "github_integration";
         status: "queued" | "running" | "completed" | "failed";
         totalRows: number;
@@ -6974,7 +6976,12 @@ export declare const internal: {
     recordRowFailures: FunctionReference<
       "mutation",
       "internal",
-      { count: number; jobId: Id<"taskImportJobs"> },
+      {
+        count: number;
+        jobId: Id<"taskImportJobs">;
+        message: string;
+        startIndex: number;
+      },
       null
     >;
     runImport: FunctionReference<

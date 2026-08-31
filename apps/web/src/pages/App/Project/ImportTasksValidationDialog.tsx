@@ -7,6 +7,12 @@
 // Phase-1 (toast summary) and phase-2 (this dialog) intentionally use the
 // SAME schema from @ripple/shared/taskImportSchema — there's no separate
 // "row schema" — so a successful phase-2 implies a fixable phase-1 too.
+//
+// When the *server* is the one that rejected the rows, its issues are passed
+// in and listed as-is instead. Re-parsing locally would agree in every normal
+// case and disagree in exactly the one that matters — a tab running an older
+// schema than the deployment — where it would show an empty table under a
+// toast that just said the import failed.
 
 import { Button } from "@ripple/ui/components/button";
 import {
@@ -37,15 +43,42 @@ interface RowFailure {
  */
 type CsvRow = Record<string, string>;
 
+/** A failure the server reported: zod's shape, with the path stringified. */
+interface ServerRowIssue {
+  path: string[];
+  message: string;
+}
+
 interface Props {
   open: boolean;
   rows: CsvRow[];
+  /** Server-reported issues; when present they replace the local re-parse. */
+  issues?: ServerRowIssue[];
   onOpenChange: (open: boolean) => void;
 }
 
-export function ImportTasksValidationDialog({ open, rows, onOpenChange }: Props) {
+export function ImportTasksValidationDialog({
+  open,
+  rows,
+  issues,
+  onOpenChange,
+}: Props) {
   const failures: RowFailure[] = (() => {
-    if (!open || rows.length === 0) return [];
+    if (!open) return [];
+    if (issues) {
+      return issues.map((iss) => {
+        // path is [rowIndex, field] for an array of rows.
+        const rowIndex = Number(iss.path[0]);
+        const field = iss.path[1] ?? "";
+        return {
+          rowNumber: Number.isNaN(rowIndex) ? 0 : rowIndex + 1,
+          field,
+          value: rows[rowIndex]?.[field] ?? "",
+          message: iss.message,
+        };
+      });
+    }
+    if (rows.length === 0) return [];
     const out: RowFailure[] = [];
     for (const [idx, row] of rows.entries()) {
       const result = taskImportRowSchema.safeParse(row);

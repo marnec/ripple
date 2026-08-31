@@ -13,6 +13,12 @@
 //   5. createImportJob mutation → navigate to the job status page
 // Any failure short-circuits with a Sonner toast; the "Show details" action
 // opens ImportTasksValidationDialog for the phase-2 per-row drill-down.
+//
+// Step 5 sends the RAW papaparse rows, not the zod output. The row schema
+// coerces (tags "a;b" → ["a","b"], estimate "3" → 3, "" → null), so it is not
+// idempotent — re-parsing its own output rejects every transformed cell. The
+// server re-runs the same schema as the authoritative pass and stores what it
+// produces; the parse here exists only to fail fast with a readable message.
 
 import { Button } from "@ripple/ui/components/button";
 import {
@@ -27,9 +33,11 @@ import type { Id } from "@convex/_generated/dataModel";
 import {
   TASK_IMPORT_HEADERS,
   TASK_IMPORT_MAX_PAYLOAD_BYTES,
+  buildTaskImportTemplateCsv,
+  stripTaskImportExampleRows,
   taskImportRowsSchema,
-  type TaskImportRow,
 } from "@ripple/shared/taskImportSchema";
+import { ConvexError } from "convex/values";
 import { useMutation } from "convex/react";
 import { useQuery } from "convex-helpers/react/cache";
 import { ChevronDown, Download, Upload } from "lucide-react";
@@ -62,6 +70,11 @@ export function ImportTasksButton({ projectId, workspaceId }: Props) {
   const [validationDialog, setValidationDialog] = useState<{
     open: boolean;
     rows: Record<string, string>[];
+    // Set only when the *server* rejected the rows: its issues are shown
+    // as-is rather than re-derived locally, because the two only disagree
+    // when this tab is running an older schema — precisely the case where
+    // re-parsing here would show an empty, baffling dialog.
+    issues?: ServerRowIssue[];
   }>({ open: false, rows: [] });
 
   // Prefetch papaparse so the chunk loads in parallel with the file dialog.
@@ -70,7 +83,10 @@ export function ImportTasksButton({ projectId, workspaceId }: Props) {
   };
 
   const downloadTemplate = () => {
-    const blob = new Blob([TASK_IMPORT_HEADERS.join(",") + "\n"], {
+    // Header line + one filled-in example row (see the shared schema): the
+    // formats that actually get rejected — dates, the `;` tag separator, the
+    // priority vocabulary — are not guessable from column names alone.
+    const blob = new Blob([buildTaskImportTemplateCsv()], {
       type: "text/csv;charset=utf-8",
     });
     const url = URL.createObjectURL(blob);
@@ -128,8 +144,21 @@ export function ImportTasksButton({ projectId, workspaceId }: Props) {
         return;
       }
 
+      // The template's example row is dropped rather than imported: leaving
+      // it in is the expected mistake, and the alternative is a task called
+      // "EXAMPLE: delete this row" in someone's project.
+      const rows = stripTaskImportExampleRows(parsed.data);
+      const skippedExamples = parsed.data.length - rows.length;
+      if (rows.length === 0) {
+        toast.error("Nothing to import", {
+          description:
+            "The file only contains the template's example row. Replace it with your own tasks.",
+        });
+        return;
+      }
+
       // Phase 1: validate all rows in one zod pass.
-      const result = taskImportRowsSchema.safeParse(parsed.data);
+      const result = taskImportRowsSchema.safeParse(rows);
       if (!result.success) {
         const issues = result.error.issues;
         const failedRowIndices = new Set(
@@ -138,23 +167,24 @@ export function ImportTasksButton({ projectId, workspaceId }: Props) {
             .filter((p): p is number => typeof p === "number"),
         );
         toast.error(
-          `Validation failed: ${failedRowIndices.size} of ${parsed.data.length} rows have errors`,
+          `Validation failed: ${failedRowIndices.size} of ${rows.length} rows have errors`,
           {
             description: firstIssueSummary(issues),
             action: {
               label: "Show details",
-              onClick: () =>
-                setValidationDialog({ open: true, rows: parsed.data }),
+              onClick: () => setValidationDialog({ open: true, rows }),
             },
             duration: 10000,
           },
         );
         return;
       }
-      const validatedRows: TaskImportRow[] = result.data;
+      // The rows we send are papaparse's, not `result.data` — see the file
+      // header. The server owns the transform.
 
       // Size pre-check — keep client well under Convex's 1MB doc limit.
-      const payloadBytes = new Blob([JSON.stringify(validatedRows)]).size;
+      // Measured on the payload actually sent.
+      const payloadBytes = new Blob([JSON.stringify(rows)]).size;
       if (payloadBytes >= TASK_IMPORT_MAX_PAYLOAD_BYTES) {
         toast.error("CSV too large to import in a single job", {
           description:
@@ -168,14 +198,47 @@ export function ImportTasksButton({ projectId, workspaceId }: Props) {
         const jobId = await createImportJob({
           projectId,
           workspaceId,
-          rows: validatedRows,
+          rows,
         });
+        if (skippedExamples > 0) {
+          toast.info(
+            skippedExamples === 1
+              ? "The template's example row was skipped."
+              : `${skippedExamples} example rows were skipped.`,
+          );
+        }
         void navigate(
           `/workspaces/${workspaceId}/projects/${projectId}/import/${jobId}`,
         );
       } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        toast.error("Could not start import", { description: msg });
+        const failure = describeImportFailure(err);
+        toast.error("Could not start import", {
+          description: failure.description,
+          duration: failure.issues || failure.jobId ? 10000 : undefined,
+          ...(failure.issues
+            ? {
+                action: {
+                  label: "Show details",
+                  onClick: () =>
+                    setValidationDialog({
+                      open: true,
+                      rows,
+                      issues: failure.issues,
+                    }),
+                },
+              }
+            : failure.jobId
+              ? {
+                  action: {
+                    label: "View import",
+                    onClick: () =>
+                      void navigate(
+                        `/workspaces/${workspaceId}/projects/${projectId}/import/${failure.jobId}`,
+                      ),
+                  },
+                }
+              : {}),
+        });
       }
     } catch (err) {
       console.error("Task CSV import failed:", err);
@@ -246,12 +309,75 @@ export function ImportTasksButton({ projectId, workspaceId }: Props) {
       <ImportTasksValidationDialog
         open={validationDialog.open}
         rows={validationDialog.rows}
+        issues={validationDialog.issues}
         onOpenChange={(open) =>
           setValidationDialog((s) => ({ ...s, open }))
         }
       />
     </>
   );
+}
+
+/**
+ * What the mutation's rejection means, in a sentence a person can act on.
+ *
+ * `ConvexError.message` is the serialized payload — the
+ * `Uncaught ConvexError: {"code":"INVALID_ROWS",…}` blob — so the structured
+ * `data` is read instead, and the row issues come back with it so the details
+ * dialog can list them.
+ */
+function describeImportFailure(err: unknown): {
+  description: string;
+  issues?: ServerRowIssue[];
+  jobId?: string;
+} {
+  if (err instanceof ConvexError) {
+    const data: unknown = err.data;
+    if (typeof data === "string") return { description: data };
+    if (data && typeof data === "object") {
+      const payload = data as {
+        code?: unknown;
+        message?: unknown;
+        issues?: unknown;
+        jobId?: unknown;
+      };
+      if (payload.code === "INVALID_ROWS" && Array.isArray(payload.issues)) {
+        const issues = payload.issues as ServerRowIssue[];
+        const rowCount = new Set(issues.map((iss) => iss.path[0])).size;
+        return {
+          description: `${issues.length} cell${issues.length === 1 ? "" : "s"} in ${rowCount} row${rowCount === 1 ? "" : "s"} were rejected — ${serverIssueSummary(issues)}`,
+          issues,
+        };
+      }
+      if (typeof payload.message === "string") {
+        return {
+          description: payload.message,
+          ...(typeof payload.jobId === "string" ? { jobId: payload.jobId } : {}),
+        };
+      }
+    }
+  }
+  return {
+    description: err instanceof Error ? err.message : String(err),
+  };
+}
+
+/** Server-reported issue: same shape zod gives, with the path stringified. */
+export interface ServerRowIssue {
+  path: string[];
+  message: string;
+}
+
+/** Same one-line summary as the local pass, for server-reported issues. */
+function serverIssueSummary(issues: ServerRowIssue[]): string {
+  const first = issues[0];
+  if (!first) return "";
+  const rowIndex = Number(first.path[0]);
+  const where = Number.isNaN(rowIndex) ? "Row ?" : `row ${rowIndex + 1}`;
+  const field = first.path[1];
+  return field
+    ? `${where}, ${field}: ${first.message}`
+    : `${where}: ${first.message}`;
 }
 
 /** Short human summary of the first issue, used as the toast description. */

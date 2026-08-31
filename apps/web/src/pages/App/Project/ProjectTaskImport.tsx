@@ -40,7 +40,10 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { useNavigate, useParams } from "react-router-dom";
 import type { QueryParams } from "@convex/types/routes";
-import { TASK_IMPORT_TASK_LIST_LIMIT } from "@ripple/shared/taskImportSchema";
+import {
+  TASK_IMPORT_MAX_ROW_ERRORS,
+  TASK_IMPORT_TASK_LIST_LIMIT,
+} from "@ripple/shared/taskImportSchema";
 import { TaskRow } from "./TaskRow";
 
 export function ProjectTaskImport() {
@@ -146,6 +149,12 @@ function ProjectTaskImportContent({
         {job.errorMessage && (
           <p className="text-xs text-destructive">{job.errorMessage}</p>
         )}
+        {job.rowErrors && job.rowErrors.length > 0 && (
+          <RowErrors
+            rowErrors={job.rowErrors}
+            failedRows={job.failedRows}
+          />
+        )}
       </header>
 
       <div className="flex-1 overflow-auto">
@@ -234,6 +243,46 @@ function ProjectTaskImportContent({
           </ResponsiveDialogFooter>
         </ResponsiveDialogContent>
       </ResponsiveDialog>
+    </div>
+  );
+}
+
+/**
+ * Why rows were dropped.
+ *
+ * A count on its own ("3 failed") is unactionable — the whole point of the
+ * import is that the file goes in unattended, so the only thing the person
+ * can do afterwards is fix the rows they were told about. The list is capped
+ * server-side; the cap is stated rather than hidden, since a file that fails
+ * this way usually fails the same way on every row.
+ */
+function RowErrors({
+  rowErrors,
+  failedRows,
+}: {
+  rowErrors: { row: number; field?: string; message: string }[];
+  failedRows: number;
+}) {
+  const capped = rowErrors.length >= TASK_IMPORT_MAX_ROW_ERRORS;
+  return (
+    <div className="rounded-md border border-destructive/30 bg-destructive/5 p-3">
+      <p className="text-xs font-medium text-destructive">
+        {failedRows === 1 ? "1 row was skipped" : `${failedRows} rows were skipped`}
+      </p>
+      <ul className="mt-1.5 flex max-h-40 flex-col gap-1 overflow-auto text-xs text-muted-foreground">
+        {rowErrors.map((e, i) => (
+          <li key={`${e.row}-${e.field ?? ""}-${i}`}>
+            <span className="font-mono text-foreground">Row {e.row}</span>
+            {e.field && <span className="font-mono"> · {e.field}</span>} —{" "}
+            {e.message}
+          </li>
+        ))}
+      </ul>
+      {capped && (
+        <p className="mt-1.5 text-xs text-muted-foreground">
+          Only the first {TASK_IMPORT_MAX_ROW_ERRORS} problems are listed.
+        </p>
+      )}
     </div>
   );
 }

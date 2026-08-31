@@ -26,10 +26,14 @@ import { scheduleTaskImport } from "./taskImportPool";
 import { isImportJobStale } from "./taskImportStaleness";
 import {
   TASK_IMPORT_MAX_PAYLOAD_BYTES,
+  TASK_IMPORT_MAX_ROW_ERRORS,
   TASK_IMPORT_TASK_LIST_LIMIT,
+  stripTaskImportExampleRows,
   taskImportRowsSchema,
   taskImportRowOutputSchema,
+  toRowError,
   type TaskImportRow,
+  type TaskImportRowError,
 } from "@ripple/shared/taskImportSchema";
 
 const jobStatusValidator = v.union(
@@ -38,6 +42,12 @@ const jobStatusValidator = v.union(
   v.literal("completed"),
   v.literal("failed"),
 );
+
+const rowErrorValidator = v.object({
+  row: v.number(),
+  field: v.optional(v.string()),
+  message: v.string(),
+});
 
 const importJobValidator = v.object({
   _id: v.id("taskImportJobs"),
@@ -51,6 +61,7 @@ const importJobValidator = v.object({
   failedRows: v.number(),
   numberRangeStart: v.number(),
   errorMessage: v.optional(v.string()),
+  rowErrors: v.optional(v.array(rowErrorValidator)),
   completedAt: v.optional(v.number()),
   // `projectActiveJob` strips only the heavy `rows` blob, so every other
   // column on the row reaches this validator and has to be declared here —
@@ -180,10 +191,14 @@ export const createImportJob = mutation({
     workspaceId: v.id("workspaces"),
     // Loose intentionally: the strict shape lives in @shared/taskImportSchema
     // and is re-validated below. See file header for the rationale.
+    // These are the RAW CSV cells (all strings) exactly as papaparse produced
+    // them — the transform to typed values happens here, once, and what this
+    // handler stores is the parsed output. Sending pre-parsed rows fails: the
+    // row schema does not accept its own output.
     rows: v.array(v.any()),
   },
   returns: v.id("taskImportJobs"),
-  handler: async (ctx, { projectId, workspaceId, rows }) => {
+  handler: async (ctx, { projectId, workspaceId, rows: rawRows }) => {
     const { userId } = await requireWorkspaceMember(ctx, workspaceId);
 
     const project = await ctx.db.get(projectId);
@@ -192,8 +207,17 @@ export const createImportJob = mutation({
       throw new ConvexError("Project does not belong to the given workspace");
     }
 
-    // Defensive zod re-parse — phase-1 validation, server side. Surfaces a
-    // structured error so the client can re-open the validation dialog.
+    // The template ships with a filled-in example row; someone who imports
+    // the file without deleting it means the example, not a task called
+    // "EXAMPLE: …". Stripped here as well as on the client so the row is
+    // skipped whichever one sees it first.
+    const rows = stripTaskImportExampleRows(rawRows);
+
+    // Authoritative phase-1 parse: validates the raw cells AND produces the
+    // typed rows persisted below (tags split, estimate coerced, blanks
+    // nulled). The client runs the same schema first, but only for fast
+    // feedback. Surfaces a structured error so the client can re-open the
+    // validation dialog.
     // Issues are serialized to plain objects because ConvexError data must
     // be JSON-compatible Values.
     const parsed = taskImportRowsSchema.safeParse(rows);
@@ -211,7 +235,11 @@ export const createImportJob = mutation({
     const validatedRows: TaskImportRow[] = parsed.data;
 
     if (validatedRows.length === 0) {
-      throw new ConvexError("CSV contains no rows.");
+      throw new ConvexError(
+        rawRows.length > 0
+          ? "The CSV only contains the template's example row — nothing to import."
+          : "CSV contains no rows.",
+      );
     }
 
     // Concurrency guard: at most one *live* queued/running job per project. A
@@ -334,9 +362,17 @@ export const runImport = internalAction({
         // createImportedTasks swallows per-row data failures into the job's
         // failedRows counter, so reaching here means the mutation itself threw
         // uncaught and none of its writes landed. Book the batch as failed
-        // rather than aborting the whole job.
+        // rather than aborting the whole job — and carry the reason onto the
+        // job, or the status page can only say "50 failed" about a batch that
+        // died for a reason the user can act on (missing statuses, deleted
+        // project).
         console.error("taskImports.runImport batch failure", { jobId, startIndex, count, err });
-        await ctx.runMutation(internal.taskImports.recordRowFailures, { jobId, count });
+        await ctx.runMutation(internal.taskImports.recordRowFailures, {
+          jobId,
+          startIndex,
+          count,
+          message: describeError(err),
+        });
       }
     }
 
@@ -439,25 +475,56 @@ export const finalizeJob = internalMutation({
   handler: async (ctx, { jobId }) => {
     const job = await ctx.db.get(jobId);
     if (!job) return null;
+    const allFailed = job.failedRows === job.totalRows;
     await ctx.db.patch(jobId, {
-      status: job.failedRows === job.totalRows ? "failed" : "completed",
+      status: allFailed ? "failed" : "completed",
       completedAt: Date.now(),
+      // A job that ends at "failed" with no message reads as a bug in the
+      // product rather than a problem with the file. The per-row reasons are
+      // already stored; this is the sentence above them.
+      ...(allFailed && !job.errorMessage
+        ? {
+            errorMessage:
+              "No rows could be imported. Fix the rows listed below and upload the file again.",
+          }
+        : {}),
     });
     return null;
   },
 });
 
-/** Book a batch the mutation never committed as processed-and-failed. */
+/**
+ * Book a batch the mutation never committed as processed-and-failed, with the
+ * reason attached to the range of rows it took down.
+ *
+ * `errorMessage` is only claimed if nothing has claimed it yet: a cancelled
+ * import already says why it stopped, and the first cause of a cascade is more
+ * useful than the last.
+ */
 export const recordRowFailures = internalMutation({
-  args: { jobId: v.id("taskImportJobs"), count: v.number() },
+  args: {
+    jobId: v.id("taskImportJobs"),
+    startIndex: v.number(),
+    count: v.number(),
+    message: v.string(),
+  },
   returns: v.null(),
-  handler: async (ctx, { jobId, count }) => {
+  handler: async (ctx, { jobId, startIndex, count, message }) => {
     const job = await ctx.db.get(jobId);
     if (!job) return null;
+    const firstRow = startIndex + 1;
+    const lastRow = startIndex + count;
+    const range =
+      count === 1 ? `Row ${firstRow}` : `Rows ${firstRow}–${lastRow}`;
     await ctx.db.patch(jobId, {
       processedRows: job.processedRows + count,
       lastProgressAt: Date.now(),
       failedRows: job.failedRows + count,
+      rowErrors: [
+        ...(job.rowErrors ?? []),
+        { row: firstRow, message: `${range} could not be imported: ${message}` },
+      ].slice(0, TASK_IMPORT_MAX_ROW_ERRORS),
+      ...(job.errorMessage ? {} : { errorMessage: message }),
     });
     return null;
   },
@@ -489,15 +556,26 @@ export const createImportedTasks = internalMutation({
     const job = await ctx.db.get(jobId);
     if (!job) return null;
 
-    const finish = (failedRows: number) =>
+    const finish = (failedRows: number, newErrors: TaskImportRowError[] = []) =>
       ctx.db.patch(jobId, {
         processedRows: job.processedRows + count,
         failedRows: job.failedRows + failedRows,
         lastProgressAt: Date.now(),
+        ...(newErrors.length > 0
+          ? {
+              rowErrors: [...(job.rowErrors ?? []), ...newErrors].slice(
+                0,
+                TASK_IMPORT_MAX_ROW_ERRORS,
+              ),
+            }
+          : {}),
       });
 
     const project = await ctx.db.get(job.projectId);
     if (!project) {
+      await ctx.db.patch(jobId, {
+        errorMessage: "The project was deleted while the import was running.",
+      });
       await finish(count);
       return null;
     }
@@ -509,7 +587,12 @@ export const createImportedTasks = internalMutation({
       )
       .first();
     if (!defaultStatus) {
-      throw new ConvexError("No default status found for project. Ensure statuses are seeded.");
+      // Thrown, not counted: nothing about this batch is salvageable and the
+      // next one would fail identically. runImport books the rows and puts
+      // this sentence on the job, which is the one the user reads.
+      throw new ConvexError(
+        "This project has no default task status, so imported tasks have nowhere to land. Add a status to the project and import again.",
+      );
     }
 
     // Position: append after the last task in the default status column.
@@ -528,6 +611,7 @@ export const createImportedTasks = internalMutation({
     let previousPosition = lastTask?.position ?? null;
 
     let failedRows = 0;
+    const rowErrors: TaskImportRowError[] = [];
 
     for (let offset = 0; offset < count; offset++) {
       const rowIndex = startIndex + offset;
@@ -542,6 +626,14 @@ export const createImportedTasks = internalMutation({
       const parsed = taskImportRowOutputSchema.safeParse(job.rows[rowIndex]);
       if (!parsed.success) {
         failedRows++;
+        // Keep the reason, not just the count — a row that silently vanishes
+        // between "validation passed" and the finished import is the single
+        // most confusing thing this feature can do. Bounded per job: a broken
+        // column fails every row with the same sentence.
+        for (const issue of parsed.error.issues) {
+          if (rowErrors.length >= TASK_IMPORT_MAX_ROW_ERRORS) break;
+          rowErrors.push(toRowError(rowIndex + 1, issue));
+        }
         continue;
       }
       const row = parsed.data;
@@ -597,7 +689,7 @@ export const createImportedTasks = internalMutation({
       });
     }
 
-    await finish(failedRows);
+    await finish(failedRows, rowErrors);
     return null;
   },
 });
@@ -611,6 +703,27 @@ import type { Doc } from "./_generated/dataModel";
  * row blob is only meaningful to the workpool action — the status page
  * reads the tasks the job produced via listJobTasks.
  */
+/**
+ * The sentence to show a person for a thrown error.
+ *
+ * ConvexError carries our own wording in `data` (a string, or the `message`
+ * of a structured payload); everything else falls back to the raw message,
+ * which at least names the failure. `err.message` on a ConvexError is the
+ * serialized payload — the "Uncaught ConvexError: {"code":...}" wall of JSON
+ * we are here to stop showing.
+ */
+function describeError(err: unknown): string {
+  if (err instanceof ConvexError) {
+    const data: unknown = err.data;
+    if (typeof data === "string") return data;
+    if (data && typeof data === "object" && "message" in data) {
+      const message = (data as { message?: unknown }).message;
+      if (typeof message === "string") return message;
+    }
+  }
+  return err instanceof Error ? err.message : String(err);
+}
+
 function projectActiveJob(job: Doc<"taskImportJobs">) {
   const { rows: _omitted, ...rest } = job;
   void _omitted;

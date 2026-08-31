@@ -6,7 +6,10 @@ import {
   setupAuthenticatedUser,
 } from "./helpers";
 import type { Id } from "../convex/_generated/dataModel";
-import { TASK_IMPORT_TASK_LIST_LIMIT } from "@ripple/shared/taskImportSchema";
+import {
+  TASK_IMPORT_EXAMPLE_ROW,
+  TASK_IMPORT_TASK_LIST_LIMIT,
+} from "@ripple/shared/taskImportSchema";
 
 // Mirror tasks.test.ts: convex-test's scheduler runs scheduled jobs against
 // fake timers, so the workpool / audit log effects don't bleed across tests.
@@ -88,6 +91,56 @@ describe("taskImports.createImportJob", () => {
     // Counter has been advanced by exactly totalRows.
     const project = await t.run(async (ctx) => ctx.db.get(projectId));
     expect(project?.taskCounter).toBe(3);
+  });
+
+  it("skips the template's example row instead of importing it", async () => {
+    const t = createTestContext();
+    const { workspaceId, userId, asUser } = await setupWorkspaceWithAdmin(t);
+    const { projectId } = await setupProjectWithStatuses(t, {
+      workspaceId,
+      userId,
+    });
+
+    const jobId = await asUser.mutation(api.taskImports.createImportJob, {
+      projectId,
+      workspaceId,
+      // As downloaded, with the example left in place above the real rows.
+      rows: [TASK_IMPORT_EXAMPLE_ROW, validRow("A"), validRow("B")],
+    });
+
+    const job = await t.run(async (ctx) => ctx.db.get(jobId));
+    expect(job?.totalRows).toBe(2);
+    // The skipped row must not eat a task number either.
+    const project = await t.run(async (ctx) => ctx.db.get(projectId));
+    expect(project?.taskCounter).toBe(2);
+
+    await t.finishAllScheduledFunctions(vi.runAllTimers);
+    const titles = await t.run(async (ctx) =>
+      (
+        await ctx.db
+          .query("tasks")
+          .withIndex("by_importJob", (q) => q.eq("importJobId", jobId))
+          .collect()
+      ).map((task) => task.title),
+    );
+    expect(titles.sort()).toEqual(["A", "B"]);
+  });
+
+  it("refuses a file that is nothing but the example row", async () => {
+    const t = createTestContext();
+    const { workspaceId, userId, asUser } = await setupWorkspaceWithAdmin(t);
+    const { projectId } = await setupProjectWithStatuses(t, {
+      workspaceId,
+      userId,
+    });
+
+    await expect(
+      asUser.mutation(api.taskImports.createImportJob, {
+        projectId,
+        workspaceId,
+        rows: [TASK_IMPORT_EXAMPLE_ROW],
+      }),
+    ).rejects.toThrow(/example row/i);
   });
 
   it("rejects when another job is already running for the same project", async () => {
@@ -192,6 +245,11 @@ describe("taskImports.runImport (end-to-end)", () => {
     expect(tasks).toHaveLength(2);
     const titles = tasks.map((t) => t.title).sort();
     expect(titles).toEqual(["First", "Second"]);
+    // The mutation receives raw CSV cells and owns the transform: a "a;b"
+    // tags cell has to reach the task as a labels array, not a string.
+    const first = tasks.find((t) => t.title === "First");
+    expect(first?.labels).toEqual(["alpha", "beta"]);
+    expect(first?.priority).toBe("high");
     for (const task of tasks) {
       expect(task.importJobId).toBe(jobId);
       expect(task.statusId).toBe(todoId);
@@ -242,6 +300,64 @@ describe("taskImports.runImport (end-to-end)", () => {
       processedRows: 2,
       failedRows: 1,
     });
+    // The count alone tells the user nothing they can act on — the reason
+    // has to reach the status page, naming the row and the column.
+    // The seeded row is missing both `title` and `tags` (it still carries the
+    // pre-rename `labels`), and each bad column is reported on its own.
+    expect(job?.rowErrors).toEqual([
+      { row: 2, field: "title", message: "title is required" },
+      { row: 2, field: "tags", message: "tags must be text separated by ;" },
+    ]);
+  });
+
+  it("explains a batch that dies as a whole, instead of just counting it", async () => {
+    const t = createTestContext();
+    const { workspaceId, userId } = await setupWorkspaceWithAdmin(t);
+
+    // A project with no statuses: every row is unimportable, and for a
+    // reason no per-row message can express.
+    const projectId = await t.run(async (ctx) =>
+      ctx.db.insert("projects", {
+        name: "Statusless",
+        color: "bg-blue-500",
+        workspaceId,
+        creatorId: userId,
+        key: "STA",
+        taskCounter: 0,
+      }),
+    );
+    const jobId = await t.run(async (ctx) =>
+      ctx.db.insert("taskImportJobs", {
+        projectId,
+        workspaceId,
+        creatorId: userId,
+        status: "queued",
+        rows: [
+          {
+            title: "OK",
+            priority: null,
+            tags: null,
+            dueDate: null,
+            plannedStartDate: null,
+            estimate: null,
+          },
+        ],
+        numberRangeStart: 1,
+        totalRows: 1,
+        processedRows: 0,
+        failedRows: 0,
+      }),
+    );
+
+    await t.action(internal.taskImports.runImport, { jobId });
+    await t.finishAllScheduledFunctions(vi.runAllTimers);
+
+    const job = await t.run(async (ctx) => ctx.db.get(jobId));
+    expect(job).toMatchObject({ status: "failed", failedRows: 1 });
+    expect(job?.errorMessage).toMatch(/no default task status/i);
+    expect(job?.rowErrors?.[0]?.message).toMatch(
+      /Row 1 could not be imported: .*no default task status/i,
+    );
   });
 });
 
