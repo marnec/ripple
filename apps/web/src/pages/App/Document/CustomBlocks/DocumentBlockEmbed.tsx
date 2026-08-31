@@ -35,8 +35,11 @@ function DocumentBlockView({
     );
   }
 
-  // Loading — mirror the loaded DOM structure invisibly to reserve exact dimensions
-  if (document === undefined || isLoading) {
+  // Loading — mirror the loaded DOM structure invisibly to reserve exact
+  // dimensions. Only the quoted text gates this: the document's *name* is a
+  // second, slower query that feeds the label above the quote, and waiting for
+  // it held the quote back even when this device already had it.
+  if (isLoading) {
     return (
       <div aria-hidden="true" className="invisible">
         <div className="text-xs text-muted-foreground w-full text-right">&nbsp;</div>
@@ -52,7 +55,7 @@ function DocumentBlockView({
     return (
       <div data-embed-deleted className="w-full flex items-center gap-2 p-3 border border-dashed rounded-lg text-muted-foreground text-sm">
         <CircleSlash className="h-4 w-4 shrink-0" />
-        <span>Referenced block no longer exists in &ldquo;{document.name}&rdquo;</span>
+        <span>Referenced block no longer exists in &ldquo;{document?.name ?? "this document"}&rdquo;</span>
       </div>
     );
   }
@@ -60,7 +63,10 @@ function DocumentBlockView({
   return (
     <div className="animate-fade-in">
       <div className="text-xs text-muted-foreground w-full text-right">
-        <span className="truncate max-w-60">{document.name}</span>
+        {/* Reserved, not blank: the name fades in when it lands. */}
+        <span className="truncate max-w-60 animate-fade-in">
+          {document?.name ?? "\u00A0"}
+        </span>
       </div>
       <div
         className="w-full border-l-3 border-primary/30 pl-3 py-2 cursor-pointer hover:bg-muted/50 transition-colors rounded-r-md"

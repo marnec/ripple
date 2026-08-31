@@ -1,5 +1,4 @@
 import { cn } from "@/lib/utils";
-import { isSingleCell } from "@ripple/shared/cellRef";
 import { SuggestionMenuController } from "@blocknote/react";
 import { BlockNoteView } from "@blocknote/shadcn";
 import "@blocknote/core/fonts/inter.css";
@@ -16,7 +15,13 @@ import { getRichSlashMenuItems } from "@/lib/blocknote/slash-menu";
 import { SUGGESTION_MENU_FLOATING_OPTIONS } from "@/lib/blocknote/floating";
 import { useMediaDropGuard } from "@/hooks/use-media-drop-guard";
 import { BlockPickerDialog } from "../Document/BlockPickerDialog";
-import { CellRefDialog } from "../Document/CellRefDialog";
+import { CellRefEmbedDialog } from "../Document/CellRefEmbedDialog";
+import {
+  insertBlockEmbed,
+  insertCellRefEmbed,
+  type CellRefEmbedPick,
+} from "@/lib/embed-insert";
+import type { BlockPreview } from "@ripple/shared/blockRef";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 import { BODY_PORTAL_ELEMENTS } from "@/lib/blocknote/portal";
@@ -170,69 +175,28 @@ export function TaskDescriptionEditor({
     return [...m, ...e];
   };
 
-  const handleBlockPickerInsert = (blockId: string) => {
-      if (!editor || !blockPickerDialog) return;
+  const handleBlockPickerInsert = (block: BlockPreview) => {
+    if (!editor || !blockPickerDialog) return;
+    insertBlockEmbed({
+      editor,
+      documentId: blockPickerDialog.documentId,
+      block,
+      ensureBlockRef,
+    });
+    setBlockPickerDialog(null);
+  };
 
-      const { documentId } = blockPickerDialog;
-      editor.focus();
-
-      editor.insertBlocks(
-        [
-          {
-            type: "documentBlockEmbed",
-            props: { documentId, blockId },
-          },
-        ],
-        editor.getTextCursorPosition().block,
-        "after",
-      );
-
-      void ensureBlockRef({ documentId, blockId });
-      setBlockPickerDialog(null);
-    };
-
-  const handleCellRefInsert = (cellRef: string | null) => {
-      if (!editor || !cellRefDialog) return;
-
-      const { spreadsheetId } = cellRefDialog;
-      editor.focus();
-
-      if (cellRef) {
-        void prepareStableRef({ spreadsheetId, cellRef }).then((stableRef) => {
-          if (!editor) return;
-          if (isSingleCell(cellRef)) {
-            editor.insertInlineContent([
-              {
-                type: "spreadsheetCellRef",
-                props: { spreadsheetId, cellRef, stableRef },
-              },
-              " ",
-            ]);
-          } else {
-            editor.insertBlocks(
-              [
-                {
-                  type: "spreadsheetRange" as const,
-                  props: { spreadsheetId, cellRef, stableRef } as any,
-                },
-              ],
-              editor.getTextCursorPosition().block,
-              "after",
-            );
-          }
-          void ensureCellRef({ spreadsheetId, cellRef, stableRef });
-        });
-      } else {
-        editor.insertInlineContent([
-          {
-            type: "spreadsheetLink",
-            props: { spreadsheetId },
-          },
-          " ",
-        ]);
-      }
-      setCellRefDialog(null);
-    };
+  const handleCellRefInsert = (pick: CellRefEmbedPick) => {
+    if (!editor || !cellRefDialog) return;
+    insertCellRefEmbed({
+      editor,
+      spreadsheetId: cellRefDialog.spreadsheetId,
+      pick,
+      ensureCellRef,
+      prepareStableRef,
+    });
+    setCellRefDialog(null);
+  };
 
   if (!editor) {
     if (unavailableOffline) {
@@ -323,14 +287,11 @@ export function TaskDescriptionEditor({
         />
       )}
       {cellRefDialog && (
-        <CellRefDialog
-          open={cellRefDialog.open}
-          onOpenChange={(open) => {
-            if (!open) setCellRefDialog(null);
-          }}
+        <CellRefEmbedDialog
           spreadsheetId={cellRefDialog.spreadsheetId}
           spreadsheetName={cellRefDialog.spreadsheetName}
-          onInsert={handleCellRefInsert}
+          onClose={() => setCellRefDialog(null)}
+          onPick={handleCellRefInsert}
         />
       )}
     </div>

@@ -168,12 +168,13 @@ function SpreadsheetCellRefView({
     );
   }
 
-  // Loading state — show skeleton only when both local and metadata are loading
-  if (spreadsheet === undefined || (localLoading && !localValues)) {
+  // Reserved space until the value itself is known. The spreadsheet's *name*
+  // only feeds the tooltip, so it is not worth holding the chip back for.
+  if (localLoading && !localValues) {
     return <span className="inline-block h-5 w-8 align-middle" />;
   }
 
-  const caption = `${spreadsheet.name} \u203A ${liveCellRef ?? cellRef}`;
+  const caption = `${spreadsheet?.name ?? "Spreadsheet"} \u203A ${liveCellRef ?? cellRef}`;
 
   if (orphan) {
     return (

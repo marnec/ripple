@@ -203,8 +203,10 @@ const ResizableSpreadsheetRange = ({
     );
   }
 
-  const isLoading =
-    spreadsheet === undefined || (localLoading && !localValues);
+  // The cells are what this block is; the spreadsheet's name is a second,
+  // slower query that only feeds the caption. Waiting for it held the grid
+  // back on every load even when the values were already on the device.
+  const isLoading = localLoading && !localValues;
 
   if (isLoading) {
     return (
@@ -225,7 +227,9 @@ const ResizableSpreadsheetRange = ({
     );
   }
 
-  const caption = `${spreadsheet.name} \u203A ${captionCellRef}`;
+  const caption = spreadsheet
+    ? `${spreadsheet.name} \u203A ${captionCellRef}`
+    : null;
   const editable = editor.isEditable;
 
   return (
@@ -258,7 +262,9 @@ const ResizableSpreadsheetRange = ({
         )}
         <div className="flex-1" />
         <span
-          className="text-xs text-muted-foreground cursor-pointer hover:underline truncate max-w-[60%]"
+          className={`text-xs text-muted-foreground truncate max-w-[60%] ${
+            caption ? "cursor-pointer hover:underline animate-fade-in" : ""
+          }`}
           onClick={handleNavigate}
           role="button"
           tabIndex={0}
@@ -269,7 +275,8 @@ const ResizableSpreadsheetRange = ({
             }
           }}
         >
-          {caption}
+          {/* Reserved, not blank: the caption fades in when the name lands. */}
+          {caption ?? "\u00A0"}
         </span>
       </div>
 

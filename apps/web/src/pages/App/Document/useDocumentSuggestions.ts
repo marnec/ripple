@@ -1,10 +1,15 @@
-import { isSingleCell } from "@ripple/shared/cellRef";
+import type { BlockPreview } from "@ripple/shared/blockRef";
 import { useAction } from "convex/react";
 import { Clock, FileText, PenTool, Search, Table } from "lucide-react";
 import { createElement } from "react";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 import type { RecentItem } from "@/hooks/use-local-recents";
+import {
+  insertBlockEmbed,
+  insertCellRefEmbed,
+  type CellRefEmbedPick,
+} from "@/lib/embed-insert";
 import type { DocumentSchemaEditor } from "./schema";
 
 interface NodeResult {
@@ -77,8 +82,18 @@ export function useDocumentSuggestions({
   hasSearch: boolean;
   isStale: boolean;
   editor: DocumentSchemaEditor | null;
-  ensureCellRef: (args: { spreadsheetId: Id<"spreadsheets">; cellRef: string; stableRef: string }) => Promise<null>;
-  ensureBlockRef: (args: { documentId: Id<"documents">; blockId: string }) => Promise<null>;
+  ensureCellRef: (args: {
+    spreadsheetId: Id<"spreadsheets">;
+    cellRef: string;
+    stableRef: string;
+    values?: string[][];
+  }) => Promise<null>;
+  ensureBlockRef: (args: {
+    documentId: Id<"documents">;
+    blockId: string;
+    blockType?: string;
+    textContent?: string;
+  }) => Promise<null>;
   setCellRefDialog: (state: CellRefDialogState) => void;
   setBlockPickerDialog: (state: BlockPickerDialogState) => void;
   setFramePickerDialog: (state: FramePickerDialogState) => void;
@@ -159,44 +174,18 @@ export function useDocumentSuggestions({
       .map((node) => makeItem(node.resourceType, node.resourceId, node.name, "Results"));
   };
 
-  const handleCellRefInsert = (cellRef: string | null, cellRefDialog: CellRefDialogOpen) => {
+  const handleCellRefInsert = (
+    pick: CellRefEmbedPick,
+    cellRefDialog: CellRefDialogOpen,
+  ) => {
     if (!editor) return;
-
-    const { spreadsheetId } = cellRefDialog;
-    editor.focus();
-
-    if (cellRef) {
-      // Resolve the cell's stable identity against the spreadsheet's current
-      // rowOrder/colOrder before inserting. Throws if the snapshot is missing
-      // order arrays (only possible for sheets that pre-date Phase B).
-      void prepareStableRef({ spreadsheetId, cellRef }).then((stableRef) => {
-        if (!editor) return;
-        if (isSingleCell(cellRef)) {
-          editor.insertInlineContent([
-            {
-              type: "spreadsheetCellRef",
-              props: { spreadsheetId, cellRef, stableRef },
-            },
-            " ",
-          ]);
-        } else {
-          editor.insertBlocks(
-            [{
-              type: "spreadsheetRange" as const,
-              props: { spreadsheetId, cellRef, stableRef },
-            }],
-            editor.getTextCursorPosition().block,
-            "after",
-          );
-        }
-        void ensureCellRef({ spreadsheetId, cellRef, stableRef });
-      });
-    } else {
-      editor.insertInlineContent([
-        { type: "spreadsheetLink", props: { spreadsheetId } },
-        " ",
-      ]);
-    }
+    insertCellRefEmbed({
+      editor,
+      spreadsheetId: cellRefDialog.spreadsheetId,
+      pick,
+      ensureCellRef,
+      prepareStableRef,
+    });
     setCellRefDialog(null);
   };
 
@@ -220,19 +209,17 @@ export function useDocumentSuggestions({
     setFramePickerDialog(null);
   };
 
-  const handleBlockPickerInsert = (blockId: string, blockPickerDialog: BlockPickerDialogOpen) => {
+  const handleBlockPickerInsert = (
+    block: BlockPreview,
+    blockPickerDialog: BlockPickerDialogOpen,
+  ) => {
     if (!editor) return;
-
-    const { documentId } = blockPickerDialog;
-    editor.focus();
-
-    editor.insertBlocks(
-      [{ type: "documentBlockEmbed" as const, props: { documentId, blockId } }],
-      editor.getTextCursorPosition().block,
-      "after",
-    );
-
-    void ensureBlockRef({ documentId, blockId });
+    insertBlockEmbed({
+      editor,
+      documentId: blockPickerDialog.documentId,
+      block,
+      ensureBlockRef,
+    });
     setBlockPickerDialog(null);
   };
 

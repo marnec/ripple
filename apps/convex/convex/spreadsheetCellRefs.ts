@@ -2,7 +2,12 @@ import { ConvexError, v } from "convex/values";
 import { internalQuery, query } from "./_generated/server";
 import { internalMutation, mutation } from "./functions";
 import { internal } from "./_generated/api";
-import { normalizeCellRef, isValidCellRef, exceedsMaxCells } from "@ripple/shared/cellRef";
+import {
+  normalizeCellRef,
+  isValidCellRef,
+  exceedsMaxCells,
+  parseRange,
+} from "@ripple/shared/cellRef";
 import { checkResourceMember, requireResourceMember, requireUser } from "./authHelpers";
 
 /**
@@ -77,17 +82,27 @@ export const listBySpreadsheet = query({
 });
 
 /**
- * Create a placeholder cache entry when a user inserts a cell reference.
- * Dedupes by stableRef. Schedules `populateFromSnapshot` to fill `values`.
+ * Create the cache entry when a user inserts a cell reference.
+ * Dedupes by stableRef. Schedules `populateFromSnapshot` to settle `values`.
+ *
+ * `values` is what the inserting client read out of its own replica of the
+ * room a moment earlier, and it is the whole point of the argument: without it
+ * the row starts blank and every reader — the author included — watches the
+ * embed sit empty until a Node action has fetched and decoded the snapshot.
+ * The scheduled populate still runs and still wins, so a client that sends
+ * something wrong is corrected within the second; treating the seed as
+ * authoritative is what we must not do, not accepting it.
  */
 export const ensureCellRef = mutation({
   args: {
     spreadsheetId: v.id("spreadsheets"),
     cellRef: v.string(),
     stableRef: v.string(),
+    /** Display values the client read at insert time, row-major. */
+    values: v.optional(v.array(v.array(v.string()))),
   },
   returns: v.null(),
-  handler: async (ctx, { spreadsheetId, cellRef, stableRef }) => {
+  handler: async (ctx, { spreadsheetId, cellRef, stableRef, values }) => {
     await requireResourceMember(ctx, "spreadsheets", spreadsheetId);
 
     const normalized = normalizeCellRef(cellRef);
@@ -106,7 +121,7 @@ export const ensureCellRef = mutation({
         spreadsheetId,
         cellRef: normalized,
         stableRef,
-        values: JSON.stringify([[""]]),
+        values: JSON.stringify(seedValues(values, normalized)),
         updatedAt: Date.now(),
       });
       await ctx.scheduler.runAfter(0, internal.spreadsheetCellRefsNode.populateFromSnapshot, {
@@ -118,6 +133,25 @@ export const ensureCellRef = mutation({
     return null;
   },
 });
+
+/**
+ * The seed grid to store, or the blank placeholder when there is nothing
+ * usable. A seed is accepted only when it is no bigger than the range it
+ * claims to be — the ref itself is already capped at 100 cells, and a grid
+ * that disagrees with its own ref is not a grid we would ever display.
+ */
+function seedValues(
+  values: string[][] | undefined,
+  normalizedRef: string,
+): string[][] {
+  if (!values || values.length === 0) return [[""]];
+  const range = parseRange(normalizedRef);
+  const maxRows = range ? range.endRow - range.startRow + 1 : 1;
+  const maxCols = range ? range.endCol - range.startCol + 1 : 1;
+  if (values.length > maxRows) return [[""]];
+  if (values.some((row) => row.length > maxCols)) return [[""]];
+  return values;
+}
 
 /**
  * Batch upsert cell values from PartyKit. Each update carries the row's

@@ -3,6 +3,7 @@ import { query, internalQuery } from "./_generated/server";
 import { mutation, internalMutation } from "./functions";
 import { internal } from "./_generated/api";
 import { checkResourceMember, requireResourceMember, requireUser } from "./authHelpers";
+import { isEmbeddableBlockType } from "@ripple/shared/blockRef";
 
 /**
  * Get cached block content for a document + block ID pair.
@@ -42,16 +43,25 @@ export const getBlockRef = query({
 });
 
 /**
- * Create a placeholder block ref cache entry and schedule snapshot population.
+ * Create the block ref cache entry and schedule snapshot population.
  * Called when a documentBlockEmbed is inserted in the editor.
+ *
+ * `blockType` / `textContent` are what the picker showed the user the instant
+ * before they chose the block, so seeding the row with them is what stops a
+ * freshly inserted embed rendering blank until the Node action has fetched and
+ * decoded the source document's snapshot. That action still runs and still
+ * overwrites, so a seed is only ever the first thing shown, never the truth.
  */
 export const ensureBlockRef = mutation({
   args: {
     documentId: v.id("documents"),
     blockId: v.string(),
+    /** What the block held at insert time, as shown in the picker. */
+    blockType: v.optional(v.string()),
+    textContent: v.optional(v.string()),
   },
   returns: v.null(),
-  handler: async (ctx, { documentId, blockId }) => {
+  handler: async (ctx, { documentId, blockId, blockType, textContent }) => {
     await requireResourceMember(ctx, "documents", documentId);
 
     // Check if already exists
@@ -66,8 +76,8 @@ export const ensureBlockRef = mutation({
       await ctx.db.insert("documentBlockRefs", {
         documentId,
         blockId,
-        blockType: "paragraph",
-        textContent: "",
+        blockType: blockType && isEmbeddableBlockType(blockType) ? blockType : "paragraph",
+        textContent: textContent ?? "",
         updatedAt: Date.now(),
       });
     }

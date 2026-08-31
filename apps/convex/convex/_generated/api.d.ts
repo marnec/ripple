@@ -1111,7 +1111,12 @@ export declare const api: {
     ensureBlockRef: FunctionReference<
       "mutation",
       "public",
-      { blockId: string; documentId: Id<"documents"> },
+      {
+        blockId: string;
+        blockType?: string;
+        documentId: Id<"documents">;
+        textContent?: string;
+      },
       null
     >;
     getBlockRef: FunctionReference<
@@ -2823,7 +2828,12 @@ export declare const api: {
     ensureCellRef: FunctionReference<
       "mutation",
       "public",
-      { cellRef: string; spreadsheetId: Id<"spreadsheets">; stableRef: string },
+      {
+        cellRef: string;
+        spreadsheetId: Id<"spreadsheets">;
+        stableRef: string;
+        values?: Array<Array<string>>;
+      },
       null
     >;
     getCellRef: FunctionReference<

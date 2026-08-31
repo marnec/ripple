@@ -54,7 +54,7 @@ import { useMemberSuggestions } from "../../../hooks/use-member-suggestions";
 import { useEventSuggestions } from "../../../hooks/use-event-suggestions";
 import { useUploadFile } from "../../../hooks/use-upload-file";
 import { BlockPickerDialog } from "./BlockPickerDialog";
-import { CellRefDialog } from "./CellRefDialog";
+import { CellRefEmbedDialog } from "./CellRefEmbedDialog";
 import { FramePickerDialog } from "./FramePickerDialog";
 import { DocumentSpotlightFrame } from "./DocumentSpotlightFrame";
 import { EditorRevealRipple } from "./EditorRevealRipple";
@@ -490,17 +490,11 @@ function DocumentBody({
         <ReferencedBlocksHighlight blockIds={referencedBlockIds} />
         <BlockNoteViewEditor />
         {cellRefDialog && (
-          <CellRefDialog
-            open={cellRefDialog.open}
-            onOpenChange={(open) => {
-              if (!open) setCellRefDialog(null);
-            }}
+          <CellRefEmbedDialog
             spreadsheetId={cellRefDialog.spreadsheetId}
             spreadsheetName={cellRefDialog.spreadsheetName}
-            onInsert={(cellRef) => {
-              if (!cellRefDialog) return;
-              handleCellRefInsert(cellRef, cellRefDialog);
-            }}
+            onClose={() => setCellRefDialog(null)}
+            onPick={(pick) => handleCellRefInsert(pick, cellRefDialog)}
           />
         )}
         {blockPickerDialog && (
@@ -511,9 +505,9 @@ function DocumentBody({
             }}
             documentId={blockPickerDialog.documentId}
             documentName={blockPickerDialog.documentName}
-            onInsert={(blockId) => {
+            onInsert={(block) => {
               if (!blockPickerDialog) return;
-              handleBlockPickerInsert(blockId, blockPickerDialog);
+              handleBlockPickerInsert(block, blockPickerDialog);
             }}
           />
         )}

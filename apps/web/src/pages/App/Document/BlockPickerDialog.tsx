@@ -54,7 +54,7 @@ function BlockPickerBody({
   isLoading: boolean;
   filtered: BlockPreview[];
   blocks: BlockPreview[] | null;
-  onSelect: (blockId: string) => void;
+  onSelect: (block: BlockPreview) => void;
 }) {
   return (
     <ResponsiveDialogBody className="flex flex-col gap-3">
@@ -86,7 +86,7 @@ function BlockPickerBody({
                   key={block.blockId}
                   type="button"
                   className="w-full text-left px-3 py-2 rounded-md hover:bg-muted transition-colors group"
-                  onClick={() => onSelect(block.blockId)}
+                  onClick={() => onSelect(block)}
                 >
                   <div className="flex items-start gap-2">
                     <Icon className="h-4 w-4 mt-0.5 shrink-0 text-muted-foreground group-hover:text-foreground transition-colors" />
@@ -115,7 +115,8 @@ interface BlockPickerDialogProps {
   onOpenChange: (open: boolean) => void;
   documentId: Id<"documents">;
   documentName: string;
-  onInsert: (blockId: string) => void;
+  /** The picked block, content included — the embed renders from it. */
+  onInsert: (block: BlockPreview) => void;
 }
 
 export function BlockPickerDialog({
@@ -148,8 +149,8 @@ export function BlockPickerDialog({
     return blocks.filter((b) => b.text.toLowerCase().includes(q));
   })();
 
-  const handleSelect = (blockId: string) => {
-    onInsert(blockId);
+  const handleSelect = (block: BlockPreview) => {
+    onInsert(block);
     onOpenChange(false);
   };
 
