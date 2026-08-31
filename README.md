@@ -2,9 +2,7 @@ NEXT STEPS:
 
 - cascade delete collection phase is bounded even for batched deletes and will hit a ceiling for extremely large cascaded entities.
 
-- improve reactivity around embedding in docs, first we should use optimistic edit using the indexeddb local-storage, also I'm pretty sure we can improve UI independently from optimistic ally update results
-
-
+- improve reactivity around embedding in docs, first we should use optimistic edit using the indexeddb local-storage, also I'm pretty sure we can improve UI independently from optimistic ally update results.
 
 - consider introducing document snapshots
 

@@ -282,3 +282,146 @@ describe("channels.createDm", () => {
 // rejection to the type system. What it protected is covered by
 // `channelKindVisibility.test.ts`, which asserts the mutation always writes
 // `kind: "channel"`.
+
+/**
+ * The read behind "click a name to message them": opening a conversation that
+ * exists is one thing, putting a new one in someone else's sidebar is another,
+ * and the chip has to tell them apart before it acts.
+ */
+describe("channels.findDmWith", () => {
+  it("is null until the conversation exists, then names it", async () => {
+    const t = createTestContext();
+    const { workspaceId, asUser: asAdmin } = await setupWorkspaceWithAdmin(t);
+    const { userId: memberId } = await setupAuthenticatedUser(t, {
+      name: "Member",
+      email: "member@test.com",
+    });
+
+    await t.run(async (ctx) => {
+      await ctx.db.insert("workspaceMembers", {
+        userId: memberId,
+        workspaceId,
+        role: WorkspaceRole.MEMBER,
+      });
+    });
+
+    expect(
+      await asAdmin.query(api.channels.findDmWith, { workspaceId, otherUserId: memberId }),
+    ).toBeNull();
+
+    const channelId = await asAdmin.mutation(api.channels.createDm, {
+      workspaceId,
+      otherUserId: memberId,
+    });
+
+    expect(
+      await asAdmin.query(api.channels.findDmWith, { workspaceId, otherUserId: memberId }),
+    ).toBe(channelId);
+  });
+
+  it("reads null for yourself rather than throwing, unlike createDm", async () => {
+    const t = createTestContext();
+    const { userId: adminId, workspaceId, asUser: asAdmin } = await setupWorkspaceWithAdmin(t);
+
+    // `createDm` refuses because there is nothing sane to create. Asking
+    // whether one exists has an honest answer, and it is "no" — a caller that
+    // threw here would make every self-mention an error path to handle.
+    expect(
+      await asAdmin.query(api.channels.findDmWith, { workspaceId, otherUserId: adminId }),
+    ).toBeNull();
+  });
+
+  it("does not leak a conversation to a non-member of the workspace", async () => {
+    const t = createTestContext();
+    const { workspaceId, asUser: asAdmin } = await setupWorkspaceWithAdmin(t);
+    const { userId: memberId } = await setupAuthenticatedUser(t, {
+      name: "Member",
+      email: "member@test.com",
+    });
+    const { asUser: asOutsider } = await setupAuthenticatedUser(t, {
+      name: "Outsider",
+      email: "out@test.com",
+    });
+
+    await t.run(async (ctx) => {
+      await ctx.db.insert("workspaceMembers", {
+        userId: memberId,
+        workspaceId,
+        role: WorkspaceRole.MEMBER,
+      });
+    });
+
+    await asAdmin.mutation(api.channels.createDm, { workspaceId, otherUserId: memberId });
+
+    await expect(
+      asOutsider.query(api.channels.findDmWith, { workspaceId, otherUserId: memberId }),
+    ).rejects.toThrow("Not a member of this workspace");
+  });
+
+  it("matches through a membership row left pointing at a replaced account", async () => {
+    const t = createTestContext();
+    const { workspaceId, asUser: asAdmin } = await setupWorkspaceWithAdmin(t);
+    const { userId: oldMemberId } = await setupAuthenticatedUser(t, {
+      name: "Member",
+      email: "member@test.com",
+    });
+
+    await t.run(async (ctx) => {
+      await ctx.db.insert("workspaceMembers", {
+        userId: oldMemberId,
+        workspaceId,
+        role: WorkspaceRole.MEMBER,
+      });
+    });
+
+    const channelId = await asAdmin.mutation(api.channels.createDm, {
+      workspaceId,
+      otherUserId: oldMemberId,
+    });
+
+    // The same person, signed up again: a second `users` row carrying the
+    // address the DM's membership row was denormalized with. An id-only scan
+    // would report "no conversation" and the chip would offer to start the one
+    // they are already in.
+    const { userId: newMemberId } = await setupAuthenticatedUser(t, {
+      name: "Member",
+      email: "member@test.com",
+    });
+    await t.run(async (ctx) => {
+      await ctx.db.insert("workspaceMembers", {
+        userId: newMemberId,
+        workspaceId,
+        role: WorkspaceRole.MEMBER,
+      });
+    });
+
+    expect(
+      await asAdmin.query(api.channels.findDmWith, { workspaceId, otherUserId: newMemberId }),
+    ).toBe(channelId);
+
+    // The query cannot write, so the stale row is still stale after it. The
+    // repair belongs to `createDm`, which the chip calls next.
+    const beforeOpen = await t.run(async (ctx) =>
+      ctx.db
+        .query("channelMembers")
+        .withIndex("by_channel", (q) => q.eq("channelId", channelId))
+        .collect(),
+    );
+    expect(beforeOpen.map((m) => m.userId)).toContain(oldMemberId);
+
+    const reopened = await asAdmin.mutation(api.channels.createDm, {
+      workspaceId,
+      otherUserId: newMemberId,
+    });
+    expect(reopened, "the same conversation, not a second one").toBe(channelId);
+
+    const afterOpen = await t.run(async (ctx) =>
+      ctx.db
+        .query("channelMembers")
+        .withIndex("by_channel", (q) => q.eq("channelId", channelId))
+        .collect(),
+    );
+    expect(afterOpen.map((m) => m.userId)).toContain(newMemberId);
+    expect(afterOpen.map((m) => m.userId)).not.toContain(oldMemberId);
+  });
+});

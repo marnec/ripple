@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { useMutation } from "convex/react";
+import { useConvex, useMutation } from "convex/react";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { UserAvatar } from "@/components/UserAvatar";
 import { useViewer } from "@/pages/App/UserContext";
 import { cn } from "@/lib/utils";
@@ -32,8 +33,14 @@ interface UserMentionChipProps {
  * because nothing else in a channel says a message is addressed to you.
  *
  * The chip also used to style a hover state it never acted on. It opens the DM
- * now, so the affordance is honest: `createDm` is get-or-create, which is what
- * makes one click the whole interaction whether or not the conversation exists.
+ * now — but it asks first when there is no conversation yet. `createDm` is
+ * get-or-create, so one click could have covered both cases; the reason it
+ * doesn't is that the two cases are not the same act. Opening a conversation
+ * you already have is private and reversible. Starting one is neither: the new
+ * channel appears in the other person's sidebar the moment it exists, before a
+ * word is written. `channels.findDmWith` is the read that tells the two apart,
+ * and it runs on the click rather than on the render — a busy channel can hold
+ * dozens of these chips and none of them may ever be clicked.
  */
 export function UserMentionChip({
   userId,
@@ -44,8 +51,14 @@ export function UserMentionChip({
   const viewer = useViewer();
   const navigate = useNavigate();
   const { workspaceId } = useParams<{ workspaceId: string }>();
+  const convex = useConvex();
   const createDm = useMutation(api.channels.createDm);
   const [opening, setOpening] = useState(false);
+  // Three states in one, because the dialog has to outlive its own dismissal:
+  // `null` is "never asked" and keeps it unmounted, which is what makes a chip
+  // free until it is clicked; `false` is "asked and dismissed", still mounted
+  // so it can animate out instead of vanishing mid-drawer on mobile.
+  const [confirming, setConfirming] = useState<boolean | null>(null);
 
   const isSelf = !!viewer && viewer._id === userId;
   // A DM with yourself is refused by the mutation, and there is nowhere to go
@@ -86,13 +99,14 @@ export function UserMentionChip({
     );
   }
 
-  const openDm = async (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (opening) return;
+  // Still get-or-create at the point of navigation: between the check and this
+  // call the other person may have started the same conversation from their
+  // side, and `createDm` reuses it rather than racing a duplicate into being.
+  // It also clears the caller's dismissal — reopening a conversation you had
+  // closed is asking for it back.
+  const goToConversation = async () => {
     setOpening(true);
     try {
-      // Get-or-create: there is nothing to branch on, we go wherever it points.
       const channelId = await createDm({
         workspaceId: workspaceId as Id<"workspaces">,
         otherUserId: userId as Id<"users">,
@@ -107,16 +121,58 @@ export function UserMentionChip({
     }
   };
 
+  const openDm = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (opening) return;
+    setOpening(true);
+    try {
+      // One-shot read, not a subscription: this question is asked once per
+      // click and its answer stops mattering the moment we act on it.
+      const existing = await convex.query(api.channels.findDmWith, {
+        workspaceId: workspaceId as Id<"workspaces">,
+        otherUserId: userId as Id<"users">,
+      });
+      if (existing) {
+        await goToConversation();
+        return;
+      }
+      setConfirming(true);
+    } catch {
+      toast.error(`Couldn't open a conversation with ${name}`, {
+        description: "They may no longer be a member of this workspace.",
+      });
+    } finally {
+      setOpening(false);
+    }
+  };
+
   return (
-    <button
-      type="button"
-      className={className}
-      title={`Message ${name}`}
-      aria-busy={opening || undefined}
-      onClick={(e) => void openDm(e)}
-    >
-      {body}
-    </button>
+    <>
+      <button
+        type="button"
+        className={className}
+        title={`Message ${name}`}
+        aria-busy={opening || undefined}
+        onClick={(e) => void openDm(e)}
+      >
+        {body}
+      </button>
+      {confirming !== null && (
+        <ConfirmDialog
+          open={confirming}
+          onOpenChange={setConfirming}
+          onConfirm={() => {
+            setConfirming(false);
+            void goToConversation();
+          }}
+          title={`Message ${name}?`}
+          description={`You have no conversation with ${name} yet. Starting one puts it in both your sidebars.`}
+          confirmLabel="Start conversation"
+          confirmVariant="default"
+        />
+      )}
+    </>
   );
 }
 

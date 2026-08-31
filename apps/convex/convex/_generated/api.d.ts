@@ -703,6 +703,12 @@ export declare const api: {
       { requestId: Id<"channelJoinRequests"> },
       null
     >;
+    findDmWith: FunctionReference<
+      "query",
+      "public",
+      { otherUserId: Id<"users">; workspaceId: Id<"workspaces"> },
+      Id<"channels"> | null
+    >;
     get: FunctionReference<
       "query",
       "public",

@@ -18,6 +18,13 @@ type ConfirmDialogProps = {
   description: ReactNode;
   /** The verb on the confirming button — "Delete", "Cancel event", "Remove". */
   confirmLabel: string;
+  /**
+   * Styling only, and only because not every "are you sure?" is a warning:
+   * confirming can also be an ordinary forward step (starting a conversation)
+   * that happens to be worth asking about because it is visible to someone
+   * else. Destructive stays the default so existing call sites are unchanged.
+   */
+  confirmVariant?: "default" | "destructive";
   /** The way out. Defaults to "Cancel", which reads wrong when the action
    *  itself is a cancellation and both buttons would say the same word. */
   dismissLabel?: string;
@@ -40,6 +47,7 @@ export function ConfirmDialog({
   title,
   description,
   confirmLabel,
+  confirmVariant = "destructive",
   dismissLabel = "Cancel",
 }: ConfirmDialogProps) {
   return (
@@ -53,7 +61,7 @@ export function ConfirmDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             {dismissLabel}
           </Button>
-          <Button variant="destructive" onClick={onConfirm}>
+          <Button variant={confirmVariant} onClick={onConfirm}>
             {confirmLabel}
           </Button>
         </ResponsiveDialogFooter>

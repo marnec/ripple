@@ -1,6 +1,6 @@
 import { ConvexError, v } from "convex/values";
 import { paginationOptsValidator } from "convex/server";
-import { internalQuery, query } from "./_generated/server";
+import { internalQuery, query, type QueryCtx } from "./_generated/server";
 import { mutation } from "./functions";
 import { ChannelKind, ChannelRole, ChannelVisibility } from "@ripple/shared/enums";
 import { logActivity } from "./auditLog";
@@ -15,7 +15,7 @@ import { requireWorkspaceMember, checkWorkspaceMember, requireChannelAccess, req
 import { clearDismissal } from "./channelDismissal";
 import { notify } from "./utils/notify";
 import { channelKindSchema, channelVisibilitySchema } from "./schema";
-import type { Doc } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
 
 import { isDirectMessage, isPublicChannel, isPrivateChannel } from "@ripple/shared/channel";
 export const create = mutation({
@@ -324,6 +324,64 @@ export const search = query({
 // derivation, and the reason two functions with one validator disagreed about
 // what `name` meant.
 
+/**
+ * The direct message these two workspace members already have, or `null`.
+ *
+ * Match by userId first, then by the denormalized `email` on `channelMembers`.
+ * That second case is an account that was deleted and signed up again with the
+ * same address: the old membership row still points at the dead userId, so an
+ * id-only scan would miss the conversation and mint a second one. What to *do*
+ * about the stale row is the caller's business — `createDm` repoints it,
+ * `findDmWith` cannot write and just reports where it landed.
+ *
+ * Costs one `ctx.db.get` per channel the caller belongs to plus a member list
+ * per DM among them, so it belongs on an interaction, never on a render.
+ */
+async function findExistingDm(
+  ctx: QueryCtx,
+  {
+    workspaceId,
+    userId,
+    otherUserId,
+    otherEmail,
+  }: {
+    workspaceId: Id<"workspaces">;
+    userId: Id<"users">;
+    otherUserId: Id<"users">;
+    otherEmail?: string;
+  },
+): Promise<{
+  channelId: Id<"channels">;
+  staleMembershipId?: Id<"channelMembers">;
+} | null> {
+  const myChannelMemberships = await ctx.db
+    .query("channelMembers")
+    .withIndex("by_workspace_user", (q) =>
+      q.eq("workspaceId", workspaceId).eq("userId", userId),
+    )
+    .collect();
+
+  for (const cm of myChannelMemberships) {
+    const channel = await ctx.db.get(cm.channelId);
+    if (!channel || !isDirectMessage(channel)) continue;
+
+    const allMembers = await ctx.db
+      .query("channelMembers")
+      .withIndex("by_channel", (q) => q.eq("channelId", cm.channelId))
+      .collect();
+
+    for (const m of allMembers) {
+      if (m.userId === userId) continue;
+      if (m.userId === otherUserId) return { channelId: cm.channelId };
+      if (otherEmail && m.email === otherEmail) {
+        return { channelId: cm.channelId, staleMembershipId: m._id };
+      }
+    }
+  }
+
+  return null;
+}
+
 export const createDm = mutation({
   args: {
     workspaceId: v.id("workspaces"),
@@ -348,47 +406,29 @@ export const createDm = mutation({
       throw new ConvexError("User is not a member of this workspace");
     }
 
-    // Deduplicate: find existing DM between these two users. Match by userId
-    // first, then fall back to the denormalized email on channelMembers — this
-    // covers the case where the other user's row was replaced (account
-    // deletion + re-signup with the same email). On email match we patch the
-    // stale row to the current userId so subsequent lookups are fast.
+    // Deduplicate: reuse the conversation these two already have, if any.
     const callerUser = await ctx.db.get(userId);
     const otherUser = await ctx.db.get(otherUserId);
     const otherEmail = otherUser?.email;
 
-    const myChannelMemberships = await ctx.db
-      .query("channelMembers")
-      .withIndex("by_workspace_user", (q) =>
-        q.eq("workspaceId", workspaceId).eq("userId", userId),
-      )
-      .collect();
+    const existing = await findExistingDm(ctx, {
+      workspaceId,
+      userId,
+      otherUserId,
+      otherEmail,
+    });
 
-    for (const cm of myChannelMemberships) {
-      const channel = await ctx.db.get(cm.channelId);
-      if (!channel || !isDirectMessage(channel)) continue;
-
-      const allMembers = await ctx.db
-        .query("channelMembers")
-        .withIndex("by_channel", (q) => q.eq("channelId", cm.channelId))
-        .collect();
-
-      for (const m of allMembers) {
-        if (m.userId === userId) continue;
-        if (m.userId === otherUserId) {
-          // Asking for this conversation is asking for it back. Only the
-          // caller's dismissal is cleared — the other participant did not ask
-          // for anything, and dismissal is per-user.
-          await clearDismissal(ctx, cm.channelId, userId);
-          return cm.channelId;
-        }
-        if (otherEmail && m.email === otherEmail) {
-          // Reinstate: point the stale membership at the current userId
-          await ctx.db.patch(m._id, { userId: otherUserId });
-          await clearDismissal(ctx, cm.channelId, userId);
-          return cm.channelId;
-        }
+    if (existing) {
+      if (existing.staleMembershipId) {
+        // Reinstate: point the stale membership at the current userId, so the
+        // next lookup matches on the id rather than re-walking to the email.
+        await ctx.db.patch(existing.staleMembershipId, { userId: otherUserId });
       }
+      // Asking for this conversation is asking for it back. Only the caller's
+      // dismissal is cleared — the other participant did not ask for anything,
+      // and dismissal is per-user.
+      await clearDismissal(ctx, existing.channelId, userId);
+      return existing.channelId;
     }
 
     // No existing DM — create one with NO stored label. A DM's label is
@@ -794,10 +834,41 @@ export const denyJoinRequest = mutation({
   },
 });
 
-// `findDm` was removed: no callers anywhere in the monorepo. The DM the UI
-// actually opens is resolved inside `createDm`, which does the same
-// userId-then-denormalized-email dedup scan and creates the channel when there
-// is none — this query was a second, unexercised copy of that scan (one
-// `ctx.db.get` per membership row plus a full member list per DM) sitting on
-// the public API.
+/**
+ * Whether the caller already has a direct message with `otherUserId`.
+ *
+ * Deliberately *not* how a conversation is opened — that stays `createDm`,
+ * which reuses the same channel, repoints a stale membership row and clears the
+ * caller's dismissal. This answers the one question `createDm` cannot be asked
+ * without answering it destructively: **is there one yet?** Clicking a mention
+ * chip opens an existing conversation outright, and asks first when the click
+ * would instead put a new one in someone else's sidebar.
+ *
+ * An earlier `findDm` was deleted from here for having no callers and for
+ * being a second copy of the dedup scan. It is back with one caller and no
+ * copy: the scan is `findExistingDm`, shared with `createDm`.
+ */
+export const findDmWith = query({
+  args: {
+    workspaceId: v.id("workspaces"),
+    otherUserId: v.id("users"),
+  },
+  returns: v.union(v.id("channels"), v.null()),
+  handler: async (ctx, { workspaceId, otherUserId }) => {
+    const { userId } = await requireWorkspaceMember(ctx, workspaceId);
+    // Not an error, unlike in `createDm`: nothing is being created, and the
+    // honest answer to "do I have a DM with myself" is that there isn't one.
+    if (userId === otherUserId) return null;
+
+    const otherUser = await ctx.db.get(otherUserId);
+    const existing = await findExistingDm(ctx, {
+      workspaceId,
+      userId,
+      otherUserId,
+      otherEmail: otherUser?.email,
+    });
+
+    return existing?.channelId ?? null;
+  },
+});
 
