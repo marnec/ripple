@@ -3,7 +3,7 @@ import { useQuery } from "convex-helpers/react/cache";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 import { Skeleton } from "@/components/ui/skeleton";
-import { getUserDisplayName } from "@ripple/shared/displayName";
+import { useUserDisplayName } from "@/hooks/use-user-display-name";
 
 export const UserMention = createReactInlineContentSpec(
   {
@@ -30,6 +30,9 @@ export const UserMention = createReactInlineContentSpec(
 
 const UserMentionView = ({ userId }: { userId: Id<"users"> }) => {
   const user = useQuery(api.users.get, { id: userId });
+  // `users.get` withholds `email`, so a nameless account resolves its label
+  // from the workspace member list — see `useUserDisplayName`.
+  const displayName = useUserDisplayName(userId, user);
 
   if (user === undefined) {
     return <Skeleton className="h-5 w-16 rounded inline-block align-middle" />;
@@ -43,7 +46,7 @@ const UserMentionView = ({ userId }: { userId: Id<"users"> }) => {
 
   return (
     <span className="font-bold text-foreground align-middle" contentEditable={false}>
-      @{getUserDisplayName(user)}
+      @{displayName}
     </span>
   );
 };

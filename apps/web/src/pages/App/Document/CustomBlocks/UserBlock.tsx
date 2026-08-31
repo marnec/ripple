@@ -2,11 +2,15 @@ import { createReactInlineContentSpec } from "@blocknote/react";
 import { useQuery } from "convex-helpers/react/cache";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
-import { Avatar, AvatarFallback, AvatarImage } from "@ripple/ui/components/avatar";
+import { UserAvatar } from "@/components/UserAvatar";
+import { useUserDisplayName } from "@/hooks/use-user-display-name";
 import { Skeleton } from "../../../../components/ui/skeleton";
 
 const UserView = ({ userId }: { userId: Id<"users"> }) => {
   const user = useQuery(api.users.get, { id: userId });
+  // `users.get` withholds `email`, so a nameless account resolves its label
+  // from the workspace member list — see `useUserDisplayName`.
+  const displayName = useUserDisplayName(userId, user);
 
   if (!user) {
     return <Skeleton className="inline-block h-6 w-24 rounded-full" />;
@@ -14,13 +18,8 @@ const UserView = ({ userId }: { userId: Id<"users"> }) => {
 
   return (
     <span className="align-middle inline-flex items-center gap-1 p-1 rounded-full bg-muted">
-      <Avatar className="h-5 w-5">
-        <AvatarImage src={user.image} />
-        <AvatarFallback>
-          {user.name?.charAt(0).toLocaleUpperCase() || "U"}
-        </AvatarFallback>
-      </Avatar>
-      <span className="font-medium">{user.name || "Unknown User"}</span>
+      <UserAvatar name={displayName} image={user.image} className="h-5 w-5" />
+      <span className="font-medium">{displayName}</span>
     </span>
   );
 };
