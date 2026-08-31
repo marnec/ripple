@@ -1,12 +1,18 @@
-import { getRefInsertContext } from "@/lib/spreadsheet-formula-refs";
+import {
+  applyRefPick,
+  formatSelectionRef,
+  isSingleCellSelection,
+  sameSelection,
+  type GridSelection,
+} from "@/lib/spreadsheet-formula-refs";
 import type { SpreadsheetYjsBinding } from "@/lib/spreadsheet-yjs-binding";
 import { type RefObject, useEffect, useRef } from "react";
 
 interface UseCellPickerOptions {
   binding: SpreadsheetYjsBinding | null;
   /** Grid selection — changes in this value are interpreted as cell picks
-   *  while `enabled` is true. */
-  selection: { row: number; col: number } | null;
+   *  while `enabled` is true. A box wider than one cell picks a range. */
+  selection: GridSelection | null;
   /** The cell currently being edited; never replaced by a pick. */
   editingTarget: { row: number; col: number } | null;
   /** Current draft text and cursor (so the hook can compute the replacement
@@ -29,8 +35,10 @@ interface UseCellPickerOptions {
  * `draft` and emits via `onPick`.
  *
  * Tracks an internal "picking span" so a drag-select replaces the previously
- * inserted ref instead of appending — call `resetSpan()` whenever the user
- * types so subsequent picks start fresh.
+ * inserted ref instead of appending — jspreadsheet re-fires `onselection` for
+ * every cell the pointer crosses, so a drag rewrites one growing `A1:C3` in
+ * place. Call `resetSpan()` whenever the user types so subsequent picks start
+ * fresh.
  */
 export function useCellPicker({
   binding,
@@ -43,7 +51,7 @@ export function useCellPicker({
   onPick,
 }: UseCellPickerOptions) {
   const spanRef = useRef<{ start: number; end: number } | null>(null);
-  const lastSelectionRef = useRef<{ row: number; col: number } | null>(null);
+  const lastSelectionRef = useRef<GridSelection | null>(null);
 
   useEffect(() => {
     if (!enabled || !binding || !selection) {
@@ -55,34 +63,34 @@ export function useCellPicker({
 
     // Skip the initial selection captured at enable time — no real click yet.
     if (prev === null) return;
-    if (prev.row === selection.row && prev.col === selection.col) return;
+    if (sameSelection(prev, selection)) return;
 
-    // Don't pick the cell being edited as its own reference.
+    // Don't pick the cell being edited as its own reference. A drag that
+    // merely covers it is fine — only a bare click on it is self-reference.
     if (
       editingTarget &&
+      isSingleCellSelection(selection) &&
       selection.row === editingTarget.row &&
       selection.col === editingTarget.col
     ) {
       return;
     }
 
-    const refName = binding.cellNameAt(selection.row, selection.col);
-    const span =
-      spanRef.current
-      ?? getRefInsertContext(draft, cursor)
-      ?? { start: cursor, end: cursor };
+    const picked = applyRefPick(
+      draft,
+      cursor,
+      formatSelectionRef(selection),
+      spanRef.current,
+    );
+    spanRef.current = picked.span;
 
-    const next = draft.substring(0, span.start) + refName + draft.substring(span.end);
-    const newCursor = span.start + refName.length;
-    spanRef.current = { start: span.start, end: newCursor };
-
-    onPick({ draft: next, cursor: newCursor });
+    onPick({ draft: picked.text, cursor: picked.cursor });
 
     requestAnimationFrame(() => {
       const el = inputRef.current;
       if (!el) return;
       el.focus();
-      el.setSelectionRange(newCursor, newCursor);
+      el.setSelectionRange(picked.cursor, picked.cursor);
     });
   }, [selection, enabled, binding, editingTarget, draft, cursor, inputRef, onPick]);
 

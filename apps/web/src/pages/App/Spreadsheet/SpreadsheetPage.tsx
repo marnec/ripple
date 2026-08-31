@@ -10,6 +10,7 @@ import { useCursorAwareness } from "@/hooks/use-cursor-awareness";
 import { useCursorIdentity } from "@/hooks/use-cursor-identity";
 import { useFormulaPicker } from "@/hooks/use-formula-picker";
 import { useJSpreadsheetInstance } from "@/hooks/use-jspreadsheet-instance";
+import { useInCellRangePicker } from "@/hooks/use-in-cell-range-picker";
 import { useSpreadsheetContextMenu } from "@/hooks/use-spreadsheet-context-menu";
 import { tagsOptimisticUpdate } from "@/lib/tag-optimistic";
 import SomethingWentWrong from "@/pages/SomethingWentWrong";
@@ -35,6 +36,7 @@ import { FormulaBar } from "./FormulaBar";
 import { ConfirmRefShiftDialog } from "./ConfirmRefShiftDialog";
 import { SpreadsheetContextMenu } from "./SpreadsheetContextMenu";
 import type { SpreadsheetYjsBinding } from "@/lib/spreadsheet-yjs-binding";
+import type { GridSelection } from "@/lib/spreadsheet-formula-refs";
 
 // ---------------------------------------------------------------------------
 // Grid Component
@@ -63,7 +65,7 @@ const JSpreadsheetGrid = memo(function JSpreadsheetGrid({
   /** While true, swallow mousedown.preventDefault on the grid so clicking a
    *  cell doesn't shift focus away from the FormulaBar (click-to-pick). */
   preventBlurOnClick: boolean;
-  onSelectionChange: (sel: { row: number; col: number } | null) => void;
+  onSelectionChange: (sel: GridSelection | null) => void;
   onEditingChange: (editing: boolean) => void;
   onBindingReady: (binding: SpreadsheetYjsBinding | null) => void;
 }) {
@@ -79,10 +81,14 @@ const JSpreadsheetGrid = memo(function JSpreadsheetGrid({
     formulaPicker,
     formulaPickerHandleRef,
     insertFormula,
+    editorInputRef,
     onEditionStart: pickerOnEditionStart,
     onEditionEnd: pickerOnEditionEnd,
     registerKeyboardInterception,
   } = useFormulaPicker(bindingMirrorRef);
+
+  // Click/drag a cell or range straight into the in-cell formula editor.
+  useInCellRangePicker({ wrapperRef, editorRef: editorInputRef });
 
   // Compose formula-picker handlers with isEditing tracking for FormulaBar.
   const onEditionStart = (td: HTMLTableCellElement, wrapper: HTMLElement) => {
@@ -103,7 +109,12 @@ const JSpreadsheetGrid = memo(function JSpreadsheetGrid({
     onEditionStart,
     onEditionEnd,
     onSelectionChange: (sel) => {
-      onSelectionChange(sel ? { row: sel.y1, col: sel.x1 } : null);
+      // jspreadsheet already normalizes the box to top-left → bottom-right.
+      onSelectionChange(
+        sel
+          ? { row: sel.y1, col: sel.x1, endRow: sel.y2, endCol: sel.x2 }
+          : null,
+      );
     },
   });
 
@@ -226,7 +237,7 @@ function SpreadsheetEditor({
   const rawRefs = useQuery(api.spreadsheetCellRefs.listBySpreadsheet, { spreadsheetId });
   // Cell highlights mirror the references drawer: on while it's open.
   const [showRefHighlights, setShowRefHighlights] = useState(false);
-  const [selection, setSelection] = useState<{ row: number; col: number } | null>(null);
+  const [selection, setSelection] = useState<GridSelection | null>(null);
   const [isCellEditing, setIsCellEditing] = useState(false);
   const [binding, setBinding] = useState<SpreadsheetYjsBinding | null>(null);
   const [formulaBarPicking, setFormulaBarPicking] = useState(false);
@@ -330,7 +341,7 @@ function SpreadsheetGridPane({
   externalRefs: ReadonlyArray<{ cellRef: string; orphan?: boolean }>;
   importedRows: unknown[][] | null;
   preventBlurOnClick: boolean;
-  onSelectionChange: (sel: { row: number; col: number } | null) => void;
+  onSelectionChange: (sel: GridSelection | null) => void;
   onEditingChange: (editing: boolean) => void;
   onBindingReady: (binding: SpreadsheetYjsBinding | null) => void;
 }) {

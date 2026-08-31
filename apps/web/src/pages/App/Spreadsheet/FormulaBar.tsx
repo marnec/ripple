@@ -1,6 +1,9 @@
 import { Input } from "@ripple/ui/components/input";
 import { useCellPicker } from "@/hooks/use-cell-picker";
-import { extractCellRefs } from "@/lib/spreadsheet-formula-refs";
+import {
+  extractCellRefs,
+  type GridSelection,
+} from "@/lib/spreadsheet-formula-refs";
 import {
   filterFormulas,
   getFormulaPickerContext,
@@ -16,7 +19,9 @@ type CellCoord = { row: number; col: number };
 
 interface FormulaBarProps {
   binding: SpreadsheetYjsBinding | null;
-  selection: CellCoord | null;
+  /** The grid's selection box. Only its top-left cell is edited; the full box
+   *  is what a drag-pick turns into an `A1:C3` reference. */
+  selection: GridSelection | null;
   isEditing: boolean;
   /** Notify the page when the bar is in formula-pickup mode so the grid can
    *  suppress the focus-shift on cell mousedown. */
@@ -166,10 +171,14 @@ export function FormulaBar({
   };
 
   const handleFocus = () => {
-    // Lock the commit target now. If selection is null (no cell), the
-    // ref stays null and commit() will be a no-op — no accidental write.
-    editingTargetRef.current = selection;
-    setEditingTarget(selection);
+    // Lock the commit target now — the box's top-left cell, never the whole
+    // box. If selection is null (no cell), the ref stays null and commit()
+    // will be a no-op — no accidental write.
+    const target: CellCoord | null = selection
+      ? { row: selection.row, col: selection.col }
+      : null;
+    editingTargetRef.current = target;
+    setEditingTarget(target);
     const initial = selection ? value : "";
     setDraft(initial);
     setCursor(initial.length);

@@ -4,8 +4,6 @@ NEXT STEPS:
 
 - add timezone setting to workspace, this should be inherited by all time-related values in the app. Find efficient way for this, evaluate join vs denormalization. Consider that most likely update is seldom.
 
-- add drag to create range in spreadsheet while editing a formula
-
 - reduce default initial n cols and rows in spreadhseet, this improves client performance, add btn to add quickly col and rows at the ends
 
 - add a dependency view to tasks

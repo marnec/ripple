@@ -1,4 +1,4 @@
-import { isValidCellRef } from "@ripple/shared/cellRef";
+import { isValidCellRef, toCellName } from "@ripple/shared/cellRef";
 
 export interface FormulaRefMatch {
   /** The matched cell reference, normalized (uppercase, no `$`). */
@@ -75,4 +75,69 @@ export function getRefInsertContext(
   }
 
   return { start, end };
+}
+
+/** A grid selection box, top-left (`row`/`col`) to bottom-right inclusive. */
+export interface GridSelection {
+  row: number;
+  col: number;
+  endRow: number;
+  endCol: number;
+}
+
+/** True when the selection box covers exactly one cell. */
+export function isSingleCellSelection(sel: GridSelection): boolean {
+  return sel.row === sel.endRow && sel.col === sel.endCol;
+}
+
+/** True when two selection boxes cover the same cells. */
+export function sameSelection(a: GridSelection, b: GridSelection): boolean {
+  return (
+    a.row === b.row && a.col === b.col && a.endRow === b.endRow && a.endCol === b.endCol
+  );
+}
+
+/** Normalize an anchor/head cell pair (a drag) into a top-left→bottom-right box. */
+export function selectionFromDrag(
+  anchor: { row: number; col: number },
+  head: { row: number; col: number },
+): GridSelection {
+  return {
+    row: Math.min(anchor.row, head.row),
+    col: Math.min(anchor.col, head.col),
+    endRow: Math.max(anchor.row, head.row),
+    endCol: Math.max(anchor.col, head.col),
+  };
+}
+
+/** Format a selection box as an A1-style reference — `A1` for a single cell,
+ *  `A1:C3` for a range. */
+export function formatSelectionRef(sel: GridSelection): string {
+  const start = toCellName(sel.col, sel.row);
+  if (isSingleCellSelection(sel)) return start;
+  return `${start}:${toCellName(sel.endCol, sel.endRow)}`;
+}
+
+/**
+ * Splice a picked cell reference into formula text.
+ *
+ * `span` is the range a previous pick wrote — pass it to keep a drag replacing
+ * the ref it is growing instead of appending a new one, and pass null to start
+ * a fresh insertion at the cursor. The returned `span` feeds the next call.
+ */
+export function applyRefPick(
+  text: string,
+  cursor: number,
+  ref: string,
+  span: { start: number; end: number } | null,
+): { text: string; cursor: number; span: { start: number; end: number } } {
+  const target =
+    span ?? getRefInsertContext(text, cursor) ?? { start: cursor, end: cursor };
+  const next = text.substring(0, target.start) + ref + text.substring(target.end);
+  const nextCursor = target.start + ref.length;
+  return {
+    text: next,
+    cursor: nextCursor,
+    span: { start: target.start, end: nextCursor },
+  };
 }

@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { extractCellRefs, getRefInsertContext } from "./spreadsheet-formula-refs";
+import {
+  applyRefPick,
+  extractCellRefs,
+  formatSelectionRef,
+  getRefInsertContext,
+  selectionFromDrag,
+} from "./spreadsheet-formula-refs";
 
 describe("extractCellRefs", () => {
   it("returns empty for non-formulas", () => {
@@ -73,5 +79,77 @@ describe("getRefInsertContext", () => {
 
   it("returns span when cursor is mid-token after comma", () => {
     expect(getRefInsertContext("=SUM(A1,B2", 10)).toEqual({ start: 8, end: 10 });
+  });
+});
+
+describe("formatSelectionRef", () => {
+  it("formats a single-cell box as one ref", () => {
+    expect(formatSelectionRef({ row: 0, col: 0, endRow: 0, endCol: 0 })).toBe("A1");
+  });
+
+  it("formats a box as a range", () => {
+    expect(formatSelectionRef({ row: 0, col: 0, endRow: 4, endCol: 1 })).toBe("A1:B5");
+  });
+
+  it("handles multi-letter columns", () => {
+    expect(formatSelectionRef({ row: 1, col: 26, endRow: 2, endCol: 27 })).toBe(
+      "AA2:AB3",
+    );
+  });
+});
+
+describe("selectionFromDrag", () => {
+  it("normalizes a drag that runs up and to the left", () => {
+    expect(selectionFromDrag({ row: 4, col: 3 }, { row: 1, col: 1 })).toEqual({
+      row: 1,
+      col: 1,
+      endRow: 4,
+      endCol: 3,
+    });
+  });
+
+  it("keeps a single-cell drag single", () => {
+    expect(selectionFromDrag({ row: 2, col: 2 }, { row: 2, col: 2 })).toEqual({
+      row: 2,
+      col: 2,
+      endRow: 2,
+      endCol: 2,
+    });
+  });
+});
+
+describe("applyRefPick", () => {
+  it("inserts at the cursor when there is no span", () => {
+    expect(applyRefPick("=SUM(", 5, "A1", null)).toEqual({
+      text: "=SUM(A1",
+      cursor: 7,
+      span: { start: 5, end: 7 },
+    });
+  });
+
+  it("replaces the ref straddling the cursor", () => {
+    expect(applyRefPick("=A1", 3, "B2", null)).toEqual({
+      text: "=B2",
+      cursor: 3,
+      span: { start: 1, end: 3 },
+    });
+  });
+
+  it("grows one ref across a drag instead of appending", () => {
+    // Each step feeds the previous step's span, as a drag does.
+    const first = applyRefPick("=SUM(", 5, "A1", null);
+    const second = applyRefPick(first.text, first.cursor, "A1:B5", first.span);
+    const third = applyRefPick(second.text, second.cursor, "A1:C9", second.span);
+    expect(third.text).toBe("=SUM(A1:C9");
+    expect(third.cursor).toBe(10);
+    expect(third.span).toEqual({ start: 5, end: 10 });
+  });
+
+  it("preserves text after the insertion point", () => {
+    expect(applyRefPick("=SUM(,B2)", 5, "A1", null)).toEqual({
+      text: "=SUM(A1,B2)",
+      cursor: 7,
+      span: { start: 5, end: 7 },
+    });
   });
 });

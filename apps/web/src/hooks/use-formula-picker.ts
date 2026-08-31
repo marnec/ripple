@@ -154,6 +154,9 @@ export function useFormulaPicker(
   return {
     formulaPicker,
     formulaPickerHandleRef,
+    /** The live in-cell editor element (null when no cell is being edited).
+     *  Exposed so the range picker can splice picked refs into it. */
+    editorInputRef,
     insertFormula,
     onEditionStart,
     onEditionEnd,
