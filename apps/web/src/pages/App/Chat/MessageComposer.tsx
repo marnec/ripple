@@ -16,7 +16,7 @@ import { TaskMention } from "./CustomInlineContent/TaskMention";
 import { ResourceReference } from "./CustomInlineContent/ResourceReference";
 import { EventMention } from "./CustomInlineContent/EventMention";
 import { ProjectReference } from "../Project/CustomInlineContent/ProjectReference";
-import { UserMention } from "../Project/CustomInlineContent/UserMention";
+import { UserMention } from "./CustomInlineContent/UserMention";
 import { MessageQuotePreview } from "./MessageQuotePreview";
 import { EditingBanner } from "./EditingBanner";
 import {
