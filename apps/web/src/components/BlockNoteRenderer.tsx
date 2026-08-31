@@ -11,6 +11,7 @@ import type { Id } from "@convex/_generated/dataModel";
 import { FileText } from "lucide-react";
 import { tableCellContent, tableCellSpans } from "@/lib/blocknote-table";
 import { normalizeLinkUrl } from "@/lib/link-url";
+import { SpreadsheetRangeSnapshot } from "@/pages/App/Chat/SpreadsheetRangeSnapshot";
 
 // BlockNote JSON types (simplified for rendering)
 export type Style = {
@@ -106,6 +107,28 @@ export function renderBlockGroups(blocks: Block[]): React.ReactNode[] {
   while (i < blocks.length) {
     const block = blocks[i];
 
+    const snapshot = matchRangeSnapshot(blocks, i);
+    if (snapshot) {
+      if (snapshot.lead.length > 0) {
+        result.push(
+          <p key={`${block.id ?? i}-lead`} className="min-h-[1.5em]">
+            {renderInlineArray(snapshot.lead)}
+          </p>
+        );
+      }
+      result.push(
+        <SpreadsheetRangeSnapshot
+          key={block.id ?? `range-${i}`}
+          spreadsheetId={snapshot.chip.props.resourceId}
+          spreadsheetName={snapshot.chip.props.resourceName}
+          cellRef={snapshot.chip.props.cellRef!}
+          rows={snapshot.rows}
+        />
+      );
+      i += 2;
+      continue;
+    }
+
     if (block.type === "bulletListItem") {
       const items: Block[] = [];
       while (i < blocks.length && blocks[i].type === "bulletListItem") {
@@ -145,6 +168,69 @@ export function renderBlockGroups(blocks: Block[]): React.ReactNode[] {
   }
 
   return result;
+}
+
+/**
+ * A frozen spreadsheet range is stored as two plain blocks — a paragraph ending
+ * in a spreadsheet reference chip that carries the A1, then an ordinary `table`
+ * holding the cells (see `MessageComposer.insertSpreadsheetRange`). Recognising
+ * that pair here, rather than minting a block type for it, is what lets every
+ * range already sitting in a channel pick up the new rendering.
+ *
+ * Returns the inline content that ran *before* the chip, so the sender's own
+ * words are not swallowed by the match.
+ */
+function matchRangeSnapshot(
+  blocks: Block[],
+  i: number
+): { chip: ResourceReferenceContent; lead: InlineContent[]; rows: string[][] } | null {
+  const head = trailingRangeChip(blocks[i]);
+  if (!head) return null;
+  const next = blocks[i + 1];
+  if (!next || next.type !== "table") return null;
+  const rows = tableRowsAsText(next.content);
+  if (!rows) return null;
+  return { ...head, rows };
+}
+
+/** The spreadsheet chip a paragraph ends on, plus whatever preceded it. */
+function trailingRangeChip(
+  block: Block | undefined
+): { chip: ResourceReferenceContent; lead: InlineContent[] } | null {
+  if (!block || block.type !== "paragraph" || !Array.isArray(block.content)) return null;
+  const items = block.content;
+
+  // The composer inserts the chip last, but a sender can leave whitespace after
+  // it before hitting send.
+  let last = items.length - 1;
+  while (last >= 0) {
+    const item = items[last];
+    if (item.type === "text" && item.text.trim() === "") last--;
+    else break;
+  }
+
+  const chip = items[last];
+  if (!chip || chip.type !== "resourceReference") return null;
+  if (chip.props.resourceType !== "spreadsheet" || !chip.props.cellRef) return null;
+  return { chip, lead: items.slice(0, last) };
+}
+
+/** A stored table as plain text, or null when it holds no cells. */
+function tableRowsAsText(content: Block["content"]): string[][] | null {
+  if (!content || !("type" in content) || content.type !== "tableContent") return null;
+  const rows = content.rows.map((row) => row.cells.map(cellAsText));
+  if (rows.length === 0 || rows.every((row) => row.length === 0)) return null;
+  return rows;
+}
+
+function cellAsText(cell: unknown): string {
+  return tableCellContent<InlineContent>(cell)
+    .map((node) => {
+      if (node.type === "text") return node.text;
+      if (node.type === "link") return node.content.map((c) => c.text).join("");
+      return "";
+    })
+    .join("");
 }
 
 function BlockRenderer({ block }: { block: Block }) {

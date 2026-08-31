@@ -43,6 +43,7 @@ import { useResourceSuggestions } from "../../../hooks/use-resource-suggestions"
 import { useTaskSuggestions } from "../../../hooks/use-task-suggestions";
 import { isEditorEmpty, editorClear, blocksToPlainText } from "@/lib/editor-utils";
 import { buildTableContent } from "@/lib/spreadsheet-table";
+import { trimSnapshotRange } from "@/lib/spreadsheet-snapshot";
 import { parseRange } from "@ripple/shared/cellRef";
 import { generateThumbnail } from "@/lib/image-thumbnail";
 import {
@@ -349,6 +350,15 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
     values: string[][] | null,
   ) => {
     if (!editor) return;
+
+    // A dragged selection routinely overshoots the data by a row or two, and a
+    // frozen copy has no way to grow back into those cells later — so the blank
+    // rim is dropped here and the chip names what actually survived. A range
+    // that was blank all the way through trims to nothing and falls through to
+    // the chip-only branch, which beats sending a grid of empty boxes.
+    const trimmed =
+      cellRef && values ? trimSnapshotRange(values, cellRef) : null;
+
     const chip = {
       type: "resourceReference" as const,
       props: {
@@ -357,21 +367,21 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
         resourceName: spreadsheet.name,
         // Nothing else in the message states which cells these are — the
         // header gutter is off — so the chip carries the range.
-        cellRef: cellRef ?? "",
+        cellRef: trimmed?.cellRef ?? cellRef ?? "",
       },
     };
 
-    const range = cellRef ? parseRange(cellRef) : null;
-    if (!cellRef || !range || !values) {
+    const range = trimmed ? parseRange(trimmed.cellRef) : null;
+    if (!trimmed || !range) {
       editor.insertInlineContent([chip, " "]);
       return;
     }
 
     editor.insertInlineContent([chip]);
     const content = buildTableContent({
-      values,
-      rowCount: range.endRow - range.startRow + 1,
-      colCount: range.endCol - range.startCol + 1,
+      values: trimmed.values,
+      rowCount: trimmed.values.length,
+      colCount: trimmed.values[0].length,
       startCol: range.startCol,
       startRow: range.startRow,
       // Coordinates belong on a live embed you can go and point at; a frozen
