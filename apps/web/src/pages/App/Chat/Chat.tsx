@@ -23,6 +23,8 @@ const LazyMessageComposer = React.lazy(() =>
 );
 import { SearchDialog } from "./SearchDialog";
 import { ChatContext, type EditingMessage, type ReplyingToMessage } from "./ChatContext";
+import { ChatDropOverlay } from "./ChatDropOverlay";
+import { useFileDrop } from "@/hooks/use-file-drop";
 import { computeGroupPositions } from "./messageGrouping";
 import { UserContext } from "@/pages/App/UserContext";
 import { useRecordVisit } from "@/hooks/use-record-visit";
@@ -44,6 +46,11 @@ export function Chat({ channelId, variant = "full" }: { channelId: Id<"channels"
   useRecordVisit(workspaceId, "channel", channelId, channel?.name);
 
   const userSentMessageRef = useRef(false);
+  // Published by the composer once its chunk has loaded — see ChatContext.
+  const attachDroppedFilesRef = useRef<((files: File[]) => void) | null>(null);
+  const { isDragging, dropProps } = useFileDrop((files) =>
+    attachDroppedFilesRef.current?.(files),
+  );
   const [editingMessage, setEditingMessage] = useState<EditingMessage>({ id: null, body: null });
   const [replyingTo, setReplyingTo] = useState<ReplyingToMessage>(null);
   const [viewMode, setViewMode] = useState<'chat' | 'context'>('chat');
@@ -136,7 +143,15 @@ export function Chat({ channelId, variant = "full" }: { channelId: Id<"channels"
   }
 
   return (
-    <ChatContext.Provider value={{ editingMessage, setEditingMessage, replyingTo, setReplyingTo }}>
+    <ChatContext.Provider
+      value={{
+        editingMessage,
+        setEditingMessage,
+        replyingTo,
+        setReplyingTo,
+        attachDroppedFilesRef,
+      }}
+    >
       {/* Show message context view when jumping to a specific message */}
       {viewMode === 'context' && contextMessageId ? (
         <MessageContext
@@ -146,7 +161,8 @@ export function Chat({ channelId, variant = "full" }: { channelId: Id<"channels"
           onBackToChat={handleBackToChat}
         />
       ) : (
-        <div className="flex h-full min-h-0 flex-col animate-fade-in">
+        <div className="relative flex h-full min-h-0 flex-col animate-fade-in" {...dropProps}>
+          {isDragging && <ChatDropOverlay />}
           {/* Main Chat View */}
           {/* Inline Search — hidden in compact variant */}
           {variant === "full" && (

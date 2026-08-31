@@ -3,7 +3,6 @@ NEXT STEPS:
 - cascade delete collection phase is bounded even for batched deletes and will hit a ceiling for extremely large cascaded entities.
 
 - fix links in chat, especially around activation state and relative links
-- drag&drop in chat to attach images or files
 - improve snapshotted embedded spreadhseet ranges in chats
 
 

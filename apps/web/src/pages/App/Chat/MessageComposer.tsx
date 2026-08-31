@@ -44,6 +44,7 @@ import { useEventSuggestions } from "../../../hooks/use-event-suggestions";
 import { useResourceSuggestions } from "../../../hooks/use-resource-suggestions";
 import { useTaskSuggestions } from "../../../hooks/use-task-suggestions";
 import { isEditorEmpty, editorClear, blocksToPlainText } from "@/lib/editor-utils";
+import { attachmentKindFor } from "./messageUtils";
 import { buildTableContent } from "@/lib/spreadsheet-table";
 import { trimSnapshotRange } from "@/lib/spreadsheet-snapshot";
 import { parseRange } from "@ripple/shared/cellRef";
@@ -105,7 +106,8 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
 }: MessageComposerProps) => {
   const { resolvedTheme } = useTheme();
   const navigate = useNavigate();
-  const { editingMessage, setEditingMessage, replyingTo, setReplyingTo } = useChatContext();
+  const { editingMessage, setEditingMessage, replyingTo, setReplyingTo, attachDroppedFilesRef } =
+    useChatContext();
   const isEditing = !!editingMessage.id;
 
   // Only the reply-preview's plain-text rendering needs project names up front
@@ -370,15 +372,47 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
     if (!items) return;
     const fileItems = Array.from(items).filter((it) => it.kind === "file");
     if (fileItems.length === 0) return;
-    const item = fileItems.find((it) => it.type.startsWith("image/")) ?? fileItems[0];
+    const item =
+      fileItems.find((it) => attachmentKindFor(it.type) === "image") ?? fileItems[0];
     e.preventDefault();
     e.stopPropagation();
     if (!fileUpload || isUploadingImage || isCapturingSnapshot || isUploadingFile) return;
     const file = item.getAsFile();
     if (!file) return;
-    if (item.type.startsWith("image/")) void attachImageFile(file);
+    if (attachmentKindFor(item.type) === "image") void attachImageFile(file);
     else void attachFile(file);
   };
+
+  // Files dropped anywhere on the chat pane (the drop zone itself is in
+  // `Chat`, which owns the pane). Routing is by MIME: an image goes down the
+  // image path — local preview, thumbnail, inline render — and everything else
+  // becomes a file attachment.
+  const attachDroppedFiles = (files: File[]) => {
+    const [file, ...rest] = files;
+    if (!file) return;
+    if (!fileUpload) return;
+    if (isUploadingImage || isUploadingFile || isCapturingSnapshot) {
+      toast.error("Wait for the current attachment to finish uploading.");
+      return;
+    }
+    // One attachment per message, so a multi-file drop is not silently
+    // truncated — say which one was taken.
+    if (rest.length > 0) {
+      toast.info(`A message carries one attachment — attaching ${file.name}.`);
+    }
+    if (attachmentKindFor(file.type) === "image") void attachImageFile(file);
+    else void attachFile(file);
+  };
+
+  // Republished on every render rather than once on mount: the handler closes
+  // over the upload flags it guards on, and a mount-only registration would
+  // freeze them at their initial `false`.
+  useEffect(() => {
+    attachDroppedFilesRef.current = attachDroppedFiles;
+    return () => {
+      attachDroppedFilesRef.current = null;
+    };
+  });
 
   // Snapshot a diagram (whole canvas or a single frame) into a static PNG and
   // hand it to the shared image-attachment lifecycle. The sent message keeps
