@@ -31,3 +31,6 @@ dist-ssr
 .turbo/*
 *.pem
 *.dev.vars
+
+# Claude Code scratch worktrees — never part of the repo.
+.claude/worktrees/
