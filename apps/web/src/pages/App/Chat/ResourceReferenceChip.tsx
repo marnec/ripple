@@ -5,6 +5,7 @@ import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 import { useMentionedResources } from "./MentionedUsersContext";
 import { RESOURCE_TYPE_ICONS } from "@/lib/resource-icons";
+import { cn } from "@/lib/utils";
 
 const RESOURCE_ICONS = RESOURCE_TYPE_ICONS;
 
@@ -19,9 +20,22 @@ type ResourceReferenceChipProps = {
   resourceType: string;
   /** A1 range this chip introduces, when it heads a frozen range table. */
   cellRef?: string;
+  /**
+   * `pill` is the chip as it reads mid-sentence, where the rounded fill is what
+   * separates it from the words around it. `bare` drops the fill for the one
+   * place that already frames it — the header of a frozen range panel — so the
+   * panel does not end up with a second container inside its own header.
+   */
+  variant?: "pill" | "bare";
 };
 
-export function ResourceReferenceChip({ resourceId, resourceType, cellRef }: ResourceReferenceChipProps) {
+export function ResourceReferenceChip({
+  resourceId,
+  resourceType,
+  cellRef,
+  variant = "pill",
+}: ResourceReferenceChipProps) {
+  const bare = variant === "bare";
   const mentionedResources = useMentionedResources();
   const cached = mentionedResources[resourceId];
   const navigate = useNavigate();
@@ -48,7 +62,12 @@ export function ResourceReferenceChip({ resourceId, resourceType, cellRef }: Res
 
   if (!name) {
     return (
-      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-background/60 text-muted-foreground text-sm align-middle">
+      <span
+        className={cn(
+          "inline-flex items-center gap-1 text-muted-foreground text-sm align-middle",
+          bare ? "opacity-80" : "px-1.5 py-0.5 rounded-full bg-background/60",
+        )}
+      >
         #inaccessible-{type || "resource"}
       </span>
     );
@@ -66,12 +85,15 @@ export function ResourceReferenceChip({ resourceId, resourceType, cellRef }: Res
   return (
     <button
       onClick={handleClick}
-      className="inline-flex items-center gap-1.5 px-2 py-0.5
-                 rounded-full bg-background/60 hover:bg-background/80
-                 transition-colors cursor-pointer text-sm font-medium align-middle"
+      className={cn(
+        "inline-flex min-w-0 items-center gap-1.5 align-middle text-sm font-medium cursor-pointer transition-all",
+        bare
+          ? "opacity-75 hover:opacity-100 hover:underline underline-offset-2"
+          : "px-2 py-0.5 rounded-full bg-background/60 hover:bg-background/80",
+      )}
     >
       <Icon className="h-3 w-3 shrink-0" />
-      <span className="max-w-50 truncate">
+      <span className={cn("truncate", bare ? "max-w-full" : "max-w-50")}>
         {name}
         {cellRef ? ` \u203A ${cellRef}` : ""}
       </span>

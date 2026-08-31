@@ -12,23 +12,30 @@ interface SpreadsheetRangeSnapshotProps {
   rows: string[][];
 }
 
-/** Past this the grid scrolls inside the card instead of stretching the wall. */
+/** Past this the grid scrolls inside the panel instead of stretching the wall. */
 const MAX_GRID_HEIGHT = "16rem";
 
 /**
- * A frozen spreadsheet range, drawn as one object.
+ * A frozen spreadsheet range, drawn as one object inside the message bubble.
  *
  * Until now the two halves of a chat range were two unrelated blocks — a
- * reference chip in a paragraph, then a plain BlockNote table under it, styled
- * like any table a person might have typed. Nothing said the table came from
- * the sheet named a line above, the columns stretched to whatever width the
- * bubble allowed, and blank cells drew a grid of empty boxes.
+ * reference chip in a paragraph, then a plain BlockNote table styled like any
+ * table a person might have typed. Nothing said the table came from the sheet
+ * named a line above, the columns stretched to whatever width the bubble
+ * allowed, and blank cells drew a grid of empty boxes.
  *
- * So the pair is drawn as a sheet: the chip becomes the card's header (still
- * the link to the live spreadsheet, still resolving the current name), the
- * cells sit under it in a frame that is only as wide as the data, numbers are
- * right-aligned on tabular figures, and a long range scrolls in place rather
- * than pushing the conversation down.
+ * So the pair is drawn as a panel: the chip becomes its header (still the link
+ * to the live spreadsheet, still resolving the current name), the cells sit
+ * under it in a frame only as wide as the data, numbers are right-aligned on
+ * tabular figures, and a long range scrolls in place rather than pushing the
+ * conversation down.
+ *
+ * **Every surface here is an alpha of `foreground`, never an opaque token.**
+ * The panel has to sit inside two differently-coloured bubbles — the sender's
+ * own tinted one and the plain muted one — in both themes, and an opaque card
+ * reads as a foreign object dropped on top of the bubble. Tinting instead means
+ * the panel takes the bubble's own colour and shifts it: darker on the light
+ * themes, lighter on the dark ones, which is the direction each one expects.
  *
  * The stored body is unchanged — still a chip plus an ordinary `table` block.
  * This is a rendering decision, which is what lets it apply to every range
@@ -40,17 +47,30 @@ export function SpreadsheetRangeSnapshot({
   cellRef,
   rows,
 }: SpreadsheetRangeSnapshotProps) {
-  const headed = hasHeaderRow(rows);
-  const head = headed ? rows[0] : null;
-  const body = headed ? rows.slice(1) : rows;
+  const colCount = rows.reduce((widest, row) => Math.max(widest, row.length), 0);
+  // A range read back can be ragged where trailing cells were never written.
+  const grid = rows.map((row) =>
+    Array.from({ length: colCount }, (_, c) => row[c] ?? ""),
+  );
+
+  // A column that is blank the whole way down is a gap in the data, not a
+  // column of values — it keeps its place in the grid but gives up its width.
+  const gapColumns = Array.from({ length: colCount }, (_, c) =>
+    grid.every((row) => row[c].trim() === ""),
+  );
+
+  const headed = hasHeaderRow(grid);
+  const head = headed ? grid[0] : null;
+  const body = headed ? grid.slice(1) : grid;
 
   return (
-    <figure className="my-1.5 w-fit max-w-full overflow-hidden rounded-md border border-border/70 bg-background">
-      <figcaption className="flex items-center border-b border-border/70 bg-muted/50 px-1.5 py-1">
+    <figure className="my-1 w-fit max-w-full overflow-hidden rounded-md border border-foreground/15 bg-foreground/5 first:mt-0">
+      <figcaption className="flex min-w-0 items-center border-b border-foreground/12 px-2 py-1">
         <ResourceReferenceChip
           resourceId={spreadsheetId}
           resourceType="spreadsheet"
           cellRef={cellRef}
+          variant="bare"
         />
       </figcaption>
 
@@ -71,9 +91,11 @@ export function SpreadsheetRangeSnapshot({
                     key={ci}
                     scope="col"
                     className={cn(
-                      CELL,
-                      "sticky top-0 z-1 bg-muted/70 font-medium text-foreground",
-                      ci > 0 && "border-l border-border/60",
+                      cellClass(ci, gapColumns[ci]),
+                      // Sticky over a translucent panel would show the rows
+                      // sliding under it, so the header row is the one surface
+                      // that closes: the panel tint plus the bubble behind it.
+                      "sticky top-0 z-1 border-b border-foreground/12 bg-foreground/6 font-medium backdrop-blur-sm",
                     )}
                   >
                     <Cell text={cell} />
@@ -83,19 +105,15 @@ export function SpreadsheetRangeSnapshot({
             </thead>
           )}
 
-          <tbody className="divide-y divide-border/60">
+          <tbody className="divide-y divide-foreground/12">
             {body.map((row, ri) => (
-              <tr key={ri} className="transition-colors hover:bg-foreground/[0.035]">
+              <tr key={ri} className="transition-colors hover:bg-foreground/4">
                 {row.map((cell, ci) => (
                   <td
                     key={ci}
                     className={cn(
-                      CELL,
-                      ci > 0 && "border-l border-border/60",
-                      isNumericCell(cell)
-                        ? "text-right tabular-nums"
-                        : "text-left",
-                      cell.trim() === "" && "text-transparent",
+                      cellClass(ci, gapColumns[ci]),
+                      isNumericCell(cell) ? "text-right tabular-nums" : "text-left",
                     )}
                   >
                     <Cell text={cell} />
@@ -111,20 +129,25 @@ export function SpreadsheetRangeSnapshot({
 }
 
 /**
- * `min-w` keeps a blank cell from collapsing to a hairline, `max-w` keeps one
- * long string from making the card wider than the conversation.
+ * `min-w` keeps a cell from collapsing to a hairline, `max-w` keeps one long
+ * string from making the panel wider than the conversation.
  */
-const CELL = "min-w-14 max-w-56 px-2.5 py-1 align-top";
+function cellClass(ci: number, isGap: boolean): string {
+  return cn(
+    "max-w-56 px-2.5 py-1 align-top",
+    isGap ? "min-w-4" : "min-w-14",
+    ci > 0 && "border-l border-foreground/12",
+  );
+}
 
 /**
  * A blank cell still needs a line box or the row loses its height, so it gets a
- * non-breaking space that the `text-transparent` on the cell hides.
+ * non-breaking space rather than nothing.
  */
 function Cell({ text }: { text: string }) {
-  const shown = text.trim() === "" ? " " : text;
   return (
     <span className="block truncate" title={text.trim() || undefined}>
-      {shown}
+      {text.trim() === "" ? " " : text}
     </span>
   );
 }
