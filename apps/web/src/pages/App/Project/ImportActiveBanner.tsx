@@ -8,9 +8,16 @@
 // banner is a shortcut to that page, and an import is short enough that
 // showing it there would insert a stripe above the page on "queued" and pull
 // it back out on "completed" — two layout shifts, seconds apart, on the one
-// page that already reports the same progress.
+// page that already reports the same progress. That page is inside this
+// layout's outlet, which is why the query is skipped rather than merely
+// ignored there — otherwise it and `getJob` held two live subscriptions to the
+// same document, both re-firing on every batch.
+//
+// `useLiveImportJob` is what decides the job is still running. The query used
+// to answer that itself and could not: see `use-import-job-liveness.ts`.
 
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useLiveImportJob } from "@/hooks/use-import-job-liveness";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 import { useQuery } from "convex-helpers/react/cache";
@@ -27,10 +34,16 @@ export function ImportActiveBanner({ workspaceId, projectId }: Props) {
   const onImportPage = useMatch(
     "/workspaces/:workspaceId/projects/:projectId/import/:jobId",
   );
-  const job = useQuery(api.taskImports.getActiveJobForProject, { projectId });
-  // CSV import is a desktop-only flow (see ImportTasksButton); hide the banner
-  // on mobile so the import UI surface stays consistent.
-  if (isMobile || onImportPage || !job) return null;
+  // CSV import is a desktop-only flow (see ImportTasksButton); the banner is
+  // hidden on mobile so the import UI surface stays consistent, and skipping
+  // the query is how that stays true of the subscription too.
+  const hidden = isMobile || onImportPage !== null;
+  const activeJob = useQuery(
+    api.taskImports.getActiveJobForProject,
+    hidden ? "skip" : { projectId },
+  );
+  const job = useLiveImportJob(activeJob);
+  if (hidden || !job) return null;
 
   const pct =
     job.totalRows > 0 ? Math.round((job.processedRows / job.totalRows) * 100) : 0;

@@ -23,7 +23,7 @@ import { requireWorkspaceMember, checkResourceMember } from "./authHelpers";
 import { syncTaskTags } from "./tagSync";
 import { enrichedTaskValidator, enrichTasks } from "./tasks";
 import { scheduleTaskImport } from "./taskImportPool";
-import { isImportJobStale } from "./taskImportStaleness";
+import { isImportJobStale } from "@ripple/shared/taskImportStaleness";
 import {
   TASK_IMPORT_MAX_PAYLOAD_BYTES,
   TASK_IMPORT_MAX_ROW_ERRORS,
@@ -79,17 +79,30 @@ const importJobValidator = v.object({
 // ── Queries ─────────────────────────────────────────────────────────────
 
 /**
- * Latest queued-or-running import for the project that is actually still
- * moving, or null.
+ * The project's most recently active queued-or-running import, or null.
  *
  * Drives both the Import button's disabled state and the active-import
  * banner. Returns a minimal projection — the full row payload is never sent
  * to the client (it's only meaningful to the workpool action).
  *
- * A stale row is treated as absent rather than patched away, because this is a
- * query and cannot write. The row is tidied up separately by
- * `expireStaleImportJobs` on a cron; reading past it here is what makes the
- * banner clear immediately instead of on the cron's schedule.
+ * **Liveness is the caller's to decide, not this query's.** This used to filter
+ * stale jobs out with `isImportJobStale`, and that was a `Date.now()` read
+ * inside a query handler. A Convex query re-runs when its *read set* changes,
+ * and wall-clock time is in no read set — so when a drain died, nothing wrote
+ * to these rows again, the query never re-ran, and every already-subscribed
+ * client kept the answer it had computed before the deadline. The docstring
+ * here claimed the opposite ("clears immediately instead of on the cron's
+ * schedule"); in practice the banner spun and the Import button stayed disabled
+ * until `expireStaleImportJobs` swept the row up to an hour later, at a moment
+ * two clients could disagree about. The row now goes out as data —
+ * `lastProgressAt` and `_creationTime` are both on the projection — and the
+ * consumers judge it against a timer (`use-import-job-liveness.ts`).
+ *
+ * "Most recently active" rather than "queued, else running": with staleness
+ * gone there has to be a total order over the candidates, and the field
+ * staleness is measured against is the one that gives the right answer. If the
+ * job with the newest heartbeat is stale then every other one is staler, so a
+ * single client-side check over this one row still means "nothing is live".
  */
 export const getActiveJobForProject = query({
   args: { projectId: v.id("projects") },
@@ -100,25 +113,30 @@ export const getActiveJobForProject = query({
 
     // Queued and running are the two "active" statuses. Two indexed lookups
     // are cheaper than a filter over all jobs for the project.
-    const queued = await ctx.db
-      .query("taskImportJobs")
-      .withIndex("by_project_status", (q) =>
-        q.eq("projectId", projectId).eq("status", "queued"),
-      )
-      .order("desc")
-      .first();
-    if (queued && !isImportJobStale(queued)) return projectActiveJob(queued);
+    const candidates = await Promise.all(
+      (["queued", "running"] as const).map((status) =>
+        ctx.db
+          .query("taskImportJobs")
+          .withIndex("by_project_status", (q) =>
+            q.eq("projectId", projectId).eq("status", status),
+          )
+          .order("desc")
+          .first(),
+      ),
+    );
 
-    const running = await ctx.db
-      .query("taskImportJobs")
-      .withIndex("by_project_status", (q) =>
-        q.eq("projectId", projectId).eq("status", "running"),
-      )
-      .order("desc")
-      .first();
-    if (running && !isImportJobStale(running)) return projectActiveJob(running);
+    const lastActivity = (job: Doc<"taskImportJobs">) =>
+      job.lastProgressAt ?? job._creationTime;
 
-    return null;
+    const active = candidates
+      .filter((job): job is Doc<"taskImportJobs"> => job !== null)
+      .reduce<Doc<"taskImportJobs"> | null>(
+        (best, job) =>
+          best === null || lastActivity(job) > lastActivity(best) ? job : best,
+        null,
+      );
+
+    return active === null ? null : projectActiveJob(active);
   },
 });
 

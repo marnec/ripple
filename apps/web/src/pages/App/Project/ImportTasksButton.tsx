@@ -40,6 +40,7 @@ import {
 import { ConvexError } from "convex/values";
 import { useMutation } from "convex/react";
 import { useQuery } from "convex-helpers/react/cache";
+import { useLiveImportJob } from "@/hooks/use-import-job-liveness";
 import { ChevronDown, Download, Upload } from "lucide-react";
 import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -57,8 +58,15 @@ export function ImportTasksButton({ projectId, workspaceId }: Props) {
   const navigate = useNavigate();
   const createImportJob = useMutation(api.taskImports.createImportJob);
 
-  // Drives the disabled state. undefined while loading; null = no active job.
-  const activeJob = useQuery(api.taskImports.getActiveJobForProject, { projectId });
+  // Drives the disabled state. The query returns the project's most recently
+  // active queued-or-running job without judging whether it is still moving —
+  // that is a wall-clock question a Convex query cannot stay right about, so a
+  // job whose drain died used to keep this button disabled until the hourly
+  // sweep. `useLiveImportJob` applies the deadline and re-renders when it
+  // passes; see `use-import-job-liveness.ts`.
+  const activeJob = useLiveImportJob(
+    useQuery(api.taskImports.getActiveJobForProject, { projectId }),
+  );
   const hasActiveJob = activeJob != null;
 
   // Phase-2 dialog state — populated when phase-1 fails and the user clicks

@@ -20,6 +20,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ConvexError } from "convex/values";
 import { WorkspaceRole } from "@ripple/shared/enums/roles";
+import { isImportJobStale } from "@ripple/shared/taskImportStaleness";
 import { api, internal } from "../convex/_generated/api";
 import {
   createTestContext,
@@ -195,7 +196,18 @@ describe("a GitHub import drain that dies", () => {
  * already-wedged production row self-clear on deploy.
  */
 describe("an import job nobody is working on", () => {
-  it("stops reading as active once it has gone quiet", async () => {
+  /**
+   * The query reports the row; the *caller* decides it has gone quiet. That
+   * split is the fix for a `Date.now()` that used to live in this query's
+   * handler: a Convex query re-runs when its read set changes, and a dead drain
+   * writes nothing, so the stale filter froze at whatever it had decided before
+   * the deadline and every subscribed client kept that answer until the hourly
+   * sweep. What is asserted here is therefore the contract that replaced it —
+   * the row goes out carrying enough to judge it (`lastProgressAt`, falling
+   * back to `_creationTime`), and the shared predicate both the client and the
+   * mutation guard use says it is dead.
+   */
+  it("still reports the row, carrying what the caller needs to call it dead", async () => {
     const t = createTestContext();
     const { asUser, userId, workspaceId, projectId } =
       await setupImportableProject(t);
@@ -209,9 +221,47 @@ describe("an import job nobody is working on", () => {
     // Far past any plausible gap between two pages of an import.
     vi.setSystemTime(Date.now() + 60 * 60 * 1000);
 
-    expect(
-      await asUser.query(api.taskImports.getActiveJobForProject, { projectId }),
-    ).toBeNull();
+    const job = await asUser.query(api.taskImports.getActiveJobForProject, {
+      projectId,
+    });
+    expect(job?.status).toBe("queued");
+    expect(isImportJobStale(job!)).toBe(true);
+  });
+
+  /**
+   * The other side of the same contract, and the reason "most recently active"
+   * replaced "queued, else running" as the selection rule: a stale row must not
+   * hide a live one behind it. With the server no longer filtering, the query
+   * has to hand back the job with the newest heartbeat — if *that* one is stale
+   * then every other one is staler, which is what makes the caller's single
+   * check mean "nothing is live".
+   */
+  it("prefers the job that moved most recently over an older stale one", async () => {
+    const t = createTestContext();
+    const { asUser, userId, workspaceId, projectId } =
+      await setupImportableProject(t);
+    await seedStuckJob(t, {
+      projectId,
+      workspaceId,
+      creatorId: userId,
+      status: "queued",
+    });
+
+    vi.setSystemTime(Date.now() + 60 * 60 * 1000);
+
+    const liveId = await seedStuckJob(t, {
+      projectId,
+      workspaceId,
+      creatorId: userId,
+      status: "running",
+      lastProgressAt: Date.now(),
+    });
+
+    const job = await asUser.query(api.taskImports.getActiveJobForProject, {
+      projectId,
+    });
+    expect(job?._id).toBe(liveId);
+    expect(isImportJobStale(job!)).toBe(false);
   });
 
   it("stops blocking a new import once it has gone quiet", async () => {
