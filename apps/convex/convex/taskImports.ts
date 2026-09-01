@@ -264,28 +264,35 @@ export const createImportJob = mutation({
     // job that has gone quiet is presumed dead and does not hold the lock —
     // without that, one dead drain took the project's import feature with it
     // permanently, since nothing else could move the row off `queued`.
-    const queuedJob = await ctx.db
-      .query("taskImportJobs")
-      .withIndex("by_project_status", (q) =>
-        q.eq("projectId", projectId).eq("status", "queued"),
+    //
+    // The question is whether *any* candidate is live, not whether the first
+    // one is. This used to read a single row per status with a bare `.first()`
+    // — which, with no `.order()`, is the OLDEST row — and judge that one. A
+    // stale row is exactly what accumulates at the front of that order, so once
+    // one existed the guard read the dead job, concluded nothing was live and
+    // let a second import start alongside a live one: the two dead-drain
+    // symptoms this staleness rule exists for, traded for a duplicate-import
+    // one. `.order("desc")` matters for the same reason the cap below is safe.
+    const candidates = (
+      await Promise.all(
+        (["queued", "running"] as const).map((status) =>
+          ctx.db
+            .query("taskImportJobs")
+            .withIndex("by_project_status", (q) =>
+              q.eq("projectId", projectId).eq("status", status),
+            )
+            .order("desc")
+            .take(ACTIVE_JOB_PROBE_LIMIT),
+        ),
       )
-      .first();
-    const activeQueued = queuedJob && !isImportJobStale(queuedJob) ? queuedJob : null;
-    const runningJob = activeQueued
-      ? null
-      : await ctx.db
-          .query("taskImportJobs")
-          .withIndex("by_project_status", (q) =>
-            q.eq("projectId", projectId).eq("status", "running"),
-          )
-          .first();
-    const activeRunning =
-      runningJob && !isImportJobStale(runningJob) ? runningJob : null;
-    if (activeQueued || activeRunning) {
+    ).flat();
+
+    const live = candidates.find((job) => !isImportJobStale(job));
+    if (live) {
       throw new ConvexError({
         code: "IMPORT_ALREADY_RUNNING",
         message: "An import job is already running for this project.",
-        jobId: (activeQueued ?? activeRunning)!._id,
+        jobId: live._id,
       });
     }
 
@@ -474,6 +481,19 @@ export const expireStaleImportJobs = internalMutation({
 });
 
 const EXPIRY_SWEEP_LIMIT = 100;
+
+/**
+ * How many queued/running rows per status `createImportJob`'s guard looks at
+ * before deciding nothing is live.
+ *
+ * A bound rather than a `.collect()`, and safe at this size because of the
+ * order it reads in. Newest-first, and a row is only ever created when the
+ * guard finds nothing live — so a live job has, by construction, nothing newer
+ * than itself and is found immediately. The slack is for data that predates
+ * the guard being right: rows the old `.first()` bug let through, and the
+ * stale ones that pile up between hourly `expireStaleImportJobs` sweeps.
+ */
+const ACTIVE_JOB_PROBE_LIMIT = 16;
 
 export const startJob = internalMutation({
   args: { jobId: v.id("taskImportJobs") },

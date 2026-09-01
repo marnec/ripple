@@ -298,6 +298,75 @@ describe("an import job nobody is working on", () => {
   });
 
   /**
+   * The bug the escape hatch introduced, and the reason the guard asks whether
+   * *any* candidate is live rather than whether the first one is.
+   *
+   * A dead row is not swept for up to an hour, so it sits in front of every row
+   * created after it. The guard used to read one row per status with a bare
+   * `.first()` — no `.order()`, so the oldest — find that dead row, conclude
+   * nothing was live and wave the caller through, next to a live import it
+   * never looked at. Two drains then write two batches of tasks from two
+   * uploads of the same CSV.
+   *
+   * Both rows are `queued` on purpose: that is the window the old code could
+   * not see out of. Once the second job reaches `running` the separate
+   * running-status probe caught it, which is why this went unnoticed.
+   */
+  it("still blocks a new import when a stale job sits in front of a live one", async () => {
+    const t = createTestContext();
+    const { asUser, userId, workspaceId, projectId } =
+      await setupImportableProject(t);
+
+    const deadJobId = await seedStuckJob(t, {
+      projectId,
+      workspaceId,
+      creatorId: userId,
+      status: "queued",
+    });
+
+    vi.setSystemTime(Date.now() + 60 * 60 * 1000);
+
+    // Newer, and still moving — the one that holds the lock.
+    const liveJobId = await seedStuckJob(t, {
+      projectId,
+      workspaceId,
+      creatorId: userId,
+      status: "queued",
+      lastProgressAt: Date.now(),
+    });
+
+    const rejection = await asUser
+      .mutation(api.taskImports.createImportJob, {
+        projectId,
+        workspaceId,
+        rows: [
+          {
+            title: "Second upload of the same file",
+            priority: "medium",
+            tags: "",
+            dueDate: "",
+            plannedStartDate: "",
+            estimate: "",
+          },
+        ],
+      })
+      .then(
+        () => null,
+        (err: unknown) => err,
+      );
+
+    expect(rejection).toBeInstanceOf(ConvexError);
+    // The id has to name the job actually holding the lock: it is what the
+    // client's "an import is already running" toast links to, so pointing at
+    // the dead row would send the user to a job that is going nowhere.
+    expect((rejection as ConvexError<{ code: string; jobId: string }>).data).toMatchObject({
+      code: "IMPORT_ALREADY_RUNNING",
+      jobId: liveJobId,
+    });
+    expect(liveJobId).not.toBe(deadJobId);
+  });
+
+  /**
    * The bound. A drain that is still turning pages must keep its lock — this
    * is what stops the escape hatch from becoming a way to run two imports over
    * the same pre-allocated task-number range.
