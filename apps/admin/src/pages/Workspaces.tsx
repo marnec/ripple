@@ -5,7 +5,6 @@ import {
   LoadingPane,
   PageHeader,
   SearchInput,
-  SectionLabel,
   TypeToConfirmDialog,
   UserAvatar,
 } from "@/components/console";
@@ -23,9 +22,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { navigate } from "@/hooks/useHashRoute";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@ripple/ui/components/tabs";
+import { navigate, resolveTab } from "@/hooks/useHashRoute";
 import { errorMessage } from "@/lib/errors";
 import { fmtDate, fmtNum } from "@/lib/format";
+import { WorkspaceActivityPanel } from "@/pages/WorkspaceActivity";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 import { useMutation, useQuery } from "convex/react";
@@ -33,7 +34,6 @@ import {
   ArrowLeftIcon,
   ChevronRightIcon,
   CrownIcon,
-  HistoryIcon,
   PlusIcon,
   UserPlusIcon,
 } from "lucide-react";
@@ -219,7 +219,16 @@ function CreateWorkspaceDialog({ open, onClose }: { open: boolean; onClose: () =
 }
 
 // ── Detail ───────────────────────────────────────────────────────────────
-export function WorkspaceDetailPage({ workspaceId }: { workspaceId: Id<"workspaces"> }) {
+const WORKSPACE_TABS = ["overview", "members", "activity"] as const;
+
+export function WorkspaceDetailPage({
+  workspaceId,
+  tab,
+}: {
+  workspaceId: Id<"workspaces">;
+  tab?: string;
+}) {
+  const active = resolveTab(tab, WORKSPACE_TABS);
   const ws = useQuery(api.admin.workspaces.get, { workspaceId });
   const removeWorkspace = useMutation(api.admin.workspaces.remove);
   const [deleting, setDeleting] = useState(false);
@@ -248,6 +257,8 @@ export function WorkspaceDetailPage({ workspaceId }: { workspaceId: Id<"workspac
     );
   }
 
+  const owner = ws.members.find((m) => m.isOwner);
+
   const counts: [string, number][] = [
     ["Channels", ws.counts.channels],
     ["Documents", ws.counts.documents],
@@ -258,7 +269,7 @@ export function WorkspaceDetailPage({ workspaceId }: { workspaceId: Id<"workspac
   ];
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <BackLink />
 
       <header className="animate-rise flex flex-wrap items-start justify-between gap-4">
@@ -270,12 +281,6 @@ export function WorkspaceDetailPage({ workspaceId }: { workspaceId: Id<"workspac
           <div className="mt-1 font-mono text-[11px] text-muted-foreground/70">{ws._id}</div>
         </div>
         <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            onClick={() => navigate(`/workspaces/${ws._id}/activity`)}
-          >
-            <HistoryIcon /> Activity
-          </Button>
           <Button variant="outline" onClick={() => setInviting(true)}>
             <UserPlusIcon /> Invite member
           </Button>
@@ -285,48 +290,83 @@ export function WorkspaceDetailPage({ workspaceId }: { workspaceId: Id<"workspac
         </div>
       </header>
 
-      <section className="animate-rise" style={{ animationDelay: "60ms" }}>
-        <div className="grid grid-cols-3 gap-3 sm:grid-cols-6">
-          {counts.map(([label, value]) => (
-            <Card key={label} className="gap-0 px-3 py-2.5">
-              <div className="font-mono text-[10px] tracking-[0.16em] text-muted-foreground uppercase">
-                {label}
-              </div>
-              <div className="mt-1 font-mono text-xl font-semibold tabular-nums">{value}</div>
-            </Card>
-          ))}
-        </div>
-      </section>
+      <Tabs
+        value={active}
+        onValueChange={(value) => navigate(`/workspaces/${ws._id}/${value as string}`)}
+        className="animate-rise gap-4"
+        style={{ animationDelay: "60ms" }}
+      >
+        <TabsList>
+          <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="members">Members ({ws.members.length})</TabsTrigger>
+          <TabsTrigger value="activity">Activity</TabsTrigger>
+        </TabsList>
 
-      <section className="animate-rise space-y-3" style={{ animationDelay: "120ms" }}>
-        <SectionLabel>Members ({ws.members.length})</SectionLabel>
-        <Card className="gap-0 py-0">
-          <ul className="divide-y divide-border">
-            {ws.members.map((m) => (
-              <li
-                key={m.userId}
-                onClick={() => navigate(`/users/${m.userId}`)}
-                className="flex cursor-pointer items-center gap-3 px-4 py-2.5 transition-colors hover:bg-accent"
-              >
-                <UserAvatar name={m.name} email={m.email} />
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm">{m.name ?? "Unnamed"}</div>
-                  <div className="truncate font-mono text-xs text-muted-foreground">
-                    {m.email ?? "—"}
-                  </div>
+        <TabsContent value="overview" className="space-y-6">
+          <div className="grid grid-cols-3 gap-3 sm:grid-cols-6">
+            {counts.map(([label, value]) => (
+              <Card key={label} className="gap-0 px-3 py-2.5">
+                <div className="font-mono text-[10px] tracking-[0.16em] text-muted-foreground uppercase">
+                  {label}
                 </div>
-                {m.isOwner && (
-                  <Badge className="bg-primary/15 text-primary">
-                    <CrownIcon /> owner
-                  </Badge>
-                )}
-                <Badge variant="secondary">{m.role}</Badge>
-                <ChevronRightIcon className="size-4 text-muted-foreground" />
-              </li>
+                <div className="mt-1 font-mono text-xl font-semibold tabular-nums">{value}</div>
+              </Card>
             ))}
-          </ul>
-        </Card>
-      </section>
+          </div>
+
+          <Card className="gap-0 divide-y divide-border py-0">
+            <DetailRow label="Owner">
+              {owner ? (
+                <button
+                  type="button"
+                  className="hover:underline"
+                  onClick={() => navigate(`/users/${owner.userId}`)}
+                >
+                  {owner.name ?? owner.email ?? "Unnamed"}
+                </button>
+              ) : (
+                "—"
+              )}
+            </DetailRow>
+            <DetailRow label="Created">{fmtDate(ws.createdAt)}</DetailRow>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="members">
+          <Card className="gap-0 py-0">
+            <ul className="divide-y divide-border">
+              {ws.members.map((m) => (
+                <li
+                  key={m.userId}
+                  onClick={() => navigate(`/users/${m.userId}`)}
+                  className="flex cursor-pointer items-center gap-3 px-4 py-2.5 transition-colors hover:bg-accent"
+                >
+                  <UserAvatar name={m.name} email={m.email} />
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-sm">{m.name ?? "Unnamed"}</div>
+                    <div className="truncate font-mono text-xs text-muted-foreground">
+                      {m.email ?? "—"}
+                    </div>
+                  </div>
+                  {m.isOwner && (
+                    <Badge className="bg-primary/15 text-primary">
+                      <CrownIcon /> owner
+                    </Badge>
+                  )}
+                  <Badge variant="secondary">{m.role}</Badge>
+                  <ChevronRightIcon className="size-4 text-muted-foreground" />
+                </li>
+              ))}
+            </ul>
+          </Card>
+        </TabsContent>
+
+        {/* Unmounted until selected — that is what keeps the audit subscription
+            off every visit to a workspace. */}
+        <TabsContent value="activity">
+          <WorkspaceActivityPanel workspaceId={ws._id} />
+        </TabsContent>
+      </Tabs>
 
       <InviteMemberDialog
         open={inviting}
@@ -354,5 +394,16 @@ function BackLink() {
     <Button variant="ghost" size="sm" className="-ml-2" onClick={() => navigate("/workspaces")}>
       <ArrowLeftIcon /> Workspaces
     </Button>
+  );
+}
+
+function DetailRow({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex items-center justify-between gap-4 px-4 py-2.5">
+      <span className="font-mono text-xs tracking-wider text-muted-foreground uppercase">
+        {label}
+      </span>
+      <span className="text-sm">{children}</span>
+    </div>
   );
 }

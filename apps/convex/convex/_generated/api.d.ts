@@ -51,9 +51,44 @@ export declare const api: {
             severity: "info" | "warning" | "error" | "critical";
             source?: string;
             timestamp: number;
+            workspaceId?: Id<"workspaces">;
+            workspaceName?: string;
           }>;
           hasMore: boolean;
           workspaceName: string | null;
+        }
+      >;
+      listByUser: FunctionReference<
+        "query",
+        "public",
+        {
+          limit?: number;
+          resourceTypes?: Array<string>;
+          userId: Id<"users">;
+          workspaceId?: Id<"workspaces">;
+        },
+        {
+          entries: Array<{
+            _id: string;
+            action: string;
+            actorEmail?: string;
+            actorId?: string;
+            actorImage?: string;
+            actorIsUser: boolean;
+            actorName: string;
+            cascadeSummary?: string;
+            newValue?: string;
+            oldValue?: string;
+            resourceId?: string;
+            resourceName?: string;
+            resourceType?: string;
+            severity: "info" | "warning" | "error" | "critical";
+            source?: string;
+            timestamp: number;
+            workspaceId?: Id<"workspaces">;
+            workspaceName?: string;
+          }>;
+          hasMore: boolean;
         }
       >;
     };

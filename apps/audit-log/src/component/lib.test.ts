@@ -101,6 +101,84 @@ describe("audit log component", () => {
     expect(results).toHaveLength(2);
   });
 
+  test("narrows an actor's trail by scope and resource type", async () => {
+    const t = initConvexTest();
+
+    for (const [scope, resourceType, resourceId] of [
+      ["ws1", "documents", "doc1"],
+      ["ws1", "tasks", "task1"],
+      ["ws2", "documents", "doc2"],
+      ["ws2", "tasks", "task2"],
+    ] as const) {
+      await t.mutation(api.lib.log, {
+        action: `${resourceType}.created`,
+        actorId: "user123",
+        resourceType,
+        resourceId,
+        scope,
+        severity: "info",
+      });
+    }
+    // Another actor in the same scope — never this actor's business.
+    await t.mutation(api.lib.log, {
+      action: "documents.created",
+      actorId: "other",
+      resourceType: "documents",
+      resourceId: "doc3",
+      scope: "ws1",
+      severity: "info",
+    });
+
+    const byScope = await t.query(api.lib.queryByActor, {
+      actorId: "user123",
+      scope: "ws1",
+    });
+    expect(byScope.map((r) => r.resourceId).sort()).toEqual(["doc1", "task1"]);
+
+    const byType = await t.query(api.lib.queryByActor, {
+      actorId: "user123",
+      resourceTypes: ["tasks"],
+    });
+    expect(byType.map((r) => r.resourceId).sort()).toEqual(["task1", "task2"]);
+
+    const both = await t.query(api.lib.queryByActor, {
+      actorId: "user123",
+      scope: "ws1",
+      resourceTypes: ["tasks"],
+    });
+    expect(both.map((r) => r.resourceId)).toEqual(["task1"]);
+  });
+
+  test("fills the limit under a filter instead of truncating first", async () => {
+    const t = initConvexTest();
+
+    // Interleaved: filtering an array already cut to `limit` would return one
+    // row here, which silently breaks limit+1 tail detection for callers.
+    for (let i = 0; i < 4; i++) {
+      await t.mutation(api.lib.log, {
+        action: i % 2 === 0 ? "documents.created" : "tasks.created",
+        actorId: "user123",
+        resourceType: i % 2 === 0 ? "documents" : "tasks",
+        resourceId: `res${i}`,
+        severity: "info",
+      });
+    }
+
+    const byType = await t.query(api.lib.queryByActor, {
+      actorId: "user123",
+      resourceTypes: ["documents"],
+      limit: 2,
+    });
+    expect(byType.map((r) => r.resourceId).sort()).toEqual(["res0", "res2"]);
+
+    const byAction = await t.query(api.lib.queryByActor, {
+      actorId: "user123",
+      actions: ["documents.created"],
+      limit: 2,
+    });
+    expect(byAction.map((r) => r.resourceId).sort()).toEqual(["res0", "res2"]);
+  });
+
   test("can query by severity", async () => {
     const t = initConvexTest();
 

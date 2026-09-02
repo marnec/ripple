@@ -5,7 +5,6 @@ import {
   LoadingPane,
   PageHeader,
   SearchInput,
-  SectionLabel,
   TypeToConfirmDialog,
   UserAvatar,
 } from "@/components/console";
@@ -20,9 +19,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { navigate } from "@/hooks/useHashRoute";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@ripple/ui/components/tabs";
+import { navigate, resolveTab } from "@/hooks/useHashRoute";
 import { errorMessage } from "@/lib/errors";
 import { fmtDate, fmtNum, shortId } from "@/lib/format";
+import { UserActivityPanel } from "@/pages/UserActivity";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 import { useMutation, usePaginatedQuery, useQuery } from "convex/react";
@@ -179,7 +180,10 @@ export function UsersPage() {
 }
 
 // ── Detail ───────────────────────────────────────────────────────────────
-export function UserDetailPage({ userId }: { userId: Id<"users"> }) {
+const USER_TABS = ["identity", "workspaces", "activity"] as const;
+
+export function UserDetailPage({ userId, tab }: { userId: Id<"users">; tab?: string }) {
+  const active = resolveTab(tab, USER_TABS);
   const user = useQuery(api.admin.users.get, { userId });
   const viewer = useQuery(api.users.viewer);
   const setAdmin = useMutation(api.admin.users.setPlatformAdmin);
@@ -239,7 +243,7 @@ export function UserDetailPage({ userId }: { userId: Id<"users"> }) {
   };
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <BackLink />
 
       <header className="animate-rise flex flex-wrap items-start justify-between gap-4">
@@ -305,56 +309,73 @@ export function UserDetailPage({ userId }: { userId: Id<"users"> }) {
         )}
       </header>
 
-      <section className="animate-rise space-y-3" style={{ animationDelay: "60ms" }}>
-        <SectionLabel>Identity</SectionLabel>
-        <Card className="gap-0 divide-y divide-border py-0">
-          <DetailRow label="Providers">
-            {user.providers.length ? (
-              <div className="flex gap-1">
-                {user.providers.map((p) => (
-                  <Badge key={p} variant="outline">
-                    {p}
-                  </Badge>
-                ))}
-              </div>
-            ) : (
-              "—"
-            )}
-          </DetailRow>
-          <DetailRow label="Email verified">{user.emailVerified ? "Yes" : "No"}</DetailRow>
-          {user.githubLogin && <DetailRow label="GitHub">@{user.githubLogin}</DetailRow>}
-          {user.gitlabLogin && <DetailRow label="GitLab">@{user.gitlabLogin}</DetailRow>}
-          <DetailRow label="Joined">{fmtDate(user.createdAt)}</DetailRow>
-        </Card>
-      </section>
+      <Tabs
+        value={active}
+        onValueChange={(value) => navigate(`/users/${user._id}/${value as string}`)}
+        className="animate-rise gap-4"
+        style={{ animationDelay: "60ms" }}
+      >
+        <TabsList>
+          <TabsTrigger value="identity">Identity</TabsTrigger>
+          <TabsTrigger value="workspaces">Workspaces ({user.workspaces.length})</TabsTrigger>
+          <TabsTrigger value="activity">Activity</TabsTrigger>
+        </TabsList>
 
-      <section className="animate-rise space-y-3" style={{ animationDelay: "120ms" }}>
-        <SectionLabel>Workspaces ({user.workspaces.length})</SectionLabel>
-        <Card className="gap-0 py-0">
-          {user.workspaces.length === 0 ? (
-            <EmptyState title="No workspaces">Not a member of any workspace.</EmptyState>
-          ) : (
-            <ul className="divide-y divide-border">
-              {user.workspaces.map((w) => (
-                <li
-                  key={w._id}
-                  onClick={() => navigate(`/workspaces/${w._id}`)}
-                  className="flex cursor-pointer items-center gap-3 px-4 py-2.5 transition-colors hover:bg-accent"
-                >
-                  <span className="flex-1 truncate text-sm">{w.name}</span>
-                  {w.isOwner && (
-                    <Badge className="bg-primary/15 text-primary">
-                      <CrownIcon /> owner
+        <TabsContent value="identity">
+          <Card className="gap-0 divide-y divide-border py-0">
+            <DetailRow label="Providers">
+              {user.providers.length ? (
+                <div className="flex gap-1">
+                  {user.providers.map((p) => (
+                    <Badge key={p} variant="outline">
+                      {p}
                     </Badge>
-                  )}
-                  <Badge variant="secondary">{w.role}</Badge>
-                  <ChevronRightIcon className="size-4 text-muted-foreground" />
-                </li>
-              ))}
-            </ul>
-          )}
-        </Card>
-      </section>
+                  ))}
+                </div>
+              ) : (
+                "—"
+              )}
+            </DetailRow>
+            <DetailRow label="Email verified">{user.emailVerified ? "Yes" : "No"}</DetailRow>
+            {user.githubLogin && <DetailRow label="GitHub">@{user.githubLogin}</DetailRow>}
+            {user.gitlabLogin && <DetailRow label="GitLab">@{user.gitlabLogin}</DetailRow>}
+            <DetailRow label="Joined">{fmtDate(user.createdAt)}</DetailRow>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="workspaces">
+          <Card className="gap-0 py-0">
+            {user.workspaces.length === 0 ? (
+              <EmptyState title="No workspaces">Not a member of any workspace.</EmptyState>
+            ) : (
+              <ul className="divide-y divide-border">
+                {user.workspaces.map((w) => (
+                  <li
+                    key={w._id}
+                    onClick={() => navigate(`/workspaces/${w._id}`)}
+                    className="flex cursor-pointer items-center gap-3 px-4 py-2.5 transition-colors hover:bg-accent"
+                  >
+                    <span className="flex-1 truncate text-sm">{w.name}</span>
+                    {w.isOwner && (
+                      <Badge className="bg-primary/15 text-primary">
+                        <CrownIcon /> owner
+                      </Badge>
+                    )}
+                    <Badge variant="secondary">{w.role}</Badge>
+                    <ChevronRightIcon className="size-4 text-muted-foreground" />
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Card>
+        </TabsContent>
+
+        {/* Unmounted until selected — that is what keeps the audit subscription
+            off every visit to a user. */}
+        <TabsContent value="activity">
+          <UserActivityPanel userId={user._id} workspaces={user.workspaces} />
+        </TabsContent>
+      </Tabs>
 
       <ConfirmDialog
         open={confirming}

@@ -22,45 +22,52 @@ const PAGE_SIZE = 50;
 const MAX_WINDOW = 500;
 
 /**
- * The audit trail of one tenant — the Activity tab of the workspace detail
- * page.
+ * The audit trail of one person — the Activity tab of the user detail page.
  *
- * Deliberately not the product's timeline: that one is prose for the people who
- * did the work, this one is evidence for the operator answering "what happened
- * to this workspace, and who did it". Every row therefore carries the raw
- * `resourceType.verb` and the resource id next to the sentence — the row
- * rendering itself lives in `@/components/activity`, shared with the per-user
- * feed on the user page.
+ * The mirror image of `WorkspaceActivityPanel`: there the tenant is fixed and
+ * the actor varies, here the actor is fixed and each row says which tenant it
+ * happened in. Both narrowings are indexed server-side
+ * (`by_actor_resourceType_timestamp`, `by_actor_scope_timestamp`), so filtering
+ * costs a smaller scan rather than a bigger one.
  *
  * A tab rather than a section stacked on the detail page, because `TabsContent`
  * unmounts what isn't selected: a live subscription over an append-only audit
  * table is the console's heaviest read, and this way it only opens when someone
  * asks for it.
  */
-export function WorkspaceActivityPanel({ workspaceId }: { workspaceId: Id<"workspaces"> }) {
+export function UserActivityPanel({
+  userId,
+  workspaces,
+}: {
+  userId: Id<"users">;
+  workspaces: { _id: Id<"workspaces">; name: string }[];
+}) {
   const [resourceType, setResourceType] = useState<string>(ALL);
+  const [workspaceId, setWorkspaceId] = useState<string>(ALL);
   const [limit, setLimit] = useState(PAGE_SIZE);
   const [q, setQ] = useState("");
 
-  // Changing the filter starts a new window — keeping a 300-row limit across a
+  // Changing a filter starts a new window — keeping a 300-row limit across a
   // switch would silently re-read the whole trail under the new filter.
-  const [appliedFilter, setAppliedFilter] = useState(resourceType);
-  if (resourceType !== appliedFilter) {
-    setAppliedFilter(resourceType);
+  const filterKey = `${resourceType}|${workspaceId}`;
+  const [appliedFilter, setAppliedFilter] = useState(filterKey);
+  if (filterKey !== appliedFilter) {
+    setAppliedFilter(filterKey);
     setLimit(PAGE_SIZE);
   }
 
-  const result = useQuery(api.admin.activity.list, {
-    workspaceId,
+  const result = useQuery(api.admin.activity.listByUser, {
+    userId,
     limit,
+    workspaceId: workspaceId === ALL ? undefined : (workspaceId as Id<"workspaces">),
     resourceTypes: resourceType === ALL ? undefined : [resourceType],
   });
 
-  // Hold the last result for this workspace+filter so "Load more" — which is a
-  // *new* query, not a page appended to the old one — doesn't blank the list
-  // while the wider window loads. Keyed, so a filter change shows a real load
-  // instead of rows that no longer match it.
-  const cacheKey = `${workspaceId}|${resourceType}`;
+  // Hold the last result for this user+filter so "Load more" — which is a *new*
+  // query, not a page appended to the old one — doesn't blank the list while
+  // the wider window loads. Keyed, so a filter change shows a real load instead
+  // of rows that no longer match it.
+  const cacheKey = `${userId}|${filterKey}`;
   const [cached, setCached] = useState<{ key: string; data: typeof result } | null>(null);
   if (result !== undefined && (cached?.key !== cacheKey || cached.data !== result)) {
     setCached({ key: cacheKey, data: result });
@@ -76,14 +83,16 @@ export function WorkspaceActivityPanel({ workspaceId }: { workspaceId: Id<"works
   // happened".
   const visible = needle
     ? entries.filter((e) =>
-        [e.actorName, e.actorEmail, e.action, e.resourceName, e.oldValue, e.newValue, e.resourceId]
-          .some((field) => field?.toLowerCase().includes(needle)),
+        [e.action, e.resourceName, e.oldValue, e.newValue, e.resourceId, e.workspaceName].some(
+          (field) => field?.toLowerCase().includes(needle),
+        ),
       )
     : entries;
 
   if (data === undefined) return <LoadingPane className="min-h-40" />;
 
   const atCeiling = limit >= MAX_WINDOW;
+  const filtered = resourceType !== ALL || workspaceId !== ALL;
 
   return (
     <div className="space-y-4">
@@ -99,7 +108,31 @@ export function WorkspaceActivityPanel({ workspaceId }: { workspaceId: Id<"works
         </p>
 
         <div className="flex items-center gap-2">
-          <SearchInput value={q} onValueChange={setQ} placeholder="Search actor, action…" />
+          <SearchInput value={q} onValueChange={setQ} placeholder="Search action, resource…" />
+          {/* Shown even for a single membership: it still narrows the feed to
+              that tenant, dropping the platform-level rows that carry no scope
+              and any rows from a workspace this person has since left. */}
+          {workspaces.length > 0 && (
+            <Select value={workspaceId} onValueChange={(v) => setWorkspaceId(v ?? ALL)}>
+              <SelectTrigger className="h-9 w-44">
+                <SelectValue>
+                  {(value: string) =>
+                    value === ALL
+                      ? "All workspaces"
+                      : (workspaces.find((w) => w._id === value)?.name ?? "Workspace")
+                  }
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL}>All workspaces</SelectItem>
+                {workspaces.map((w) => (
+                  <SelectItem key={w._id} value={w._id}>
+                    {w.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
           <Select value={resourceType} onValueChange={(v) => setResourceType(v ?? ALL)}>
             <SelectTrigger className="h-9 w-44">
               <SelectValue>
@@ -124,19 +157,19 @@ export function WorkspaceActivityPanel({ workspaceId }: { workspaceId: Id<"works
             <EmptyState title="No matches">
               Nothing in the loaded window matches “{q}”. Load more to search further back.
             </EmptyState>
-          ) : resourceType !== ALL ? (
+          ) : filtered ? (
             <EmptyState title="No matching activity">
-              No {RESOURCE_LABEL[resourceType]?.toLowerCase()} events in this workspace.
+              Nothing recorded under this filter.
             </EmptyState>
           ) : (
             <EmptyState title="No activity">
-              Nothing has been recorded for this workspace yet.
+              This user hasn&apos;t done anything that leaves an audit trail yet.
             </EmptyState>
           )
         ) : (
           <ul className="divide-y divide-border">
             {visible.map((entry) => (
-              <ActivityRow key={entry._id} entry={entry} />
+              <ActivityRow key={entry._id} entry={entry} variant="user" />
             ))}
           </ul>
         )}

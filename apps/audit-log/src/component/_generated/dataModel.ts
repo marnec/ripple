@@ -77,6 +77,18 @@ export type DataModel = {
         "_creationTime",
       ];
       by_action_timestamp: ["action", "timestamp", "_creationTime"];
+      by_actor_resourceType_timestamp: [
+        "actorId",
+        "resourceType",
+        "timestamp",
+        "_creationTime",
+      ];
+      by_actor_scope_timestamp: [
+        "actorId",
+        "scope",
+        "timestamp",
+        "_creationTime",
+      ];
       by_actor_timestamp: ["actorId", "timestamp", "_creationTime"];
       by_resource: ["resourceType", "resourceId", "timestamp", "_creationTime"];
       by_retention_timestamp: [

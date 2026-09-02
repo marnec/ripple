@@ -272,6 +272,8 @@ export const api: {
         actorId: string;
         fromTimestamp?: number;
         limit?: number;
+        resourceTypes?: Array<string>;
+        scope?: string;
       },
       Array<{
         _creationTime: number;

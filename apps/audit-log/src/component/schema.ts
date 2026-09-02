@@ -56,7 +56,11 @@ export default defineSchema({
     // Query by scope with time ordering (e.g. all activity in a workspace)
     .index("by_scope_timestamp", ["scope", "timestamp"])
     // Query by scope + resource type with time ordering (filtered activity feeds)
-    .index("by_scope_resourceType_timestamp", ["scope", "resourceType", "timestamp"]),
+    .index("by_scope_resourceType_timestamp", ["scope", "resourceType", "timestamp"])
+    // Query by actor + resource type with time ordering (one person's filtered feed)
+    .index("by_actor_resourceType_timestamp", ["actorId", "resourceType", "timestamp"])
+    // Query by actor + scope with time ordering (one person's activity in one workspace)
+    .index("by_actor_scope_timestamp", ["actorId", "scope", "timestamp"]),
 
   /**
    * Configuration table for component settings.

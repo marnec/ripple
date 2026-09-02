@@ -217,7 +217,9 @@ export class AuditLog {
   }
 
   /**
-   * Query audit logs by actor (user).
+   * Query audit logs by actor (user), optionally narrowed to one scope and/or
+   * a set of resource types. Both narrowings are index-driven — see
+   * `lib.queryByActor`.
    */
   async queryByActor(
     ctx: QueryCtx,
@@ -226,6 +228,8 @@ export class AuditLog {
       limit?: number;
       fromTimestamp?: number;
       actions?: string[];
+      scope?: string;
+      resourceTypes?: string[];
     }
   ) {
     return await ctx.runQuery(this.component.lib.queryByActor, args);
@@ -539,6 +543,8 @@ export function exposeAuditLogApi(
         limit: v.optional(v.number()),
         fromTimestamp: v.optional(v.number()),
         actions: v.optional(v.array(v.string())),
+        scope: v.optional(v.string()),
+        resourceTypes: v.optional(v.array(v.string())),
       },
       handler: async (ctx, args) => {
         await options.auth(ctx, { type: "read" });

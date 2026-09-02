@@ -242,3 +242,219 @@ describe("admin/activity.list", () => {
     expect(entries[0].resourceName).toBeUndefined();
   });
 });
+
+describe("admin/activity.listByUser", () => {
+  it("is gated on platform admin", async () => {
+    const t = createTestContext();
+    const { userId, asUser } = await setupWorkspaceWithAdmin(t);
+
+    await expect(asUser.query(api.admin.activity.listByUser, { userId })).rejects.toThrow(
+      /Not authorized/,
+    );
+
+    const { asAdmin } = await makePlatformAdmin(t);
+    expect(await asAdmin.query(api.admin.activity.listByUser, { userId })).toEqual({
+      entries: [],
+      hasMore: false,
+    });
+  });
+
+  it("returns one actor's trail across every workspace, newest first", async () => {
+    const t = createTestContext();
+    const { userId, workspaceId } = await setupWorkspaceWithAdmin(t);
+    const { workspaceId: otherWorkspaceId } = await setupWorkspaceWithAdmin(t, "Other");
+    const { userId: strangerId } = await setupAuthenticatedUser(t, {
+      name: "Stranger",
+      email: "stranger@example.com",
+    });
+    const { asAdmin } = await makePlatformAdmin(t);
+
+    withMonotonicClock();
+    await t.run(async (ctx) => {
+      await logActivity(ctx, {
+        userId,
+        resourceType: "documents",
+        resourceId: "doc-1",
+        action: "created",
+        resourceName: "Spec",
+        scope: workspaceId,
+      });
+      // Same person, a different tenant — this is exactly what the workspace
+      // page hides and this one must show.
+      await logActivity(ctx, {
+        userId,
+        resourceType: "tasks",
+        resourceId: "task-1",
+        action: "created",
+        resourceName: "Ship it",
+        scope: otherWorkspaceId,
+      });
+      // Someone else in a workspace this user belongs to — must not appear.
+      await logActivity(ctx, {
+        userId: strangerId,
+        resourceType: "documents",
+        resourceId: "doc-2",
+        action: "created",
+        scope: workspaceId,
+      });
+    });
+
+    const { entries, hasMore } = await asAdmin.query(api.admin.activity.listByUser, {
+      userId,
+    });
+
+    expect(hasMore).toBe(false);
+    expect(entries.map((e) => e.resourceId)).toEqual(["task-1", "doc-1"]);
+    expect(entries[0]).toMatchObject({
+      action: "tasks.created",
+      actorId: userId,
+      actorName: "Test User",
+      actorIsUser: true,
+      workspaceId: otherWorkspaceId,
+      workspaceName: "Other",
+    });
+    expect(entries[1]).toMatchObject({
+      workspaceId,
+      workspaceName: "Test Workspace",
+    });
+  });
+
+  it("narrows by workspace and by resource type, both server-side", async () => {
+    const t = createTestContext();
+    const { userId, workspaceId } = await setupWorkspaceWithAdmin(t);
+    const { workspaceId: otherWorkspaceId } = await setupWorkspaceWithAdmin(t, "Other");
+    const { asAdmin } = await makePlatformAdmin(t);
+
+    withMonotonicClock();
+    await t.run(async (ctx) => {
+      for (const [scope, resourceType, resourceId] of [
+        [workspaceId, "documents", "here-doc"],
+        [workspaceId, "tasks", "here-task"],
+        [otherWorkspaceId, "documents", "there-doc"],
+        [otherWorkspaceId, "tasks", "there-task"],
+      ] as const) {
+        await logActivity(ctx, {
+          userId,
+          resourceType,
+          resourceId,
+          action: "created",
+          scope,
+        });
+      }
+    });
+
+    const byWorkspace = await asAdmin.query(api.admin.activity.listByUser, {
+      userId,
+      workspaceId,
+    });
+    expect(byWorkspace.entries.map((e) => e.resourceId).sort()).toEqual([
+      "here-doc",
+      "here-task",
+    ]);
+
+    const byType = await asAdmin.query(api.admin.activity.listByUser, {
+      userId,
+      resourceTypes: ["tasks"],
+    });
+    expect(byType.entries.map((e) => e.resourceId).sort()).toEqual(["here-task", "there-task"]);
+
+    // Both at once: the type filter is indexed, the scope rides along as a
+    // stream filter — the pair must still intersect, not union.
+    const both = await asAdmin.query(api.admin.activity.listByUser, {
+      userId,
+      workspaceId,
+      resourceTypes: ["tasks"],
+    });
+    expect(both.entries.map((e) => e.resourceId)).toEqual(["here-task"]);
+  });
+
+  it("still fills the window under a filter — the tail signal stays truthful", async () => {
+    const t = createTestContext();
+    const { userId, workspaceId } = await setupWorkspaceWithAdmin(t);
+    const { asAdmin } = await makePlatformAdmin(t);
+
+    withMonotonicClock();
+    await t.run(async (ctx) => {
+      // Interleaved, so a filter applied *after* truncating to `limit` would
+      // return one row instead of two.
+      for (let i = 0; i < 4; i++) {
+        await logActivity(ctx, {
+          userId,
+          resourceType: i % 2 === 0 ? "documents" : "tasks",
+          resourceId: `res-${i}`,
+          action: "created",
+          scope: workspaceId,
+        });
+      }
+    });
+
+    const page = await asAdmin.query(api.admin.activity.listByUser, {
+      userId,
+      resourceTypes: ["documents"],
+      limit: 2,
+    });
+    expect(page.entries.map((e) => e.resourceId)).toEqual(["res-2", "res-0"]);
+    expect(page.hasMore).toBe(false);
+  });
+
+  it("windows with hasMore so the section knows there is a tail", async () => {
+    const t = createTestContext();
+    const { userId, workspaceId } = await setupWorkspaceWithAdmin(t);
+    const { asAdmin } = await makePlatformAdmin(t);
+
+    withMonotonicClock();
+    await t.run(async (ctx) => {
+      for (let i = 0; i < 5; i++) {
+        await logActivity(ctx, {
+          userId,
+          resourceType: "documents",
+          resourceId: `doc-${i}`,
+          action: "created",
+          scope: workspaceId,
+        });
+      }
+    });
+
+    const first = await asAdmin.query(api.admin.activity.listByUser, { userId, limit: 2 });
+    expect(first.entries.map((e) => e.resourceId)).toEqual(["doc-4", "doc-3"]);
+    expect(first.hasMore).toBe(true);
+
+    const all = await asAdmin.query(api.admin.activity.listByUser, { userId, limit: 5 });
+    expect(all.entries).toHaveLength(5);
+    expect(all.hasMore).toBe(false);
+  });
+
+  it("survives a deleted workspace and an unscoped entry", async () => {
+    const t = createTestContext();
+    const { userId, workspaceId } = await setupWorkspaceWithAdmin(t);
+    const { asAdmin } = await makePlatformAdmin(t);
+
+    withMonotonicClock();
+    await t.run(async (ctx) => {
+      await logActivity(ctx, {
+        userId,
+        resourceType: "documents",
+        resourceId: "doc-1",
+        action: "created",
+        scope: workspaceId,
+      });
+      // No scope at all — platform-level events exist and must not drop out.
+      await logActivity(ctx, {
+        userId,
+        resourceType: "workspaces",
+        resourceId: "ws-x",
+        action: "created",
+      });
+      await ctx.db.delete(workspaceId);
+    });
+
+    const { entries } = await asAdmin.query(api.admin.activity.listByUser, { userId });
+    const byResource = new Map(entries.map((e) => [e.resourceId, e]));
+
+    // The workspace row is gone; its id is still the scope, so the row keeps
+    // the link and loses only the name.
+    expect(byResource.get("doc-1")).toMatchObject({ workspaceId });
+    expect(byResource.get("doc-1")?.workspaceName).toBeUndefined();
+    expect(byResource.get("ws-x")?.workspaceId).toBeUndefined();
+  });
+});

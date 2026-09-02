@@ -219,7 +219,23 @@ export const queryByActionResource = query({
 });
 
 /**
- * Query audit logs by actor (user).
+ * Query audit logs by actor (user), optionally narrowed to a scope and/or a
+ * set of resource types.
+ *
+ * Every narrowing is a stream, never a post-`take` filter: filtering an array
+ * that has already been truncated to `limit` silently returns fewer rows than
+ * asked for and breaks any caller using a `limit + 1` over-fetch to detect a
+ * tail. `filterWith` keeps pulling from the index until `limit` rows match.
+ *
+ * Index selection:
+ * - resourceTypes → one `by_actor_resourceType_timestamp` stream per type,
+ *   merged on timestamp (the same shape `queryByScope` uses).
+ * - scope alone → `by_actor_scope_timestamp`.
+ * - both → the per-type streams above with scope applied via `filterWith`.
+ *   A fully indexed answer would need a four-column
+ *   `["actorId", "scope", "resourceType", "timestamp"]` index, which is not
+ *   worth the write amplification on an append-only audit table for what is a
+ *   narrow operator query — the type filter already bounds the scan.
  */
 export const queryByActor = query({
   args: {
@@ -227,23 +243,71 @@ export const queryByActor = query({
     limit: v.optional(v.number()),
     fromTimestamp: v.optional(v.number()),
     actions: v.optional(v.array(v.string())),
+    scope: v.optional(v.string()),
+    resourceTypes: v.optional(v.array(v.string())),
   },
   returns: v.array(auditLogValidator),
   handler: async (ctx, args) => {
-    let results = await ctx.db
-      .query("auditLogs")
-      .withIndex("by_actor_timestamp", (q) => {
-        const q2 = q.eq("actorId", args.actorId);
-        return args.fromTimestamp ? q2.gte("timestamp", args.fromTimestamp) : q2;
-      })
-      .order("desc")
-      .take(args.limit ?? 50);
+    const limit = args.limit ?? 50;
+    const db = ctx.db as unknown as SchemaReader;
+    const resourceTypes =
+      args.resourceTypes && args.resourceTypes.length > 0
+        ? args.resourceTypes
+        : undefined;
 
-    if (args.actions && args.actions.length > 0) {
-      results = results.filter((log) => args.actions!.includes(log.action));
+    let streams;
+    if (resourceTypes) {
+      streams = resourceTypes.map((resourceType) => {
+        const s = stream(db, schema)
+          .query("auditLogs")
+          .withIndex("by_actor_resourceType_timestamp", (q) => {
+            const q2 = q
+              .eq("actorId", args.actorId)
+              .eq("resourceType", resourceType);
+            return args.fromTimestamp
+              ? q2.gte("timestamp", args.fromTimestamp)
+              : q2;
+          })
+          .order("desc");
+        return args.scope === undefined
+          ? s
+          : s.filterWith(async (doc) => doc.scope === args.scope);
+      });
+    } else if (args.scope !== undefined) {
+      streams = [
+        stream(db, schema)
+          .query("auditLogs")
+          .withIndex("by_actor_scope_timestamp", (q) => {
+            const q2 = q.eq("actorId", args.actorId).eq("scope", args.scope);
+            return args.fromTimestamp
+              ? q2.gte("timestamp", args.fromTimestamp)
+              : q2;
+          })
+          .order("desc"),
+      ];
+    } else {
+      streams = [
+        stream(db, schema)
+          .query("auditLogs")
+          .withIndex("by_actor_timestamp", (q) => {
+            const q2 = q.eq("actorId", args.actorId);
+            return args.fromTimestamp
+              ? q2.gte("timestamp", args.fromTimestamp)
+              : q2;
+          })
+          .order("desc"),
+      ];
     }
 
-    return results;
+    let merged =
+      streams.length === 1 ? streams[0] : mergedStream(streams, ["timestamp"]);
+
+    if (args.actions && args.actions.length > 0) {
+      const actions = args.actions;
+      merged = merged.filterWith(async (doc) => actions.includes(doc.action));
+    }
+
+    return merged.take(limit);
   },
 });
 

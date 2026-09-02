@@ -27,3 +27,14 @@ export function useRouteSegments(): string[] {
 export function navigate(to: string) {
   window.location.hash = to;
 }
+
+/**
+ * The tab a `#/<section>/<id>/<sub>` URL selects.
+ *
+ * Detail pages put their tab in the route so a tab is linkable and survives a
+ * reload; a missing or unrecognised segment falls back to the first tab, which
+ * is what makes the bare `#/<section>/<id>` a valid URL.
+ */
+export function resolveTab<T extends string>(sub: string | undefined, tabs: readonly T[]): T {
+  return tabs.includes(sub as T) ? (sub as T) : tabs[0];
+}

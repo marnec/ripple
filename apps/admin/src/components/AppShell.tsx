@@ -12,7 +12,6 @@ import { cn } from "@/lib/utils";
 import { InvitesPage } from "@/pages/Invites";
 import { JobsPage } from "@/pages/Jobs";
 import { UserDetailPage, UsersPage } from "@/pages/Users";
-import { WorkspaceActivityPage } from "@/pages/WorkspaceActivity";
 import { WorkspaceDetailPage, WorkspacesPage } from "@/pages/Workspaces";
 import { useAuthActions } from "@convex-dev/auth/react";
 import { api } from "@convex/_generated/api";
@@ -80,13 +79,14 @@ function Routed({ segments }: { segments: string[] }) {
     // rendering the same page for both means no blank frame and no remount.
     case undefined:
     case "users":
-      return id ? <UserDetailPage userId={id as Id<"users">} /> : <UsersPage />;
+      // `sub` is the detail page's tab — it owns the fallback for an unknown
+      // one, so the router just hands the segment over.
+      return id ? <UserDetailPage userId={id as Id<"users">} tab={sub} /> : <UsersPage />;
     case "workspaces":
-      if (!id) return <WorkspacesPage />;
-      return sub === "activity" ? (
-        <WorkspaceActivityPage workspaceId={id as Id<"workspaces">} />
+      return id ? (
+        <WorkspaceDetailPage workspaceId={id as Id<"workspaces">} tab={sub} />
       ) : (
-        <WorkspaceDetailPage workspaceId={id as Id<"workspaces">} />
+        <WorkspacesPage />
       );
     case "invites":
       return <InvitesPage />;

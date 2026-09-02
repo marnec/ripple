@@ -287,6 +287,8 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           actorId: string;
           fromTimestamp?: number;
           limit?: number;
+          resourceTypes?: Array<string>;
+          scope?: string;
         },
         Array<{
           _creationTime: number;
