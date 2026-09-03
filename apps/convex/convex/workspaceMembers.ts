@@ -60,6 +60,14 @@ export const membersWithRoles = query({
     email: v.optional(v.string()),
     image: v.optional(v.string()),
     joinedAt: v.number(),
+    // Whether the member has an account-level identity for each provider
+    // (`users.githubLogin` / `users.gitlabUserId`, written at sign-in or by
+    // "connect your account"). Presence only, never the login itself: the
+    // members list uses it to nudge admins about who assignee sync cannot
+    // reach. Read off the user row already loaded for `name`, so there is no
+    // per-member round trip.
+    githubConnected: v.boolean(),
+    gitlabConnected: v.boolean(),
   })),
   handler: async (ctx, { workspaceId }) => {
     await requireWorkspaceMember(ctx, workspaceId);
@@ -82,6 +90,8 @@ export const membersWithRoles = query({
           email: user.email,
           image: user.image,
           joinedAt: m._creationTime,
+          githubConnected: user.githubLogin !== undefined,
+          gitlabConnected: user.gitlabUserId !== undefined,
         };
       }),
     );

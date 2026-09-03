@@ -220,6 +220,7 @@ function normalizeIssuesEvent(payload: unknown): NormalizedIssueEvent | null {
     return {
       kind: "issue.opened",
       ...sharedIssueFields(p.issue),
+      ...labelsIfPresent(p.issue),
     };
   }
 
@@ -245,6 +246,7 @@ function normalizeIssuesEvent(payload: unknown): NormalizedIssueEvent | null {
     return {
       kind: "issue.reopened",
       ...sharedIssueFields(p.issue),
+      ...labelsIfPresent(p.issue),
     };
   }
 
@@ -263,7 +265,7 @@ function normalizeIssuesEvent(payload: unknown): NormalizedIssueEvent | null {
       externalIssueId: p.issue.node_id,
       issueNumber: p.issue.number,
       externalUpdatedAt: Date.parse(p.issue.updated_at),
-      labels: (p.issue.labels ?? []).map((l) => l.name),
+      labels: issueLabelNames(p.issue),
     };
   }
 
@@ -305,6 +307,20 @@ function normalizeInstallationRepositoriesEvent(
     externalAccountId: String(p.installation.id),
     externalRepoIds: (p.repositories_removed ?? []).map((r) => r.node_id),
   };
+}
+
+/** The issue's current label names — every `issues.*` payload carries the full set. */
+function issueLabelNames(issue: GithubIssue): string[] {
+  return (issue.labels ?? []).map((l) => l.name);
+}
+
+/**
+ * `labels` for the create-shaped events, only when the payload actually
+ * carries the array: an adapter reports what the provider said, it does not
+ * invent an empty set. (Real GitHub payloads always carry it.)
+ */
+function labelsIfPresent(issue: GithubIssue): { labels?: string[] } {
+  return issue.labels ? { labels: issueLabelNames(issue) } : {};
 }
 
 /**

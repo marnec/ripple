@@ -396,6 +396,40 @@ http.route({
     // than a completed install.
     if (!nonce) return fail();
 
+    // One route, two round trips. The App's user-authorization URL is shared
+    // by "connect an existing installation" (admin, binds an account to the
+    // workspace) and "connect your GitHub account" (any member, records which
+    // GitHub user they are). The nonce says which was started; each finalizer
+    // consumes it and refuses the other purpose, so this peek only picks the
+    // door — it does not open it. Identity outcomes carry their own flags so
+    // they never collide with the install picker's `github_connect`.
+    const purpose = await ctx.runQuery(
+      internal.integrations.core.installFlow.peekInstallStatePurpose,
+      { nonce },
+    );
+    if (purpose === "identity") {
+      const failIdentity = () =>
+        Response.redirect(`${siteUrl}/workspaces?github_identity=error`, 302);
+      if (!code) return failIdentity();
+      let identity;
+      try {
+        identity = await ctx.runAction(
+          internal.integrations.github.setupAction.finalizeIdentity,
+          { nonce, code },
+        );
+      } catch (err) {
+        console.error("[identity] github callback threw", err);
+        return failIdentity();
+      }
+      if (!identity) return failIdentity();
+      const returnTo =
+        identity.returnTo ?? `/workspaces/${identity.workspaceId}`;
+      return Response.redirect(
+        `${siteUrl}${returnTo}?github_identity=success`,
+        302,
+      );
+    }
+
     // Backstop. `finalizeInstall` returns null on every failure it knows
     // about; this keeps the "always redirects" contract even for one it
     // doesn't, which would otherwise strand the user on a raw 500 outside the
@@ -441,6 +475,9 @@ http.route({
  * (see the GitHub setup route above). Success lands on the originating
  * workspace's settings. The single non-redirect exit is a deployment with no
  * `SITE_URL`.
+ *
+ * Shared with "connect your GitLab account" (`gitlab/identityAction`), told
+ * apart by the nonce's purpose; identity outcomes carry `?gitlab_identity=`.
  */
 http.route({
   path: "/integrations/gitlab/oauth/callback",
@@ -455,7 +492,42 @@ http.route({
     const fail = () =>
       Response.redirect(`${siteUrl}/workspaces?gitlab_oauth=error`, 302);
 
-    if (!code || !nonce) return fail();
+    if (!nonce) return fail();
+
+    // One route, two round trips — see the GitHub setup route above. The
+    // nonce says whether this is an admin binding an account to the workspace
+    // or a member proving which GitLab user they are; each finalizer consumes
+    // it and refuses the other purpose, so this peek only picks the door.
+    // Peeked before the `code` check so a code-less identity callback still
+    // reports with the identity flag.
+    const purpose = await ctx.runQuery(
+      internal.integrations.core.installFlow.peekInstallStatePurpose,
+      { nonce },
+    );
+    if (purpose === "identity") {
+      const failIdentity = () =>
+        Response.redirect(`${siteUrl}/workspaces?gitlab_identity=error`, 302);
+      if (!code) return failIdentity();
+      let identity;
+      try {
+        identity = await ctx.runAction(
+          internal.integrations.gitlab.identityAction.finalizeIdentity,
+          { nonce, code },
+        );
+      } catch (err) {
+        console.error("[gitlab/identity] callback threw", err);
+        return failIdentity();
+      }
+      if (!identity) return failIdentity();
+      const returnTo =
+        identity.returnTo ?? `/workspaces/${identity.workspaceId}`;
+      return Response.redirect(
+        `${siteUrl}${returnTo}?gitlab_identity=success`,
+        302,
+      );
+    }
+
+    if (!code) return fail();
 
     // Backstop, as on the GitHub setup route above — and here the user has
     // already granted a live `api`-scope token, so stranding them on a 500

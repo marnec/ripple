@@ -496,3 +496,26 @@ describe("integrations/gitlab/webhook.handleGitlabWebhook", () => {
     expect(await countTasks(t, projectId)).toBe(0);
   });
 });
+
+describe("integrations/gitlab/webhook.normalize — labels at creation", () => {
+  it("carries the issue's labels on open and reopen", () => {
+    const withLabels = (action: string) => ({
+      ...issuePayload(action),
+      labels: [{ title: "bug" }, { title: "P1" }],
+    });
+    expect(normalize(withLabels("open"))).toMatchObject({
+      kind: "issue.opened",
+      labels: ["bug", "P1"],
+    });
+    expect(normalize(withLabels("reopen"))).toMatchObject({
+      kind: "issue.reopened",
+      labels: ["bug", "P1"],
+    });
+  });
+
+  it("reports an empty set for an unlabeled open, and nothing when the payload has no label data", () => {
+    expect(normalize({ ...issuePayload("open"), labels: [] })).toMatchObject({ labels: [] });
+    const noData = normalize(issuePayload("open"));
+    expect(noData && "labels" in noData).toBe(false);
+  });
+});

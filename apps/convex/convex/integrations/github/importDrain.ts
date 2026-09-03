@@ -29,6 +29,7 @@ interface RawGithubIssue {
   updated_at: string;
   user: { login: string; avatar_url: string; html_url: string };
   pull_request?: unknown; // GitHub conflates PRs and issues on the list endpoint
+  labels?: { name: string }[];
 }
 
 /**
@@ -67,6 +68,7 @@ export function normalizeImportBatch(
       const opened: NormalizedIssueOpenedEvent = {
         kind: "issue.opened",
         ...shared,
+        ...(issue.labels ? { labels: issue.labels.map((l) => l.name) } : {}),
       };
       out.push(opened);
     }

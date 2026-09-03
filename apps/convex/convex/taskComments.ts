@@ -34,6 +34,10 @@ export const list = query({
       avatarUrl: v.string(),
       url: v.string(),
     })),
+    // The private lane (see schema): a team-only note on a linked task.
+    // Absent for public comments, so the timeline renders its lock chip only
+    // where one applies.
+    internal: v.optional(v.boolean()),
   })),
   handler: async (ctx, { taskId }) => {
     await requireResourceMember(ctx, "tasks", taskId);
@@ -76,6 +80,7 @@ export const list = query({
         author: getUserDisplayName(user),
         image: user?.image,
         externalAuthor: externalAuthorByComment.get(comment._id),
+        internal: comment.internal,
       };
     });
 
@@ -90,16 +95,33 @@ export const create = mutation({
     body: v.string(),
     /**
      * The same content rendered to markdown by the client editor, for the
-     * outbound GitHub push. BlockNote→markdown is lossy for Ripple-only inline
-     * content (mentions), matching the description-sync contract; we render it
-     * client-side because Convex can't carry the BlockNote/JSDOM bundle. Not
-     * stored — only threaded to the outbound dispatcher.
+     * outbound provider push; rendered client-side because Convex can't carry
+     * the BlockNote/JSDOM bundle. Mentions arrive as `@user:<id>` /
+     * `@event:<id>` / `@series:<id>` tokens (the specs' `toExternalHTML`), and
+     * the dispatcher rewrites them to the provider's `@login` or a plain name
+     * (`integrations/core/mentionTokens.ts`) — the one Ripple-only inline
+     * content that survives the trip. Not stored — only threaded to the
+     * outbound dispatcher.
      */
     bodyMarkdown: v.string(),
+    /**
+     * The private lane: keep this comment in Ripple instead of replying on
+     * the linked issue. Honoured only when the task is linked — on an
+     * unlinked task there is nowhere else a comment could go, so the flag is
+     * dropped rather than stored as meaningless state. Immutable afterwards.
+     */
+    internal: v.optional(v.boolean()),
   },
   returns: v.id("taskComments"),
-  handler: async (ctx, { taskId, body, bodyMarkdown }) => {
+  handler: async (ctx, { taskId, body, bodyMarkdown, internal }) => {
     const { userId, resource: task } = await requireResourceMember(ctx, "tasks", taskId);
+
+    const isLinked =
+      (await ctx.db
+        .query("taskIntegrationLinks")
+        .withIndex("by_task", (q) => q.eq("taskId", taskId))
+        .unique()) !== null;
+    const isPrivate = internal === true && isLinked;
 
     // Insert comment
     const commentId = await ctx.db.insert("taskComments", {
@@ -107,6 +129,7 @@ export const create = mutation({
       userId,
       body,
       deleted: false,
+      ...(isPrivate ? { internal: true } : {}),
     });
 
     // Log comment creation activity
@@ -156,7 +179,11 @@ export const create = mutation({
       });
     }
 
-    await maybeEnqueueCommentCreate(ctx, commentId, bodyMarkdown);
+    // A private note never leaves Ripple. (The dispatcher checks the row too,
+    // so a link inserted by hand cannot leak it either.)
+    if (!isPrivate) {
+      await maybeEnqueueCommentCreate(ctx, commentId, bodyMarkdown);
+    }
 
     return commentId;
   },
@@ -179,7 +206,7 @@ export const update = mutation({
     id: v.id("taskComments"),
     /** BlockNote JSON — see `create`. */
     body: v.string(),
-    /** Markdown rendering for the outbound GitHub push — see `create`. */
+    /** Markdown rendering for the outbound provider push — see `create`. */
     bodyMarkdown: v.string(),
   },
   returns: v.null(),

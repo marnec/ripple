@@ -132,7 +132,7 @@ export function buildGithubGateway(gh: InstallationRequester): OutboundGateway {
       };
     },
 
-    async createIssue({ projectRef, title, body }) {
+    async createIssue({ projectRef, title, body, labels }) {
       const res = await gh.request<{
         node_id: string;
         number: number;
@@ -141,7 +141,11 @@ export function buildGithubGateway(gh: InstallationRequester): OutboundGateway {
       }>({
         method: "POST",
         path: `/repos/${projectRef}/issues`,
-        body: { title, body },
+        body: {
+          title,
+          body,
+          ...(labels && labels.length > 0 ? { labels } : {}),
+        },
       });
       const decision = classifyResponse(toResponse(res));
       if (decision === "success") {

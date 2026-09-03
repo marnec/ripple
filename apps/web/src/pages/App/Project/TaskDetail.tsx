@@ -261,6 +261,7 @@ export function TaskActivitySection({
       workspaceId={detail.workspaceId}
       members={detail.members}
       provider={detail.linkedProvider}
+      isLinked={detail.isGithubLinked}
       fillHeight
       collapsed={collapsed}
       onToggle={onToggle}

@@ -195,3 +195,52 @@ describe("taskComments.list with external author", () => {
     expect(comments[0]?.externalAuthor).toBeUndefined();
   });
 });
+
+/**
+ * The private lane must be visible to the timeline so it can render the lock
+ * chip. Both readers — `taskComments.list` and `taskActivity.timeline` —
+ * expose it; public comments (every row without the column) expose nothing.
+ */
+describe("taskComments.list / taskActivity.timeline expose the private lane", () => {
+  let savedAppId: string | undefined;
+  let savedKey: string | undefined;
+  beforeEach(() => {
+    vi.useFakeTimers();
+    savedAppId = process.env.GITHUB_APP_ID;
+    savedKey = process.env.GITHUB_APP_PRIVATE_KEY;
+    delete process.env.GITHUB_APP_ID;
+    delete process.env.GITHUB_APP_PRIVATE_KEY;
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    if (savedAppId !== undefined) process.env.GITHUB_APP_ID = savedAppId;
+    if (savedKey !== undefined) process.env.GITHUB_APP_PRIVATE_KEY = savedKey;
+  });
+
+  it("marks a private note internal and a public reply not", async () => {
+    const t = createTestContext();
+    const { asUser, taskId } = await setupTaskWithLink(t);
+
+    const privateId = await asUser.mutation(api.taskComments.create, {
+      taskId,
+      body: "[]",
+      bodyMarkdown: "private",
+      internal: true,
+    });
+    const publicId = await asUser.mutation(api.taskComments.create, {
+      taskId,
+      body: "[]",
+      bodyMarkdown: "public",
+    });
+    await t.finishAllScheduledFunctions(vi.runAllTimers);
+
+    const listed = await asUser.query(api.taskComments.list, { taskId });
+    expect(listed.find((c) => c._id === privateId)?.internal).toBe(true);
+    expect(listed.find((c) => c._id === publicId)?.internal ?? undefined).toBeUndefined();
+
+    const timeline = await asUser.query(api.taskActivity.timeline, { taskId });
+    const comments = timeline.filter((i) => i.kind === "comment");
+    expect(comments.find((c) => c._id === privateId)?.internal).toBe(true);
+    expect(comments.find((c) => c._id === publicId)?.internal ?? undefined).toBeUndefined();
+  });
+});

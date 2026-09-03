@@ -21,6 +21,7 @@ import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 import { BranchStatusMapEditor } from "../Workspace/BranchStatusMapEditor";
 import { BranchSourceDefaultsEditor } from "../Workspace/BranchSourceDefaultsEditor";
+import { PriorityLabelsEditor } from "../Workspace/PriorityLabelsEditor";
 
 export type IntegrationLink = FunctionReturnType<
   typeof api.integrations.core.links.linksForProject
@@ -335,6 +336,10 @@ function IntegrationLinkRow({
           defaultBaseBranch: link.defaultBaseBranch,
           askBranchSourceEachTime: link.askBranchSourceEachTime,
         }}
+      />
+      <PriorityLabelsEditor
+        link={{ _id: link._id, priorityLabels: link.priorityLabels }}
+        providerTitle={providerTitle}
       />
       <InboundIssueSyncToggle
         linkId={link._id}

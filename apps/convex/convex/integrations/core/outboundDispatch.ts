@@ -3,7 +3,7 @@ import { ConvexError } from "convex/values";
 import { components } from "../../_generated/api";
 import type { MutationCtx } from "../../_generated/server";
 import type { Doc, Id } from "../../_generated/dataModel";
-import { normalizeTagList } from "../../tagSync";
+import { withPriorityLabel } from "./priorityLabels";
 import { diffSet, normalizeLoginList } from "./syncableSet";
 import { memberToExternalAssigneeRef } from "./identity";
 import { getIntegrationForLink } from "./integrationLookups";
@@ -17,6 +17,7 @@ import {
   appendRippleCommentMarker,
   appendRippleTaskMarker,
 } from "./rippleMarker";
+import { renderMentionTokens } from "./mentionTokens";
 
 /**
  * Outbound dispatchers. Called by `tasks.update`, `tasks.updatePosition`, and
@@ -107,7 +108,9 @@ async function resolveTaskTarget(
 /** Routing for a comment-keyed push, resolved from the comment-link row. */
 interface OutboundCommentTarget {
   commentLink: Doc<"taskCommentIntegrationLinks">;
+  projectLink: Doc<"projectIntegrationLinks">;
   adapter: OutboundAdapter;
+  provider: string;
   credentialRef: string;
   projectRef: string;
   issueRef: number;
@@ -142,7 +145,9 @@ async function resolveCommentLinkTarget(
 
   return {
     commentLink,
+    projectLink,
     adapter,
+    provider: integration.provider,
     credentialRef: integration.externalAccountId,
     projectRef: projectLink.externalRepoFullName,
     issueRef: task?.externalRefs?.[0]?.issueNumber ?? 0,
@@ -214,6 +219,17 @@ export async function enqueueIssueCreate(
   // for GitHub Apps too.
   const taggedBody = appendRippleTaskMarker(args.body, args.taskId);
 
+  // The task's tags (plus its priority label, when the link maps one) go in
+  // the create call itself, so the issue is born with them rather than
+  // acquiring them on a later edit, if ever. The recorder seeds the link's
+  // mirror from the same set, which is what makes the bounce-back `labeled`
+  // webhooks echoes. An untagged task on an unmapped link sends nothing.
+  const labels = withPriorityLabel(
+    task.labels ?? [],
+    task.priority,
+    projectLink.priorityLabels,
+  );
+
   const runId = await retrier.run(
     ctx,
     adapter.ops.createIssue,
@@ -222,6 +238,7 @@ export async function enqueueIssueCreate(
       projectIntegrationLinkId: args.projectIntegrationLinkId,
       title: args.title,
       body: taggedBody,
+      ...(labels.length > 0 ? { labels } : {}),
       credentialRef: integration.externalAccountId,
       projectRef: projectLink.externalRepoFullName,
     },
@@ -327,12 +344,18 @@ export async function enqueueDescriptionPush(
   const issueRef = task.externalRefs?.[0]?.issueNumber ?? 0;
   if (!issueRef) throw new ConvexError("Task has no GitHub issue number");
 
+  // Mentions leave the browser as tokens; the provider gets logins / names.
+  const markdown = await renderMentionTokens(ctx, args.markdown, {
+    workspaceId: projectLink.workspaceId,
+    provider: integration.provider,
+  });
+
   const runId = await retrier.run(
     ctx,
     adapter.ops.description,
     {
       taskId: args.taskId,
-      markdown: args.markdown,
+      markdown,
       credentialRef: integration.externalAccountId,
       projectRef: projectLink.externalRepoFullName,
       issueRef,
@@ -359,7 +382,14 @@ export async function maybeEnqueueLabelsPush(
   const target = await resolveTaskTarget(ctx, taskId);
   if (!target) return;
 
-  const nextLabels = normalizeTagList(target.task.labels ?? []);
+  // Tags plus the label the task's priority maps to (`priorityLabels.ts`);
+  // the diff below is against the FULL provider set the link mirrors, so a
+  // priority change swaps its label and a tag edit leaves it in place.
+  const nextLabels = withPriorityLabel(
+    target.task.labels ?? [],
+    target.task.priority,
+    target.projectLink.priorityLabels,
+  );
   const { add, remove, changed } = diffSet(
     nextLabels,
     target.link.externalLabels ?? [],
@@ -463,6 +493,9 @@ export async function maybeEnqueueCommentCreate(
 ): Promise<void> {
   const comment = await ctx.db.get(commentId);
   if (!comment) return;
+  // The private lane: a team-only note never leaves Ripple, whatever else is
+  // true of the task's link.
+  if (comment.internal) return;
 
   const target = await resolveTaskTarget(ctx, comment.taskId);
   if (!target) return;
@@ -477,7 +510,14 @@ export async function maybeEnqueueCommentCreate(
   // is closed by then and the marker is provider-side metadata we would rather
   // not leave behind. `syncIn` strips either marker before storing an inbound
   // body, so a human editing this comment upstream never round-trips it back.
-  const taggedBody = appendRippleCommentMarker(bodyMarkdown, commentId);
+  //
+  // Mention tokens are rendered first: the marker is provider-side metadata
+  // appended to what the provider should see, and that is the rendered body.
+  const rendered = await renderMentionTokens(ctx, bodyMarkdown, {
+    workspaceId: target.projectLink.workspaceId,
+    provider: target.provider,
+  });
+  const taggedBody = appendRippleCommentMarker(rendered, commentId);
 
   const runId = await retrier.run(
     ctx,
@@ -516,9 +556,17 @@ export async function maybeEnqueueCommentUpdate(
 ): Promise<void> {
   const comment = await ctx.db.get(commentId);
   if (!comment) return;
+  // Private notes have no upstream twin to edit; defensive against a
+  // comment-link row that should never exist for one.
+  if (comment.internal) return;
 
   const target = await resolveCommentLinkTarget(ctx, commentId);
   if (!target) return;
+
+  const body = await renderMentionTokens(ctx, bodyMarkdown, {
+    workspaceId: target.projectLink.workspaceId,
+    provider: target.provider,
+  });
 
   const runId = await retrier.run(
     ctx,
@@ -526,7 +574,7 @@ export async function maybeEnqueueCommentUpdate(
     {
       commentLinkId: target.commentLink._id,
       externalCommentId: target.commentLink.externalCommentId,
-      body: bodyMarkdown,
+      body,
       credentialRef: target.credentialRef,
       projectRef: target.projectRef,
       issueRef: target.issueRef,

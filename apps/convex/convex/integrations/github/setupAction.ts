@@ -6,6 +6,7 @@ import { internal } from "../../_generated/api";
 import { githubClientFromEnv } from "./client";
 import {
   exchangeUserCode,
+  fetchCurrentUser,
   githubAppOAuthFromEnv,
   listUserInstallations,
 } from "./oauthClient";
@@ -53,6 +54,16 @@ export const finalizeInstall = internalAction({
       { nonce: args.nonce },
     );
     if (!resolved) return null;
+    // An identity nonce is minted by any member, not an admin, and proves
+    // nothing about binding an account to the workspace. The route dispatches
+    // on purpose before calling us, so reaching this is a bug or a forgery;
+    // either way it must not complete an install.
+    if (resolved.purpose !== "install") {
+      console.error(
+        "[setup] refusing install: nonce was minted for an identity connect",
+      );
+      return null;
+    }
 
     // Fail closed. The nonce proves this flow began in *a* workspace the actor
     // administers; it says nothing about the installation id GitHub echoed
@@ -185,5 +196,82 @@ export const finalizeInstall = internalAction({
     }
 
     return { workspaceId: resolved.workspaceId };
+  },
+});
+
+/**
+ * Finalize a "connect your GitHub account" round trip from the same
+ * `/integrations/github/setup` callback. Consumes the identity-purpose nonce,
+ * trades the code for a user token, asks GitHub who that is with one
+ * `GET /user`, and writes the login onto the member's user row through
+ * `completeIdentityConnect`. The token is never stored.
+ *
+ * Returns where to send the browser on success, or null on any failure —
+ * including a nonce minted for an *install*: the two purposes share this
+ * route and this nonce table, and an install nonce proves the actor is an
+ * admin who started binding an account to a workspace, not which GitHub
+ * account the actor personally is.
+ */
+export const finalizeIdentity = internalAction({
+  args: { nonce: v.string(), code: v.string() },
+  returns: v.union(
+    v.null(),
+    v.object({
+      workspaceId: v.id("workspaces"),
+      returnTo: v.optional(v.string()),
+    }),
+  ),
+  handler: async (ctx, args) => {
+    const resolved = await ctx.runMutation(
+      internal.integrations.core.installFlow.consumeInstallState,
+      { nonce: args.nonce },
+    );
+    if (!resolved) return null;
+    if (resolved.purpose !== "identity") {
+      console.error(
+        "[identity] refusing: nonce was minted for an install, not an identity connect",
+      );
+      return null;
+    }
+
+    const oauthCfg = githubAppOAuthFromEnv();
+    if (!oauthCfg) {
+      console.error(
+        "[identity] GITHUB_APP_CLIENT_ID / GITHUB_APP_CLIENT_SECRET not configured",
+      );
+      return null;
+    }
+
+    let user: Awaited<ReturnType<typeof fetchCurrentUser>>;
+    try {
+      const accessToken = await exchangeUserCode({
+        cfg: oauthCfg,
+        code: args.code,
+      });
+      user = await fetchCurrentUser({ cfg: oauthCfg, accessToken });
+    } catch (err) {
+      console.error("[identity] could not resolve the GitHub user", err);
+      return null;
+    }
+
+    // `completeIdentityConnect` throws when another user already holds the
+    // login. This is a browser navigation, so like every other failure here
+    // it becomes the documented error redirect rather than a raw 500.
+    try {
+      await ctx.runMutation(
+        internal.integrations.core.identityConnect.completeIdentityConnect,
+        {
+          userId: resolved.userId,
+          provider: "github",
+          externalLogin: user.login,
+          externalUserId: user.id,
+        },
+      );
+    } catch (err) {
+      console.error("[identity] could not store the GitHub identity", err);
+      return null;
+    }
+
+    return { workspaceId: resolved.workspaceId, returnTo: resolved.returnTo };
   },
 });

@@ -25,6 +25,17 @@ export const UserMention = createReactInlineContentSpec(
       }
       return <UserMentionView userId={userId as Id<"users">} />;
     },
+    // What the mention becomes outside the editor — in the markdown
+    // `blocksToMarkdownLossy` posts for the GitHub / GitLab push. The browser
+    // cannot know the person's provider login, so it emits a stable token and
+    // the dispatch layer rewrites it server-side
+    // (`integrations/core/mentionTokens.ts`). Without this export the mention
+    // was dropped and "ping @Marco" reached the issue as "ping ". No markdown
+    // -special characters, so the token survives the HTML → markdown pass.
+    toExternalHTML: ({ inlineContent }) => {
+      const { userId } = inlineContent.props;
+      return <span>{userId ? `@user:${userId}` : "@unknown-user"}</span>;
+    },
   }
 );
 

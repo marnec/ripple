@@ -33,16 +33,11 @@ keyboard accessiblity
     - [ ] kanban active-backlog overflow strategy when a project's uncompleted set grows past the read cap
     - [ ] `AddTasksToCycleDialog` "show completed too" toggle if users request it
 
-- [ ] External integrations
-    - [ ] github issues
-        - v1 deferrals (revisit after first ship):
-            - [ ] milestone ↔ cycle sync (opt-in, name-paired via stored `externalMilestoneId`)
-            - [ ] priority sync via configurable label template (e.g. `priority/high`)
-            - [ ] internal-only task comments (`taskComments.internal` flag; not pushed to GitHub, never set on inbound)
-            - [ ] comment/description @mention fidelity on outbound markdown: `userMention`/`eventMention` inline content has no markdown serialization, so `blocksToMarkdownLossy` drops them to empty when pushing to GitHub. To render `@login` we'd need a userId→GitHub-login map at render time (same lossiness affects description sync)
-    - [ ] gitlab (end-to-end built: OAuth + project picker + webhooks + outbound gateway; remaining gaps)
-        - [ ] self-hosted GitLab — `gitlab.com` is hardcoded across `integrations/gitlab/*` (tokenClient, oauthClient, outboundGateway, branchesAction, forceResyncAction); needs a per-integration base URL
-    - [ ] `workspaceMemberExternalIdentity` has no write path — no mutation, no UI. Identity resolution falls back to OAuth-captured columns only, so a member who signed in with a different account can never be an assignee-push target. Needs a per-workspace "you are @x on <provider>" mapping screen
+
+- [ ] github issues
+    - deferred, not planned: milestone ↔ cycle sync (Linear skips it too; needs a new inbound kind + outbound op in both adapters)
+- [ ] gitlab 
+    - deferred: self-hosted GitLab — `GITLAB_BASE` in `gitlab/oauthClient.ts` (already parameterized on `cfg.base`), plus literals in `gitlab/outboundGateway.ts`, `gitlab/webhook.ts`, `gitlab/forceResyncAction.ts`, `core/syncOutMutations.ts` (issue URL) and web `TaskGithubBranchActions.tsx` (MR URL). A per-integration base URL covers the PAT path; OAuth would also need per-workspace app credentials. Linear does PAT-only.
 
 - I don't really know how to handle unread messages, they kind of work right now but god save me
 

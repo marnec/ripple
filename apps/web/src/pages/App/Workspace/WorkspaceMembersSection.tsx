@@ -14,6 +14,7 @@ import { Shield, User, UserMinus } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
+import { missingIdentityHints } from "@/lib/member-identity-hints";
 
 export function WorkspaceMembersSection({
   workspaceId,
@@ -21,6 +22,11 @@ export function WorkspaceMembersSection({
   workspaceId: Id<"workspaces">;
 }) {
   const members = useQuery(api.workspaceMembers.membersWithRoles, { workspaceId });
+  // Which providers the workspace has an installation for — a member without
+  // an identity for one of those is who assignee sync silently skips.
+  const installations = useQuery(api.integrations.core.install.listInstallations, {
+    workspaceId,
+  });
   const currentUser = useViewer();
   const changeRole = useMutation(api.workspaceMembers.changeRole);
   const removeMember = useMutation(api.workspaceMembers.remove);
@@ -29,6 +35,7 @@ export function WorkspaceMembersSection({
 
   const currentMembership = members.find((m) => m.userId === currentUser?._id);
   const isAdmin = currentMembership?.role === "admin";
+  const activeProviders = (installations ?? []).map((i) => i.provider);
 
   const handleRoleChange = (targetUserId: Id<"users">, role: "admin" | "member") => {
     changeRole({ workspaceId, targetUserId, role }).catch((error) => {
@@ -72,6 +79,15 @@ export function WorkspaceMembersSection({
                 {isSelf && (
                   <span className="text-xs text-muted-foreground shrink-0">(you)</span>
                 )}
+                {missingIdentityHints(member, activeProviders).map((hint) => (
+                  <span
+                    key={hint}
+                    className="text-xs text-muted-foreground/70 shrink-0"
+                    title="Assignee sync skips members who have not connected their account. They can connect it from their user settings."
+                  >
+                    {hint}
+                  </span>
+                ))}
               </div>
 
               {isAdmin && !isSelf && (

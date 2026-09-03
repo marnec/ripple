@@ -46,6 +46,40 @@ describe("readIntegrationCallbackNotice", () => {
     expect(INTEGRATION_CALLBACK_PARAMS).toEqual([
       "github_install",
       "gitlab_oauth",
+      "github_identity",
+      "gitlab_identity",
     ]);
+  });
+
+  /**
+   * "Connect your account" is a member proving which provider user they are,
+   * not an admin binding an account to the workspace. Its flags are distinct
+   * so a personal connect never reads as an install, and its copy says
+   * "your account" — the capability toggle is irrelevant to it.
+   */
+  describe("identity connect flags", () => {
+    it("reads a connected GitHub account", () => {
+      const notice = readIntegrationCallbackNotice("?github_identity=success");
+      expect(notice?.variant).toBe("success");
+      expect(notice?.title).toBe("GitHub account connected");
+    });
+
+    it("reads a connected GitLab account", () => {
+      const notice = readIntegrationCallbackNotice("?gitlab_identity=success");
+      expect(notice?.variant).toBe("success");
+      expect(notice?.title).toBe("GitLab account connected");
+    });
+
+    it("reads a failed GitHub connect without blaming the capability", () => {
+      const notice = readIntegrationCallbackNotice("?github_identity=error");
+      expect(notice?.variant).toBe("error");
+      expect(notice?.title).toBe("Couldn't connect your GitHub account");
+      expect(notice?.description ?? "").not.toMatch(/capabilit/i);
+    });
+
+    it("reads a failed GitLab connect", () => {
+      const notice = readIntegrationCallbackNotice("?gitlab_identity=error");
+      expect(notice?.title).toBe("Couldn't connect your GitLab account");
+    });
   });
 });

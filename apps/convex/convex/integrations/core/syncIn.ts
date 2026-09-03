@@ -2,6 +2,7 @@ import type { MutationCtx } from "../../_generated/server";
 import { internal } from "../../_generated/api";
 import type { Doc, Id } from "../../_generated/dataModel";
 import { normalizeTagList, syncTaskTags } from "../../tagSync";
+import { splitPriorityLabels } from "./priorityLabels";
 import { diffSet, normalizeLoginList } from "./syncableSet";
 import { externalLoginToMember, externalUserIdToMember } from "./identity";
 import { getIntegrationForLink } from "./integrationLookups";
@@ -483,13 +484,19 @@ async function createTaskFromEvent(
     await ctx.db.patch(link.projectId, { taskCounter: number });
   }
 
+  // Labels the issue already carries. The link's priority↔label map (if any)
+  // decides which of them is a priority marker rather than a tag: the marker
+  // sets the task's priority at birth and never reaches the tag tables.
+  const eventLabels = "labels" in event ? event.labels : undefined;
+  const split = splitPriorityLabels(eventLabels ?? [], link.priorityLabels);
+
   const taskId = await insertTaskWithExternalLink(ctx, {
     task: {
       projectId: link.projectId,
       workspaceId: link.workspaceId,
       title: event.title,
       statusId: destinationStatus._id,
-      priority: "medium",
+      priority: split.priority ?? "medium",
       completed: destinationStatus.isCompleted,
       creatorId: integration.botUserId,
       number,
@@ -509,6 +516,26 @@ async function createTaskFromEvent(
   // (third-party-authored) bodies pass through untouched.
   const cleanBody = stripRippleMarker(event.body);
 
+  // Labels the issue already carries become the task's tags now, the same
+  // reconciliation `applyLabelsChanged` runs later. The link then mirrors the
+  // provider's FULL set (tags plus any priority marker), so the per-label
+  // `labeled` webhooks GitHub fires right after an opened-with-labels issue
+  // (and right after our own create) are echoes and reconcile nothing a
+  // second time. An event without label data leaves both untouched — exactly
+  // the pre-existing behaviour.
+  let externalLabels: string[] | undefined;
+  if (eventLabels && eventLabels.length > 0) {
+    externalLabels = normalizeTagList(eventLabels);
+    const tags = await syncTaskTags(ctx, {
+      workspaceId: link.workspaceId,
+      projectId: link.projectId,
+      taskId,
+      completed: destinationStatus.isCompleted,
+      nextTagNames: split.tags,
+    });
+    await ctx.db.patch(taskId, { labels: tags });
+  }
+
   await ctx.db.insert("taskIntegrationLinks", {
     taskId,
     projectIntegrationLinkId: link._id,
@@ -518,6 +545,7 @@ async function createTaskFromEvent(
     initialBodyMarkdown: cleanBody,
     externalState,
     externalStateReason,
+    externalLabels,
     // "pending" iff we're about to schedule the seed below; the action drives
     // it to a terminal state. Left undefined for empty bodies (no seed) so the
     // client gate opens immediately via its `!seedExpected` path.
@@ -619,12 +647,20 @@ async function applyLabelsChanged(
 
   // Echo guard: if the inbound set already matches the last-known GitHub
   // set, this event is a bounce-back from our own outbound write. Skip the
-  // taskTags reconciliation and externalUpdatedAt bump entirely.
+  // taskTags reconciliation and externalUpdatedAt bump entirely. Compared on
+  // the FULL set, priority marker included, which is what the outbound push
+  // mirrors — so Ripple's own priority push bounces off here too.
   if (!diffSet(normalized, existingLink.externalLabels).changed) return;
 
+  // The link's priority↔label map (if any) pulls the priority marker out of
+  // the set before it reaches the tag system. No marker present means no
+  // statement about priority: the task keeps whatever it has.
+  const split = splitPriorityLabels(normalized, link.priorityLabels);
+
   // Reconcile the dictionary `tags` + project-scoped `taskTags` join. We then
-  // mirror that list into `tasks.labels` (denormalized projection) and into
-  // `taskIntegrationLinks.externalLabels` (the last-known GitHub set).
+  // mirror that list into `tasks.labels` (denormalized projection) and the
+  // full provider set into `taskIntegrationLinks.externalLabels` (the
+  // last-known GitHub set).
   await syncTaskTags(ctx, {
     workspaceId: link.workspaceId,
     projectId: link.projectId,
@@ -633,14 +669,24 @@ async function applyLabelsChanged(
     dueDate: task.dueDate,
     plannedStartDate: task.plannedStartDate,
     assigneeId: task.assigneeId,
-    nextTagNames: normalized,
+    nextTagNames: split.tags,
   });
 
-  await ctx.db.patch(task._id, { labels: normalized });
+  await ctx.db.patch(task._id, { labels: split.tags });
   await ctx.db.patch(existingLink._id, {
     externalLabels: normalized,
     externalUpdatedAt: event.externalUpdatedAt,
   });
+
+  if (split.priority !== undefined && split.priority !== task.priority) {
+    await ctx.db.patch(task._id, { priority: split.priority });
+    await logTaskIntegrationActivity(ctx, {
+      taskId: task._id,
+      type: "priority_change",
+      oldValue: task.priority,
+      newValue: split.priority,
+    });
+  }
 }
 
 /**

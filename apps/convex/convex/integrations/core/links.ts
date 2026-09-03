@@ -15,6 +15,7 @@ import {
 } from "./taskExternalLink";
 import { getIntegrationForLink, resolveProvider } from "./integrationLookups";
 import { resolveResyncAdapter } from "./resyncAdapters";
+import { priorityLabelMapValidator } from "./priorityLabels";
 
 /**
  * Per-batch size for the disconnect cascade workpool drain. Each step
@@ -89,6 +90,7 @@ export const linksForProject = query({
       askBranchSourceEachTime: v.optional(v.boolean()),
       inboundIssueSyncDisabled: v.optional(v.boolean()),
       autoSelectTags: v.optional(v.array(v.string())),
+      priorityLabels: v.optional(priorityLabelMapValidator),
     }),
   ),
   handler: async (ctx, { projectId }) => {
@@ -116,6 +118,7 @@ export const linksForProject = query({
           askBranchSourceEachTime: l.askBranchSourceEachTime,
           inboundIssueSyncDisabled: l.inboundIssueSyncDisabled,
           autoSelectTags: l.autoSelectTags,
+          priorityLabels: l.priorityLabels,
         };
       }),
     );
@@ -477,6 +480,70 @@ export const setTagRoutingRule = mutation({
         autoSelectTags: next.length ? next : undefined,
       });
     }
+    return null;
+  },
+});
+
+/**
+ * Set (or clear) a link's priority ↔ label map. Admin-only. Values are
+ * normalized like tags; all four empty clears the column. Otherwise every
+ * slot must be filled, the four values distinct, and none may be a tag that
+ * routes tasks to a repo on this project (`autoSelectTags`) — a label cannot
+ * be both a router key and a priority marker, since the split in
+ * `priorityLabels.ts` would strip it before routing ever saw it.
+ */
+export const setPriorityLabels = mutation({
+  args: {
+    linkId: v.id("projectIntegrationLinks"),
+    priorityLabels: priorityLabelMapValidator,
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const link = await ctx.db.get(args.linkId);
+    if (!link) throw new ConvexError("Link not found");
+
+    await requireWorkspaceMember(ctx, link.workspaceId, {
+      role: WorkspaceRole.ADMIN,
+    });
+
+    const normalized = {
+      urgent: args.priorityLabels.urgent.trim().toLowerCase(),
+      high: args.priorityLabels.high.trim().toLowerCase(),
+      medium: args.priorityLabels.medium.trim().toLowerCase(),
+      low: args.priorityLabels.low.trim().toLowerCase(),
+    };
+    const values = Object.values(normalized);
+
+    if (values.every((value) => value === "")) {
+      await ctx.db.patch(args.linkId, { priorityLabels: undefined });
+      return null;
+    }
+    if (values.some((value) => value === "")) {
+      throw new ConvexError(
+        "Every priority needs a label (fill all four, or clear all four)",
+      );
+    }
+    if (new Set(values).size !== values.length) {
+      throw new ConvexError("Priority labels must be four distinct names");
+    }
+
+    const siblings = await ctx.db
+      .query("projectIntegrationLinks")
+      .withIndex("by_project", (q) => q.eq("projectId", link.projectId))
+      .collect();
+    const routingTags = new Set(
+      siblings
+        .filter((l) => l.status !== "disconnected")
+        .flatMap((l) => l.autoSelectTags ?? []),
+    );
+    const collision = values.find((value) => routingTags.has(value));
+    if (collision) {
+      throw new ConvexError(
+        `"${collision}" already routes tasks to a repo on this project; a tag cannot also be a priority label`,
+      );
+    }
+
+    await ctx.db.patch(args.linkId, { priorityLabels: normalized });
     return null;
   },
 });

@@ -140,7 +140,7 @@ export function buildGitlabGateway(gl: GitlabRequester): OutboundGateway {
       };
     },
 
-    async createIssue({ projectRef, title, body }) {
+    async createIssue({ projectRef, title, body, labels }) {
       const res = await gl.request<{
         id: number;
         iid: number;
@@ -150,7 +150,12 @@ export function buildGitlabGateway(gl: GitlabRequester): OutboundGateway {
       }>({
         method: "POST",
         path: `/projects/${proj(projectRef)}/issues`,
-        body: { title, description: body },
+        // GitLab takes labels as one comma-separated string.
+        body: {
+          title,
+          description: body,
+          ...(labels && labels.length > 0 ? { labels: labels.join(",") } : {}),
+        },
       });
       const decision = classifyResponse(toResponse(res));
       if (decision === "success") {

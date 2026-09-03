@@ -129,6 +129,14 @@ export interface NormalizedIssueOpenedEvent {
    *  `core/` doesn't need to know per-provider URL formats. */
   url: string;
   externalAuthor: NormalizedExternalAuthor;
+  /**
+   * Labels already on the issue when it was opened (names, un-normalized).
+   * Lets the task carry its tags from creation instead of waiting for the
+   * per-label `labeled` webhooks GitHub fires right afterwards — which the
+   * echo guard then drops, because the link mirrors this set. Absent when
+   * the adapter has no label data; empty means "no labels".
+   */
+  labels?: string[];
 }
 
 export interface NormalizedIssueClosedEvent {
@@ -161,6 +169,8 @@ export interface NormalizedIssueReopenedEvent {
   body: string;
   url: string;
   externalAuthor: NormalizedExternalAuthor;
+  /** See `NormalizedIssueOpenedEvent.labels` — a reopen can create a task too. */
+  labels?: string[];
 }
 
 /**

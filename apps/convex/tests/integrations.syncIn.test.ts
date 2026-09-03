@@ -2113,3 +2113,83 @@ describe("integrations/core/syncIn.isStaleUpdate", () => {
   });
 });
 
+
+/**
+ * Labels travel with issue creation (ticket 06). An issue that is opened,
+ * reopened or imported with labels already on it becomes a task carrying
+ * those tags immediately, and the link mirrors the provider's set so the
+ * per-label `labeled` webhooks GitHub fires right afterwards hit the echo
+ * guard instead of re-reconciling.
+ */
+describe("integrations/core/syncIn — labels at creation", () => {
+  it("issue.opened with labels creates the task with those tags and mirrors externalLabels", async () => {
+    const t = createTestContext();
+    const { link, projectId } = await setupInboundFixtures(t);
+
+    await t.run((ctx) =>
+      applyNormalizedEvent(ctx, {
+        event: makeOpenedEvent({ labels: ["Bug", "good first issue"] }),
+        link,
+      }),
+    );
+
+    const { task, taskLink, taskTags } = await t.run(async (ctx) => {
+      const task = await ctx.db
+        .query("tasks")
+        .withIndex("by_project", (q) => q.eq("projectId", projectId))
+        .unique();
+      const taskLink = await ctx.db
+        .query("taskIntegrationLinks")
+        .withIndex("by_task", (q) => q.eq("taskId", task!._id))
+        .unique();
+      const taskTags = await ctx.db
+        .query("taskTags")
+        .withIndex("by_task", (q) => q.eq("taskId", task!._id))
+        .collect();
+      return { task, taskLink, taskTags };
+    });
+
+    expect(task?.labels).toEqual(["bug", "good first issue"]);
+    expect(taskTags.map((r) => r.tagName).sort()).toEqual(["bug", "good first issue"]);
+    expect(taskLink?.externalLabels).toEqual(["bug", "good first issue"]);
+  });
+
+  it("the per-label webhooks that follow an opened-with-labels issue are dropped by the echo guard", async () => {
+    const t = createTestContext();
+    const { link, projectId } = await setupInboundFixtures(t);
+    await t.run((ctx) =>
+      applyNormalizedEvent(ctx, {
+        event: makeOpenedEvent({ labels: ["bug"] }),
+        link,
+      }),
+    );
+    const before = await t.run(async (ctx) => {
+      const task = await ctx.db.query("tasks").withIndex("by_project", (q) => q.eq("projectId", projectId)).unique();
+      return ctx.db.query("taskIntegrationLinks").withIndex("by_task", (q) => q.eq("taskId", task!._id)).unique();
+    });
+
+    // GitHub: `issues.labeled` for the same set, strictly newer.
+    await t.run((ctx) =>
+      applyNormalizedEvent(ctx, {
+        event: makeLabelsChangedEvent({ labels: ["bug"], externalUpdatedAt: 1_700_000_005_000 }),
+        link,
+      }),
+    );
+
+    const after = await t.run((ctx) => ctx.db.get(before!._id));
+    expect(after?.externalUpdatedAt).toBe(before?.externalUpdatedAt);
+  });
+
+  it("issue.opened without labels behaves exactly as before", async () => {
+    const t = createTestContext();
+    const { link, projectId } = await setupInboundFixtures(t);
+    await t.run((ctx) => applyNormalizedEvent(ctx, { event: makeOpenedEvent(), link }));
+    const { task, taskLink } = await t.run(async (ctx) => {
+      const task = await ctx.db.query("tasks").withIndex("by_project", (q) => q.eq("projectId", projectId)).unique();
+      const taskLink = await ctx.db.query("taskIntegrationLinks").withIndex("by_task", (q) => q.eq("taskId", task!._id)).unique();
+      return { task, taskLink };
+    });
+    expect(task?.labels ?? undefined).toBeUndefined();
+    expect(taskLink?.externalLabels ?? undefined).toBeUndefined();
+  });
+});

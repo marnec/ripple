@@ -116,11 +116,15 @@ export interface OutboundGateway {
   }): Promise<OutboundLookup>;
 
   /** Creates a new issue (task → provider). Success meta carries the stable id,
-   *  number, author and `updated_at` needed to write the task↔issue link. */
+   *  number, author and `updated_at` needed to write the task↔issue link.
+   *  `labels` (normalized names) go in the create call itself; both providers
+   *  create missing labels on the issue endpoint for a token with write
+   *  access, so no separate label-creation step is needed. */
   createIssue(a: {
     projectRef: string;
     title: string;
     body: string;
+    labels?: string[];
   }): Promise<OutboundOutcome>;
 
   setIssueState(a: {

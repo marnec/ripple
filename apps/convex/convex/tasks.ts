@@ -1114,8 +1114,14 @@ export const update = mutation({
       await maybeEnqueueOutboundPush(ctx, taskId);
     }
     // Independent dimension: label edits trigger a separate label push.
-    // Helper handles the unlinked/frozen/echo gates internally.
-    if (labels !== undefined) {
+    // Helper handles the unlinked/frozen/echo gates internally. A priority
+    // change rides the same push: on a link with a priority↔label map the
+    // outbound set includes the mapped label, and on a link without one the
+    // set is unchanged and the echo gate drops it.
+    if (
+      labels !== undefined ||
+      (priority !== undefined && priority !== task.priority)
+    ) {
       await maybeEnqueueLabelsPush(ctx, taskId);
     }
     // Independent dimension: assignee changes trigger an assignee push.
@@ -1327,7 +1333,9 @@ export const retryOutboundSync = mutation({
  * to GitHub" button on the task detail. The client renders the current
  * BlockNote editor to markdown (avoids server-side BlockNote/JSDOM, which
  * would balloon the Convex bundle past its size limit) and passes it in;
- * this mutation auth-checks and enqueues the PATCH.
+ * this mutation auth-checks and enqueues the PATCH. Mentions come through as
+ * tokens and are rewritten to provider logins / names at dispatch — see
+ * `taskComments.create` and `integrations/core/mentionTokens.ts`.
  *
  * Ripple is the source of truth for description content: there is no
  * automatic background sync and no reconciliation. The button is the only

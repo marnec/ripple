@@ -43,6 +43,20 @@ export const EventMention = createReactInlineContentSpec(
         <EventMentionEditorPill eventId={target.eventId} />
       );
     },
+    // Token for the outbound markdown — see `UserMention.toExternalHTML`. The
+    // dispatch layer renders it as the event's or series' title.
+    toExternalHTML: ({ inlineContent }) => {
+      const target = eventMentionTarget(inlineContent.props);
+      return (
+        <span>
+          {target.kind === "series"
+            ? `@series:${target.seriesId}`
+            : target.kind === "event"
+              ? `@event:${target.eventId}`
+              : "@unknown-event"}
+        </span>
+      );
+    },
   },
 );
 

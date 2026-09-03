@@ -416,3 +416,32 @@ describe("workspaceMembers bot-user filtering", () => {
     expect(ids).not.toContain(botUserId);
   });
 });
+
+describe("workspaceMembers.membersWithRoles — connected provider identities", () => {
+  it("reports per-provider identity presence from the user row, so admins can see who has not connected", async () => {
+    const t = createTestContext();
+    const { workspaceId, userId: adminId, asUser } = await setupWorkspaceWithAdmin(t);
+    const bothId = await t.run(async (ctx) => {
+      const uid = await ctx.db.insert("users", {
+        name: "Both",
+        githubLogin: "both-gh",
+        gitlabUserId: "9",
+        gitlabLogin: "both-gl",
+      });
+      await ctx.db.insert("workspaceMembers", { userId: uid, workspaceId, role: WorkspaceRole.MEMBER });
+      return uid;
+    });
+    const gitlabOnlyId = await t.run(async (ctx) => {
+      const uid = await ctx.db.insert("users", { name: "GitLab only", gitlabUserId: "10", gitlabLogin: "gl" });
+      await ctx.db.insert("workspaceMembers", { userId: uid, workspaceId, role: WorkspaceRole.MEMBER });
+      return uid;
+    });
+
+    const members = await asUser.query(api.workspaceMembers.membersWithRoles, { workspaceId });
+    const byId = new Map(members.map((m) => [m.userId, m]));
+
+    expect(byId.get(adminId)).toMatchObject({ githubConnected: false, gitlabConnected: false });
+    expect(byId.get(bothId)).toMatchObject({ githubConnected: true, gitlabConnected: true });
+    expect(byId.get(gitlabOnlyId)).toMatchObject({ githubConnected: false, gitlabConnected: true });
+  });
+});

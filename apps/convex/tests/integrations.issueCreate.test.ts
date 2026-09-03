@@ -480,3 +480,62 @@ describe("issue.opened echo guard (self-authored)", () => {
     expect(await countTasks(t, projectId)).toBe(1);
   });
 });
+
+/* ------------------------------------------------------------------ */
+/* Labels travel with the create (ticket 06)                          */
+/* ------------------------------------------------------------------ */
+
+describe("buildGithubGateway.createIssue — labels", () => {
+  it("sends the labels array when given, and no labels key when not", async () => {
+    const ok = () => ({
+      status: 201,
+      body: {
+        node_id: "I_new",
+        number: 8,
+        updated_at: "2026-05-26T10:00:00Z",
+        user: { login: "b", avatar_url: "", html_url: "" },
+      },
+    });
+    const withLabels = fakeClient(ok);
+    await buildGithubGateway(withLabels.client).createIssue({
+      projectRef: "acme/web",
+      title: "t",
+      body: "",
+      labels: ["bug", "p1"],
+    });
+    expect(withLabels.calls[0].body).toEqual({ title: "t", body: "", labels: ["bug", "p1"] });
+
+    const without = fakeClient(ok);
+    await buildGithubGateway(without.client).createIssue({
+      projectRef: "acme/web",
+      title: "t",
+      body: "",
+    });
+    expect(without.calls[0].body).toEqual({ title: "t", body: "" });
+  });
+});
+
+describe("recordIssueCreateSuccess — externalLabels", () => {
+  it("seeds the link's externalLabels from the set that was sent, so bounce-back labeled events echo", async () => {
+    const t = createTestContext();
+    const { projectLinkId, taskId } = await setupOutboundFixtures(t);
+
+    await t.mutation(
+      internal.integrations.core.syncOutMutations.recordIssueCreateSuccess,
+      {
+        taskId,
+        projectIntegrationLinkId: projectLinkId,
+        externalIssueId: "I_new",
+        issueNumber: 99,
+        externalUpdatedAt: 5_000,
+        externalAuthor: { login: "b", avatarUrl: "", url: "" },
+        externalLabels: ["bug", "p1"],
+      },
+    );
+
+    const link = await t.run((ctx) =>
+      ctx.db.query("taskIntegrationLinks").withIndex("by_task", (q) => q.eq("taskId", taskId)).unique(),
+    );
+    expect(link?.externalLabels).toEqual(["bug", "p1"]);
+  });
+});

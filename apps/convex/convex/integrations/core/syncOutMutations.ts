@@ -271,6 +271,12 @@ export const recordIssueCreateSuccess = internalMutation({
       avatarUrl: v.string(),
       url: v.string(),
     }),
+    /**
+     * The label set the create call carried. Seeds `externalLabels` so the
+     * `labeled` webhooks the provider fires for our own create match the
+     * mirror and are dropped by the inbound echo guard.
+     */
+    externalLabels: v.optional(v.array(v.string())),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
@@ -307,6 +313,9 @@ export const recordIssueCreateSuccess = internalMutation({
       externalUpdatedAt: args.externalUpdatedAt,
       externalAuthor: args.externalAuthor,
       externalState: "open",
+      ...(args.externalLabels && args.externalLabels.length > 0
+        ? { externalLabels: args.externalLabels }
+        : {}),
     });
 
     await setTaskExternalLink(ctx, {

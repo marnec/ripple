@@ -410,3 +410,30 @@ describe("integrations/gitlab/outboundGateway.findCommentByRippleComment", () =>
     ).toMatchObject({ kind: "unavailable" });
   });
 });
+
+describe("gitlab gateway createIssue — labels", () => {
+  it("sends labels as GitLab's comma-separated string, and nothing when there are none", async () => {
+    const ok = () => ({
+      status: 201,
+      body: {
+        id: 302,
+        iid: 8,
+        web_url: "https://gitlab.com/acme/web/-/issues/8",
+        updated_at: "2026-05-22T10:00:00Z",
+        author: { username: "bot", avatar_url: "", web_url: "" },
+      },
+    });
+    const withLabels = fakeClient(ok);
+    await gw(withLabels.client).createIssue({
+      projectRef: "acme/web",
+      title: "t",
+      body: "d",
+      labels: ["bug", "p1"],
+    });
+    expect(withLabels.calls[0].body).toEqual({ title: "t", description: "d", labels: "bug,p1" });
+
+    const without = fakeClient(ok);
+    await gw(without.client).createIssue({ projectRef: "acme/web", title: "t", body: "d" });
+    expect(without.calls[0].body).toEqual({ title: "t", description: "d" });
+  });
+});

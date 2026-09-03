@@ -156,8 +156,12 @@ function normalizeIssueEvent(
     externalAuthor: gitlabAuthor(p.user),
   };
 
-  if (a.action === "open") return { kind: "issue.opened", ...shared };
-  if (a.action === "reopen") return { kind: "issue.reopened", ...shared };
+  // The payload's top-level `labels` is the issue's current set, the same
+  // field the `update` branch reads for `labels_changed`. Reported only when
+  // present — the adapter does not invent an empty set.
+  const labels = p.labels ? { labels: p.labels.map((l) => l.title) } : {};
+  if (a.action === "open") return { kind: "issue.opened", ...shared, ...labels };
+  if (a.action === "reopen") return { kind: "issue.reopened", ...shared, ...labels };
   if (a.action === "close") {
     // GitLab has no completed/not_planned distinction — default to completed.
     return { kind: "issue.closed", ...shared, stateReason: "completed" };

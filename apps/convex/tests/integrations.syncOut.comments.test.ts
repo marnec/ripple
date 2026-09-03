@@ -426,3 +426,160 @@ describe("taskComments.remove outbound dispatch", () => {
     expect(await readCommentLastSyncError(t, commentId)).toBeFalsy();
   });
 });
+
+/**
+ * Private task comments (plan B). On a linked task the composer offers two
+ * lanes: a private note that stays in Ripple, and a reply that goes to the
+ * provider as comments always have. The lane is chosen at creation and never
+ * changes; an unlinked task has no lanes at all.
+ */
+describe("taskComments.create — private lane", () => {
+  let savedAppId: string | undefined;
+  let savedKey: string | undefined;
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    savedAppId = process.env.GITHUB_APP_ID;
+    savedKey = process.env.GITHUB_APP_PRIVATE_KEY;
+    delete process.env.GITHUB_APP_ID;
+    delete process.env.GITHUB_APP_PRIVATE_KEY;
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    if (savedAppId !== undefined) process.env.GITHUB_APP_ID = savedAppId;
+    if (savedKey !== undefined) process.env.GITHUB_APP_PRIVATE_KEY = savedKey;
+  });
+
+  it("on a linked task, a private note is stored as internal and never pushed", async () => {
+    const t = createTestContext();
+    const { asUser, taskId } = await setupTaskAndLink(t);
+
+    const commentId = await asUser.mutation(api.taskComments.create, {
+      taskId,
+      body: "[]",
+      bodyMarkdown: "team-only note",
+      internal: true,
+    });
+    await t.finishAllScheduledFunctions(vi.runAllTimers);
+
+    const row = await t.run((ctx) => ctx.db.get(commentId));
+    expect(row?.internal).toBe(true);
+    // No outbound run: nothing to record a failure against, no link row.
+    expect((await readCommentLastSyncError(t, commentId)) ?? undefined).toBeUndefined();
+    expect(
+      await t.run((ctx) => ctx.db.query("integrationOutboundRuns").collect()),
+    ).toHaveLength(0);
+    expect(
+      await t.run((ctx) => ctx.db.query("taskCommentIntegrationLinks").collect()),
+    ).toHaveLength(0);
+  });
+
+  it("the reply lane behaves exactly as before: pushed, marker and all", async () => {
+    const t = createTestContext();
+    const { asUser, taskId } = await setupTaskAndLink(t);
+
+    const commentId = await asUser.mutation(api.taskComments.create, {
+      taskId,
+      body: "[]",
+      bodyMarkdown: "reply upstream",
+      internal: false,
+    });
+    await t.finishAllScheduledFunctions(vi.runAllTimers);
+
+    const row = await t.run((ctx) => ctx.db.get(commentId));
+    expect(row?.internal ?? undefined).toBeUndefined();
+    // The action ran (and hit the missing-creds branch) → it was dispatched.
+    expect((await readCommentLastSyncError(t, commentId)) ?? undefined).toBeDefined();
+  });
+
+  it("on an unlinked task the lane is dropped: no internal field is stored", async () => {
+    const t = createTestContext();
+    const { asUser, taskId } = await setupTaskAndLink(t, { withIntegrationLink: false });
+
+    const commentId = await asUser.mutation(api.taskComments.create, {
+      taskId,
+      body: "[]",
+      bodyMarkdown: "note",
+      internal: true,
+    });
+
+    const row = await t.run((ctx) => ctx.db.get(commentId));
+    expect(row?.internal ?? undefined).toBeUndefined();
+  });
+
+  it("editing a private note never pushes, even with a comment-link row inserted by hand", async () => {
+    const t = createTestContext();
+    const { asUser, taskId } = await setupTaskAndLink(t);
+    const commentId = await asUser.mutation(api.taskComments.create, {
+      taskId,
+      body: "[]",
+      bodyMarkdown: "private",
+      internal: true,
+    });
+    const taskLinkId = await t.run(async (ctx) =>
+      (await ctx.db.query("taskIntegrationLinks").withIndex("by_task", (q) => q.eq("taskId", taskId)).unique())!._id,
+    );
+    const commentLinkId = await t.run((ctx) =>
+      ctx.db.insert("taskCommentIntegrationLinks", {
+        taskCommentId: commentId,
+        taskIntegrationLinkId: taskLinkId,
+        externalCommentId: "IC_should_not_exist",
+        externalUpdatedAt: 1_700_000_000_000,
+      }),
+    );
+
+    await asUser.mutation(api.taskComments.update, {
+      id: commentId,
+      body: "[]",
+      bodyMarkdown: "private, edited",
+    });
+    await t.finishAllScheduledFunctions(vi.runAllTimers);
+
+    const link = await t.run((ctx) => ctx.db.get(commentLinkId));
+    expect(link?.lastSyncError ?? undefined).toBeUndefined();
+    expect(
+      await t.run((ctx) => ctx.db.query("integrationOutboundRuns").collect()),
+    ).toHaveLength(0);
+  });
+
+  it("deleting a private note is a no-op on the provider side", async () => {
+    const t = createTestContext();
+    const { asUser, taskId } = await setupTaskAndLink(t);
+    const commentId = await asUser.mutation(api.taskComments.create, {
+      taskId,
+      body: "[]",
+      bodyMarkdown: "private",
+      internal: true,
+    });
+
+    await asUser.mutation(api.taskComments.remove, { id: commentId });
+    await t.finishAllScheduledFunctions(vi.runAllTimers);
+
+    expect(
+      await t.run((ctx) => ctx.db.query("integrationOutboundRuns").collect()),
+    ).toHaveLength(0);
+  });
+
+  it("inbound comments are never private", async () => {
+    const t = createTestContext();
+    const { taskId } = await setupTaskAndLink(t);
+    const link = await t.run(async (ctx) =>
+      (await ctx.db.query("projectIntegrationLinks").first())!,
+    );
+    const event: NormalizedCommentCreatedEvent = {
+      kind: "comment.created",
+      externalCommentId: "IC_inbound",
+      externalIssueId: "I_kwDOABC123",
+      externalUpdatedAt: 1_700_000_010_000,
+      body: "from upstream",
+      externalAuthor: { login: "ext", avatarUrl: "u", url: "https://github.com/ext" },
+    };
+    await t.run((ctx) => applyNormalizedEvent(ctx, { event, link }));
+
+    const rows = await t.run((ctx) =>
+      ctx.db.query("taskComments").withIndex("by_task", (q) => q.eq("taskId", taskId)).collect(),
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0].internal ?? undefined).toBeUndefined();
+  });
+});

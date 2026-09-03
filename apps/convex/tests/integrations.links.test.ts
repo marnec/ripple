@@ -875,3 +875,114 @@ describe("integrations/core/links.listByWorkspace", () => {
 void setupAuthenticatedUser;
 void WorkspaceRole;
 void (null as unknown as Id<"projectIntegrationLinks">);
+
+describe("integrations/core/links.setPriorityLabels", () => {
+  /** An active GitHub link on an activatable project, plus a non-admin member. */
+  async function linkWithMember(t: ReturnType<typeof createTestContext>) {
+    const { workspaceId, projectId, asUser } = await setupActivatableProject(t);
+    const linkId = await asUser.mutation(api.integrations.core.links.createLink, {
+      projectId,
+      workspaceId,
+      externalAccountId: "install-999",
+      externalRepoId: "R_prio",
+      externalRepoFullName: "acme/web",
+    });
+    const { userId: memberId, asUser: asMember } = await setupAuthenticatedUser(t, {
+      name: "Member",
+      email: "member@test.com",
+    });
+    await t.run((ctx) =>
+      ctx.db.insert("workspaceMembers", {
+        userId: memberId,
+        workspaceId,
+        role: WorkspaceRole.MEMBER,
+      }),
+    );
+    return { workspaceId, projectId, linkId, asUser, asMember };
+  }
+
+  const MAP = { urgent: "P0", high: " p1", medium: "p2", low: "p3 " };
+
+  it("an admin saves a four-entry map, stored normalized; a member cannot", async () => {
+    const t = createTestContext();
+    const { linkId, asUser, asMember } = await linkWithMember(t);
+
+    await asUser.mutation(api.integrations.core.links.setPriorityLabels, {
+      linkId,
+      priorityLabels: MAP,
+    });
+    expect((await t.run((ctx) => ctx.db.get(linkId)))?.priorityLabels).toEqual({
+      urgent: "p0",
+      high: "p1",
+      medium: "p2",
+      low: "p3",
+    });
+
+    await expect(
+      asMember.mutation(api.integrations.core.links.setPriorityLabels, {
+        linkId,
+        priorityLabels: { urgent: "a", high: "b", medium: "c", low: "d" },
+      }),
+    ).rejects.toThrow();
+  });
+
+  it("all-empty clears the map", async () => {
+    const t = createTestContext();
+    const { linkId, asUser } = await linkWithMember(t);
+    await asUser.mutation(api.integrations.core.links.setPriorityLabels, {
+      linkId,
+      priorityLabels: MAP,
+    });
+
+    await asUser.mutation(api.integrations.core.links.setPriorityLabels, {
+      linkId,
+      priorityLabels: { urgent: "", high: " ", medium: "", low: "" },
+    });
+
+    expect((await t.run((ctx) => ctx.db.get(linkId)))?.priorityLabels).toBeUndefined();
+  });
+
+  it("rejects an empty slot, duplicate values, and a value that is a repo-routing tag on the project", async () => {
+    const t = createTestContext();
+    const { projectId, linkId, asUser } = await linkWithMember(t);
+
+    await expect(
+      asUser.mutation(api.integrations.core.links.setPriorityLabels, {
+        linkId,
+        priorityLabels: { urgent: "p0", high: "p1", medium: "", low: "p3" },
+      }),
+    ).rejects.toThrow(/four|every priority|empty/i);
+
+    await expect(
+      asUser.mutation(api.integrations.core.links.setPriorityLabels, {
+        linkId,
+        priorityLabels: { urgent: "p0", high: "P0", medium: "p2", low: "p3" },
+      }),
+    ).rejects.toThrow(/distinct|duplicate|same/i);
+
+    await asUser.mutation(api.integrations.core.links.setTagRoutingRule, {
+      projectId,
+      tag: "frontend",
+      linkId,
+    });
+    await expect(
+      asUser.mutation(api.integrations.core.links.setPriorityLabels, {
+        linkId,
+        priorityLabels: { urgent: "p0", high: "Frontend", medium: "p2", low: "p3" },
+      }),
+    ).rejects.toThrow(/routing|repo/i);
+
+    expect((await t.run((ctx) => ctx.db.get(linkId)))?.priorityLabels).toBeUndefined();
+  });
+
+  it("linksForProject surfaces the map", async () => {
+    const t = createTestContext();
+    const { projectId, linkId, asUser } = await linkWithMember(t);
+    await asUser.mutation(api.integrations.core.links.setPriorityLabels, {
+      linkId,
+      priorityLabels: MAP,
+    });
+    const [link] = await asUser.query(api.integrations.core.links.linksForProject, { projectId });
+    expect(link.priorityLabels).toEqual({ urgent: "p0", high: "p1", medium: "p2", low: "p3" });
+  });
+});

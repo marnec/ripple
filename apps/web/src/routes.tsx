@@ -15,6 +15,7 @@ import {
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 import { IntegrationAccountPicker } from "@/components/IntegrationAccountPicker";
+import { useIntegrationCallbackNotice } from "@/hooks/use-integration-callback-notice";
 
 /**
  * Root index redirect. Drops the user into the workspace they were
@@ -59,6 +60,9 @@ function WorkspaceRouteShell() {
   useEffect(() => {
     if (workspaceId) setLastWorkspaceId(workspaceId as Id<"workspaces">);
   }, [workspaceId]);
+  // A completed provider round trip lands inside the shell: an install on the
+  // settings page, an identity connect wherever the member started from.
+  useIntegrationCallbackNotice();
   return (
     <>
       {/*

@@ -65,3 +65,17 @@ describe("integrations/github/importDrain.normalizeImportBatch", () => {
     expect(out.map((e) => ("issueNumber" in e ? e.issueNumber : null))).toEqual([1, 3]);
   });
 });
+
+describe("integrations/github/importDrain.normalizeImportBatch — labels", () => {
+  it("carries the REST issue's labels on an imported open issue", () => {
+    const out = normalizeImportBatch([
+      rawIssue({ labels: [{ name: "Bug" }, { name: "good first issue" }] }),
+    ]);
+    expect(out[0]).toMatchObject({ kind: "issue.opened", labels: ["Bug", "good first issue"] });
+  });
+
+  it("reports an empty set for an unlabeled issue, and nothing when the row has no label data", () => {
+    expect(normalizeImportBatch([rawIssue({ labels: [] })])[0]).toMatchObject({ labels: [] });
+    expect("labels" in normalizeImportBatch([rawIssue()])[0]).toBe(false);
+  });
+});

@@ -1010,3 +1010,37 @@ describe("integrations/github/webhook.handleGithubWebhook", () => {
     expect(comments).toHaveLength(0);
   });
 });
+
+describe("integrations/github/webhook.normalize — labels at creation", () => {
+  it("carries the issue's labels on issue.opened", () => {
+    const event = normalize(
+      "issues",
+      openedPayload({
+        issue: {
+          ...openedPayload().issue,
+          labels: [{ name: "Bug" }, { name: "good first issue" }],
+        },
+      }),
+    );
+    expect(event).toMatchObject({ kind: "issue.opened", labels: ["Bug", "good first issue"] });
+  });
+
+  it("carries the issue's labels on issue.reopened", () => {
+    const base = reopenedPayload();
+    const event = normalize("issues", {
+      ...base,
+      issue: { ...base.issue, labels: [{ name: "p1" }] },
+    });
+    expect(event).toMatchObject({ kind: "issue.reopened", labels: ["p1"] });
+  });
+
+  it("reports an empty set for an unlabeled open, and nothing when the payload has no label data", () => {
+    const unlabeled = normalize(
+      "issues",
+      openedPayload({ issue: { ...openedPayload().issue, labels: [] } }),
+    );
+    expect(unlabeled).toMatchObject({ kind: "issue.opened", labels: [] });
+    const noData = normalize("issues", openedPayload());
+    expect(noData && "labels" in noData).toBe(false);
+  });
+});

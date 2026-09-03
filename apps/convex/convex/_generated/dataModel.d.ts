@@ -968,6 +968,7 @@ export type DataModel = {
       expiresAt: number;
       nonce: string;
       provider: string;
+      purpose?: "install" | "identity";
       returnTo?: string;
       userId: Id<"users">;
       workspaceId: Id<"workspaces">;
@@ -981,6 +982,7 @@ export type DataModel = {
       | "expiresAt"
       | "nonce"
       | "provider"
+      | "purpose"
       | "returnTo"
       | "userId"
       | "workspaceId";
@@ -1305,6 +1307,12 @@ export type DataModel = {
       inboundIssueSyncDisabled?: boolean;
       lastWebhookAt?: number;
       pausedByBilling: boolean;
+      priorityLabels?: {
+        high: string;
+        low: string;
+        medium: string;
+        urgent: string;
+      };
       projectId: Id<"projects">;
       status: "configuring" | "active" | "paused" | "disconnected";
       webhookSecret?: string;
@@ -1326,6 +1334,11 @@ export type DataModel = {
       | "inboundIssueSyncDisabled"
       | "lastWebhookAt"
       | "pausedByBilling"
+      | "priorityLabels"
+      | "priorityLabels.high"
+      | "priorityLabels.low"
+      | "priorityLabels.medium"
+      | "priorityLabels.urgent"
       | "projectId"
       | "status"
       | "webhookSecret"
@@ -1709,6 +1722,7 @@ export type DataModel = {
     document: {
       body: string;
       deleted: boolean;
+      internal?: boolean;
       lastSyncError?: {
         httpStatus?: number;
         message: string;
@@ -1724,6 +1738,7 @@ export type DataModel = {
       | "_id"
       | "body"
       | "deleted"
+      | "internal"
       | "lastSyncError"
       | "lastSyncError.httpStatus"
       | "lastSyncError.message"

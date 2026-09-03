@@ -50,6 +50,9 @@ const timelineItemValidator = v.union(
       avatarUrl: v.string(),
       url: v.string(),
     })),
+    // The private lane — a team-only note on a linked task, never pushed.
+    // Absent for public comments. Same shape as `taskComments.list`.
+    internal: v.optional(v.boolean()),
   }),
 );
 
@@ -139,6 +142,7 @@ export const timeline = query({
         commentId: c._id,
         body: c.body,
         externalAuthor: externalAuthorByComment.get(c._id),
+        internal: c.internal,
       };
     });
 

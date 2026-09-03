@@ -163,3 +163,37 @@ export async function listUserInstallationIds(args: {
   const installs = await listUserInstallations(args);
   return installs.map((i) => i.externalAccountId);
 }
+
+export interface GithubCurrentUser {
+  /** String, matching how every other external id is stored. */
+  id: string;
+  login: string;
+}
+
+/**
+ * Ask GitHub who the holder of this user token is (`GET /user`). The one call
+ * the identity-connect finalizer makes with the token before discarding it:
+ * nothing but `id` + `login` is kept.
+ */
+export async function fetchCurrentUser(args: {
+  cfg: GithubAppOAuthConfig;
+  accessToken: string;
+}): Promise<GithubCurrentUser> {
+  const { cfg, accessToken } = args;
+  const doFetch = cfg.fetchImpl ?? fetch;
+  const res = await doFetch(`${cfg.apiBase ?? GITHUB_API_BASE}/user`, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      Accept: "application/vnd.github+json",
+      "X-GitHub-Api-Version": "2022-11-28",
+    },
+  });
+  if (!res.ok) {
+    throw new Error(`GitHub /user failed: ${res.status}`);
+  }
+  const body = (await res.json()) as { id?: number | string; login?: string };
+  if (body.id === undefined || typeof body.login !== "string") {
+    throw new Error("GitHub /user returned no id/login");
+  }
+  return { id: String(body.id), login: body.login };
+}

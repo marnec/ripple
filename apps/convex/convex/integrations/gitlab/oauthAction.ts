@@ -108,6 +108,17 @@ export const finalizeOAuth = internalAction({
       { nonce: args.nonce },
     );
     if (!resolved || !resolved.codeVerifier) return null;
+    // An identity nonce is minted by any member with a `read_user`-scoped
+    // authorize URL; it proves which GitLab user they are, not that an admin
+    // is binding an account to the workspace. The route dispatches on purpose
+    // before calling us, so reaching this is a bug or a forgery; either way it
+    // must not complete an install.
+    if (resolved.purpose !== "install") {
+      console.error(
+        "[gitlab/oauth] refusing install: nonce was minted for an identity connect",
+      );
+      return null;
+    }
 
     const cfg = gitlabOAuthFromEnv();
     if (!cfg) {

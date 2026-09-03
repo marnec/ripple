@@ -28,6 +28,7 @@ import {
   Gauge,
   FileText,
   Minus,
+  Lock,
 } from "lucide-react";
 import { useLayoutEffect, useRef, useState } from "react";
 import { api } from "@convex/_generated/api";
@@ -62,6 +63,10 @@ type TaskActivityTimelineProps = {
    *  "github" — safe for Ripple-native tasks (the integration labels never
    *  appear for them). */
   provider?: string;
+  /** Whether the task is linked to a provider issue. Turns on the comment
+   *  lanes (private note vs reply on the provider); unlinked tasks have no
+   *  lanes and their comments carry none. */
+  isLinked?: boolean;
   /** On lg+, pin header & composer and scroll only the list. Requires a parent with a defined height. */
   fillHeight?: boolean;
   /** When set, the header becomes a click target and renders the toggle icon. */
@@ -91,7 +96,17 @@ type TimelineItem = {
   commentId?: string;
   body?: string;
   externalAuthor?: { login: string; avatarUrl: string; url: string };
+  /** The private lane: a team-only note that never reached the provider. */
+  internal?: boolean;
 };
+
+/**
+ * Where a comment on a linked task goes. Private is the default, as in
+ * Linear: the synced thread is the explicit place to talk to the provider,
+ * everything else on the task is team discussion. Chosen when posting and
+ * never changed afterwards.
+ */
+type CommentLane = "private" | "reply";
 
 
 function formatRelativeTimestamp(ts: number): string {
@@ -217,7 +232,7 @@ function getActivityDescription(item: TimelineItem, provider: string): React.Rea
   }
 }
 
-export function TaskActivityTimeline({ taskId, currentUserId, workspaceId, members: membersProp, provider = "github", fillHeight = false, onToggle, collapsed = false, toggleIcon = "maximize" }: TaskActivityTimelineProps) {
+export function TaskActivityTimeline({ taskId, currentUserId, workspaceId, members: membersProp, provider = "github", isLinked = false, fillHeight = false, onToggle, collapsed = false, toggleIcon = "maximize" }: TaskActivityTimelineProps) {
   const timeline = useQuery(api.taskActivity.timeline, { taskId });
   // Use pre-fetched members when available; fall back to workspace context
   const contextMembers = useWorkspaceMembers();
@@ -229,6 +244,7 @@ export function TaskActivityTimeline({ taskId, currentUserId, workspaceId, membe
   const [filter, setFilter] = useState<TimelineFilter>("comments");
   const [editingCommentId, setEditingCommentId] = useState<Id<"taskComments"> | null>(null);
   const [isEmpty, setIsEmpty] = useState(true);
+  const [lane, setLane] = useState<CommentLane>("private");
 
   const { resolvedTheme } = useTheme();
 
@@ -247,10 +263,13 @@ export function TaskActivityTimeline({ taskId, currentUserId, workspaceId, membe
   const handleSubmit = () => {
     if (isBlocksEmpty(editor.document)) return;
     const body = JSON.stringify(editor.document);
-    // Render to markdown for the GitHub push (lossy for mentions, like the
-    // description sync). Stored body stays BlockNote JSON for Ripple rendering.
+    // Render to markdown for the provider push; mentions leave as tokens the
+    // dispatcher resolves. Stored body stays BlockNote JSON for Ripple rendering.
     const bodyMarkdown = editor.blocksToMarkdownLossy(editor.document);
-    void createComment({ taskId, body, bodyMarkdown }).then(() => {
+    // The lane only exists on a linked task; elsewhere the server would drop
+    // it anyway, so do not even send it.
+    const internal = isLinked ? lane === "private" : undefined;
+    void createComment({ taskId, body, bodyMarkdown, internal }).then(() => {
       editor.replaceBlocks(editor.document, [{ id: crypto.randomUUID(), type: "paragraph", content: "" }]);
       setIsEmpty(true);
     });
@@ -424,6 +443,20 @@ export function TaskActivityTimeline({ taskId, currentUserId, workspaceId, membe
         }
         onKeyDown={handleKeyDown}
       >
+        {isLinked && (
+          <Tabs value={lane} onValueChange={(v) => setLane(v as CommentLane)}>
+            <TabsList className="h-7">
+              <TabsTrigger value="private" className="h-6 gap-1 px-2 text-xs">
+                <Lock className="h-3 w-3" />
+                Private note
+              </TabsTrigger>
+              <TabsTrigger value="reply" className="h-6 gap-1 px-2 text-xs">
+                {provider === "gitlab" ? <GitlabMark className="h-3 w-3" /> : <GithubMark className="h-3 w-3" />}
+                Reply on {providerLabel(provider)}
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+        )}
         <div className="task-comment-editor border rounded-md p-2">
           <BlockNoteView
             editor={editor}
@@ -518,7 +551,17 @@ function CommentItem({
         {/* Name + timestamp — aligned with activity events */}
         <div className="flex items-center gap-2 leading-6">
           <MessageSquare className="h-3 w-3 text-muted-foreground shrink-0" />
-          <span className="font-medium text-sm flex-1 min-w-0">{item.userName}</span>
+          <span className="font-medium text-sm min-w-0 truncate">{item.userName}</span>
+          {item.internal && (
+            <span
+              className="inline-flex items-center gap-1 rounded-full border px-1.5 text-[10px] leading-4 text-muted-foreground shrink-0"
+              title="Private note — never sent to the linked issue"
+            >
+              <Lock className="h-2.5 w-2.5" />
+              Private
+            </span>
+          )}
+          <span className="flex-1" />
           <span
             className="text-xs text-muted-foreground/60 shrink-0"
             title={new Date(item._creationTime).toLocaleString()}

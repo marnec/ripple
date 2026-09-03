@@ -133,6 +133,8 @@ export function issueCreateSink(
   args: {
     taskId: Id<"tasks">;
     projectIntegrationLinkId: Id<"projectIntegrationLinks">;
+    /** The label set the create was sent with — seeds the link's mirror. */
+    labels?: string[];
   },
 ): OutboundRecorderSink {
   return {
@@ -148,6 +150,8 @@ export function issueCreateSink(
           issueNumber: meta.issueNumber!,
           externalUpdatedAt: meta.externalUpdatedAt!,
           externalAuthor: meta.externalAuthor!,
+          // Also on a precheck hit: the lost attempt sent the same set.
+          externalLabels: args.labels,
         },
       );
     },

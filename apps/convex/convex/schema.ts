@@ -705,6 +705,14 @@ export default defineSchema({
     userId: v.id("users"),
     body: v.string(),
     deleted: v.boolean(),
+    // The private lane. `true` = a team-only note on a task linked to an
+    // external issue: never pushed, no `taskCommentIntegrationLinks` row, a
+    // lock chip in the timeline. Chosen in the composer at creation and never
+    // changed — flipping it later would mean deleting or creating on the
+    // provider side. Absent = public: every row written before the column
+    // existed, every comment on an unlinked task (the lane is meaningless
+    // there, so `create` does not store it), and every inbound comment.
+    internal: v.optional(v.boolean()),
     // Permanent outbound failure marker for the *create* dispatch — there's
     // no `taskCommentIntegrationLinks` row yet at create-failure time, so the
     // error lives on the comment row itself. Update/delete failures land on
@@ -1503,6 +1511,14 @@ export default defineSchema({
     // open on whichever page the flow started from. App-relative; validated at
     // write time in `beginAppAuthorize`.
     returnTo: v.optional(v.string()),
+    // What the round trip is for. `install` binds a provider account to the
+    // workspace (admin-gated); `identity` proves which provider account the
+    // *user* is (any member, writes `users.githubLogin` / `gitlabUserId`).
+    // Both purposes share one callback route per provider, which reads this to
+    // dispatch to the right finalizer — so a nonce minted for one purpose can
+    // never complete the other. Absent = `install` (rows written before the
+    // column existed).
+    purpose: v.optional(v.union(v.literal("install"), v.literal("identity"))),
   })
     .index("by_nonce", ["nonce"])
     // For workspace cascade-delete (these are short-lived but tidy up anyway).
@@ -1647,6 +1663,23 @@ export default defineSchema({
     // setRepoTagRules). Normalized (trim+lowercase) to match tasks.labels.
     // Absent/empty = no routing rule for this repo.
     autoSelectTags: v.optional(v.array(v.string())),
+    // Priority ↔ label map: the provider label that stands for each Ripple
+    // priority. A vocabulary separate from tags — stripped before anything
+    // reaches `tasks.labels` / `taskTags` (`priorityLabels.splitPriorityLabels`)
+    // and re-added when computing the outbound label set
+    // (`withPriorityLabel`); `taskIntegrationLinks.externalLabels` keeps
+    // mirroring the FULL provider set so the echo guard works unchanged.
+    // Stored normalized like tags. Validated in `links.setPriorityLabels`
+    // (four distinct non-empty values, none a routing tag on the project).
+    // Absent = no priority sync for this link.
+    priorityLabels: v.optional(
+      v.object({
+        urgent: v.string(),
+        high: v.string(),
+        medium: v.string(),
+        low: v.string(),
+      }),
+    ),
   })
     .index("by_workspace", ["workspaceId"])
     .index("by_project", ["projectId"])

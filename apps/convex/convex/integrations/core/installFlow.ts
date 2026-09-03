@@ -1,5 +1,6 @@
 import { ConvexError, v } from "convex/values";
 import { internalMutation, mutation } from "../../functions";
+import { internalQuery } from "../../_generated/server";
 import { requireWorkspaceMember } from "../../authHelpers";
 import { WorkspaceRole } from "@ripple/shared/enums/roles";
 
@@ -119,6 +120,8 @@ export const consumeInstallState = internalMutation({
       provider: v.string(),
       codeVerifier: v.optional(v.string()),
       returnTo: v.optional(v.string()),
+      /** What the nonce was minted for; legacy rows read as `install`. */
+      purpose: v.union(v.literal("install"), v.literal("identity")),
     }),
   ),
   handler: async (ctx, args) => {
@@ -138,6 +141,7 @@ export const consumeInstallState = internalMutation({
       provider: row.provider,
       codeVerifier: row.codeVerifier,
       returnTo: row.returnTo,
+      purpose: row.purpose ?? "install",
     };
   },
 });
@@ -157,6 +161,10 @@ export const persistInstallState = internalMutation({
     provider: v.string(),
     expiresAt: v.number(),
     codeVerifier: v.optional(v.string()),
+    /** Absent = `install`. `identity` is minted by `gitlab/identityAction`. */
+    purpose: v.optional(v.union(v.literal("install"), v.literal("identity"))),
+    /** App-relative path to land on afterwards; validated by the caller. */
+    returnTo: v.optional(v.string()),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
@@ -167,7 +175,29 @@ export const persistInstallState = internalMutation({
       provider: args.provider,
       expiresAt: args.expiresAt,
       codeVerifier: args.codeVerifier,
+      purpose: args.purpose,
+      returnTo: args.returnTo,
     });
     return null;
+  },
+});
+
+/**
+ * Read a nonce's purpose WITHOUT consuming it. The provider callbacks are
+ * single-entry per provider and hand the nonce to one of two finalizers, each
+ * of which consumes it; this lets the route choose the finalizer first. Not
+ * a proof of anything — the finalizer still consumes and re-checks purpose.
+ * Unknown or expired nonces read as `install`, whose finalizer then fails
+ * exactly as it does today.
+ */
+export const peekInstallStatePurpose = internalQuery({
+  args: { nonce: v.string() },
+  returns: v.union(v.literal("install"), v.literal("identity")),
+  handler: async (ctx, args) => {
+    const row = await ctx.db
+      .query("integrationInstallStates")
+      .withIndex("by_nonce", (q) => q.eq("nonce", args.nonce))
+      .unique();
+    return row?.purpose ?? "install";
   },
 });

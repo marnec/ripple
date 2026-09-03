@@ -53,6 +53,8 @@ export const pushCreateIssue = internalAction({
     projectIntegrationLinkId: v.id("projectIntegrationLinks"),
     title: v.string(),
     body: v.string(),
+    /** Normalized label names to create the issue with (the task's tags). */
+    labels: v.optional(v.array(v.string())),
     credentialRef: v.string(),
     projectRef: v.string(),
   },
@@ -64,6 +66,7 @@ export const pushCreateIssue = internalAction({
       sink: issueCreateSink(ctx, {
         taskId: args.taskId,
         projectIntegrationLinkId: args.projectIntegrationLinkId,
+        labels: args.labels,
       }),
       // Creates are the one op a retry cannot safely repeat, so ask the host
       // whether a previous attempt already made this issue before making
@@ -78,6 +81,7 @@ export const pushCreateIssue = internalAction({
           projectRef: args.projectRef,
           title: args.title,
           body: args.body,
+          labels: args.labels,
         }),
     }),
 });

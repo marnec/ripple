@@ -1827,6 +1827,24 @@ export declare const api: {
           null
         >;
       };
+      identityConnect: {
+        beginIdentityConnect: FunctionReference<
+          "mutation",
+          "public",
+          {
+            provider: "github" | "gitlab";
+            returnTo: string;
+            workspaceId: Id<"workspaces">;
+          },
+          { url: string }
+        >;
+        disconnectIdentity: FunctionReference<
+          "mutation",
+          "public",
+          { provider: "github" | "gitlab" },
+          null
+        >;
+      };
       install: {
         claimInstallation: FunctionReference<
           "mutation",
@@ -1939,6 +1957,12 @@ export declare const api: {
             externalRepoFullName: string;
             inboundIssueSyncDisabled?: boolean;
             pausedByBilling: boolean;
+            priorityLabels?: {
+              high: string;
+              low: string;
+              medium: string;
+              urgent: string;
+            };
             provider: string;
             status: "configuring" | "active" | "paused";
           }>
@@ -1999,6 +2023,20 @@ export declare const api: {
           "mutation",
           "public",
           { enabled: boolean; linkId: Id<"projectIntegrationLinks"> },
+          null
+        >;
+        setPriorityLabels: FunctionReference<
+          "mutation",
+          "public",
+          {
+            linkId: Id<"projectIntegrationLinks">;
+            priorityLabels: {
+              high: string;
+              low: string;
+              medium: string;
+              urgent: string;
+            };
+          },
           null
         >;
         setTagRoutingRule: FunctionReference<
@@ -2161,6 +2199,14 @@ export declare const api: {
           "public",
           { taskId: Id<"tasks"> },
           { branches: Array<string>; defaultBranch: string | null }
+        >;
+      };
+      identityAction: {
+        beginIdentityConnect: FunctionReference<
+          "action",
+          "public",
+          { returnTo: string; workspaceId: Id<"workspaces"> },
+          { url: string }
         >;
       };
       oauthAction: {
@@ -3033,6 +3079,7 @@ export declare const api: {
             body: string;
             commentId: Id<"taskComments">;
             externalAuthor?: { avatarUrl: string; login: string; url: string };
+            internal?: boolean;
             kind: "comment";
             userId: Id<"users">;
             userImage?: string;
@@ -3045,7 +3092,12 @@ export declare const api: {
     create: FunctionReference<
       "mutation",
       "public",
-      { body: string; bodyMarkdown: string; taskId: Id<"tasks"> },
+      {
+        body: string;
+        bodyMarkdown: string;
+        internal?: boolean;
+        taskId: Id<"tasks">;
+      },
       Id<"taskComments">
     >;
     list: FunctionReference<
@@ -3060,6 +3112,7 @@ export declare const api: {
         deleted: boolean;
         externalAuthor?: { avatarUrl: string; login: string; url: string };
         image?: string;
+        internal?: boolean;
         taskId: Id<"tasks">;
         userId: Id<"users">;
       }>
@@ -3955,6 +4008,8 @@ export declare const api: {
       { workspaceId: Id<"workspaces"> },
       Array<{
         email?: string;
+        githubConnected: boolean;
+        gitlabConnected: boolean;
         image?: string;
         joinedAt: number;
         membershipId: Id<"workspaceMembers">;
@@ -5061,6 +5116,19 @@ export declare const internal: {
           }
         >;
       };
+      identityConnect: {
+        completeIdentityConnect: FunctionReference<
+          "mutation",
+          "internal",
+          {
+            externalLogin: string;
+            externalUserId: string;
+            provider: "github" | "gitlab";
+            userId: Id<"users">;
+          },
+          null
+        >;
+      };
       install: {
         assertWizardInstallation: FunctionReference<
           "query",
@@ -5141,10 +5209,17 @@ export declare const internal: {
           null | {
             codeVerifier?: string;
             provider: string;
+            purpose: "install" | "identity";
             returnTo?: string;
             userId: Id<"users">;
             workspaceId: Id<"workspaces">;
           }
+        >;
+        peekInstallStatePurpose: FunctionReference<
+          "query",
+          "internal",
+          { nonce: string },
+          "install" | "identity"
         >;
         persistInstallState: FunctionReference<
           "mutation",
@@ -5154,6 +5229,8 @@ export declare const internal: {
             expiresAt: number;
             nonce: string;
             provider: string;
+            purpose?: "install" | "identity";
+            returnTo?: string;
             userId: Id<"users">;
             workspaceId: Id<"workspaces">;
           },
@@ -5279,6 +5356,7 @@ export declare const internal: {
           {
             externalAuthor: { avatarUrl: string; login: string; url: string };
             externalIssueId: string;
+            externalLabels?: Array<string>;
             externalUpdatedAt: number;
             issueNumber: number;
             projectIntegrationLinkId: Id<"projectIntegrationLinks">;
@@ -5401,6 +5479,12 @@ export declare const internal: {
         >;
       };
       setupAction: {
+        finalizeIdentity: FunctionReference<
+          "action",
+          "internal",
+          { code: string; nonce: string },
+          null | { returnTo?: string; workspaceId: Id<"workspaces"> }
+        >;
         finalizeInstall: FunctionReference<
           "action",
           "internal",
@@ -5471,6 +5555,7 @@ export declare const internal: {
           {
             body: string;
             credentialRef: string;
+            labels?: Array<string>;
             projectIntegrationLinkId: Id<"projectIntegrationLinks">;
             projectRef: string;
             taskId: Id<"tasks">;
@@ -5618,6 +5703,20 @@ export declare const internal: {
           null
         >;
       };
+      identityAction: {
+        finalizeIdentity: FunctionReference<
+          "action",
+          "internal",
+          { code: string; nonce: string },
+          null | { returnTo?: string; workspaceId: Id<"workspaces"> }
+        >;
+        requireMemberForOAuth: FunctionReference<
+          "query",
+          "internal",
+          { workspaceId: Id<"workspaces"> },
+          { userId: Id<"users"> }
+        >;
+      };
       oauthAction: {
         assertAdminForOAuth: FunctionReference<
           "query",
@@ -5691,6 +5790,7 @@ export declare const internal: {
           {
             body: string;
             credentialRef: string;
+            labels?: Array<string>;
             projectIntegrationLinkId: Id<"projectIntegrationLinks">;
             projectRef: string;
             taskId: Id<"tasks">;
