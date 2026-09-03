@@ -334,7 +334,7 @@ export function logCascadeSummary(opts: {
 }
 
 /**
- * Batched mode: scheduled by the component when all batches complete.
+ * Batched mode: scheduled by the component when the last step commits.
  * Receives { summary, status, context } where context is the JSON-serialized
  * onCompleteContext passed at call time.
  */
@@ -389,8 +389,7 @@ export const cascadeDelete = new CascadingDelete(components.convexCascadingDelet
   deleters,
 });
 
-export const _cascadeBatchHandler = makeBatchDeleteHandler(
-  internalMutation,
-  components.convexCascadingDelete,
-  deleters,
-);
+// One transaction of a batched cascade. `internalMutation` is this app's
+// trigger-wrapped builder (functions.ts), so every row the step deletes fires
+// the aggregate and index triggers exactly like a row deleted anywhere else.
+export const _cascadeBatchHandler = makeBatchDeleteHandler(internalMutation, cascadeDelete);

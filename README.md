@@ -1,7 +1,5 @@
 NEXT STEPS:
 
-- cascade delete collection phase is bounded even for batched deletes and will hit a ceiling for extremely large cascaded entities.
-
 - add a dependency view to tasks
 
 - consider introducing document snapshots
@@ -48,7 +46,6 @@ keyboard accessiblity
     - [ ] gitlab (end-to-end built: OAuth + project picker + webhooks + outbound gateway; remaining gaps)
         - [ ] self-hosted GitLab — `gitlab.com` is hardcoded across `integrations/gitlab/*` (tokenClient, oauthClient, outboundGateway, branchesAction, forceResyncAction); needs a per-integration base URL
     - [ ] `workspaceMemberExternalIdentity` has no write path — no mutation, no UI. Identity resolution falls back to OAuth-captured columns only, so a member who signed in with a different account can never be an assignee-push target. Needs a per-workspace "you are @x on <provider>" mapping screen
-    - [ ] add sentry
 
 - I don't really know how to handle unread messages, they kind of work right now but god save me
 

@@ -24,7 +24,7 @@ vi.mock("convex/server", async () => {
   };
 });
 
-const { CascadingDelete } = await import("./index.js");
+const { CascadingDelete, makeBatchDeleteHandler } = await import("./index.js");
 
 /**
  * Creates a mock database context that simulates Convex's query builder pattern.
@@ -51,6 +51,16 @@ function createMockDb(tables: Record<string, any[]>) {
         fn(queryBuilder);
 
         return {
+          take: async (n: number) => {
+            const docs = tables[table] || [];
+            return docs
+              .filter(
+                (d) =>
+                  !deletedSet.has(d._id) &&
+                  (!filterField || d[filterField!] === filterValue)
+              )
+              .slice(0, n);
+          },
           collect: async () => {
             const docs = tables[table] || [];
             if (filterField && filterValue) {
@@ -141,10 +151,10 @@ function createMockCtx(db: any) {
 
 const noopComponent: any = {
   lib: {
-    createBatchJob: "component.lib.createBatchJob",
-    startProcessing: "component.lib.startProcessing",
+    createJob: "component.lib.createJob",
+    loadJob: "component.lib.loadJob",
+    saveStep: "component.lib.saveStep",
     cancelJob: "component.lib.cancelJob",
-    reportBatchComplete: "component.lib.reportBatchComplete",
     getJobStatus: "component.lib.getJobStatus",
   },
 };
@@ -322,30 +332,63 @@ describe("CascadingDelete", () => {
   });
 
   describe("deleteWithCascadeBatched", () => {
-    it("should delete all targets inline when under batch size", async () => {
-      const db = createMockDb({
-        posts: [{ _id: "post1", authorId: "user1" }],
-      });
-      const ctx = createMockCtx(db);
+    const rules: CascadeConfig = {
+      users: [{ to: "posts", via: "by_author", field: "authorId" }],
+      posts: [{ to: "comments", via: "by_post", field: "postId" }],
+    };
+    const batchHandlerRef = "mockRef" as any;
 
-      const rules: CascadeConfig = {
-        users: [{ to: "posts", via: "by_author", field: "authorId" }],
-      };
+    function smallTree() {
+      return createMockDb({
+        users: [{ _id: "user1", name: "Alice" }],
+        posts: [
+          { _id: "post1", authorId: "user1" },
+          { _id: "post2", authorId: "user1" },
+        ],
+        comments: [
+          { _id: "c1", postId: "post1" },
+          { _id: "c2", postId: "post1" },
+        ],
+      });
+    }
+
+    it("finishes inline when the tree fits one budget, and fires onComplete", async () => {
+      const db = smallTree();
+      const ctx = createMockCtx(db);
       const cd = new CascadingDelete(noopComponent, { rules });
 
       const result = await cd.deleteWithCascadeBatched(ctx, "users", "user1", {
-        batchHandlerRef: "mockRef" as any,
-        batchSize: 100,
+        batchHandlerRef,
+        onComplete: "onCompleteRef" as any,
+        onCompleteContext: { actor: "u9" },
       });
 
-      // All deleted inline, no job needed
       expect(result.jobId).toBeNull();
-      expect(result.initialSummary).toEqual({ users: 1, posts: 1 });
-      expect(db._deleted).toHaveLength(2);
+      expect(result.initialSummary).toEqual({ users: 1, posts: 2, comments: 2 });
+      expect(db._deleted).toHaveLength(5);
+      expect(ctx.runMutation).not.toHaveBeenCalled();
+      expect(ctx.scheduler.runAfter).toHaveBeenCalledWith(0, "mock-function-handle", {
+        summary: JSON.stringify({ users: 1, posts: 2, comments: 2 }),
+        status: "completed",
+        context: JSON.stringify({ actor: "u9" }),
+      });
     });
 
-    it("should create a batch job for overflow targets", async () => {
+    it("deletes a parent before its dependents (pre-order)", async () => {
+      const db = smallTree();
+      const cd = new CascadingDelete(noopComponent, { rules });
+
+      await cd.deleteWithCascadeBatched(createMockCtx(db), "users", "user1", { batchHandlerRef });
+
+      const order = (id: string) => db._deleted.indexOf(id);
+      expect(order("user1")).toBe(0);
+      expect(order("post1")).toBeLessThan(order("c1"));
+      expect(order("post1")).toBeLessThan(order("c2"));
+    });
+
+    it("hands the frontier to the component when the delete budget runs out", async () => {
       const db = createMockDb({
+        users: [{ _id: "user1" }],
         posts: [
           { _id: "post1", authorId: "user1" },
           { _id: "post2", authorId: "user1" },
@@ -353,59 +396,334 @@ describe("CascadingDelete", () => {
         ],
       });
       const ctx = createMockCtx(db);
-
-      const rules: CascadeConfig = {
-        users: [{ to: "posts", via: "by_author", field: "authorId" }],
-      };
       const cd = new CascadingDelete(noopComponent, { rules });
 
       const result = await cd.deleteWithCascadeBatched(ctx, "users", "user1", {
-        batchHandlerRef: "mockRef" as any,
+        batchHandlerRef,
         batchSize: 2,
+        onComplete: "onCompleteRef" as any,
       });
 
-      // First batch of 2 deleted inline
-      expect(db._deleted).toHaveLength(2);
-      // Remaining 2 go to batch job
-      expect(result.jobId).toBe("mock-job-id");
-      expect(ctx.runMutation).toHaveBeenCalled();
+      // The root plus one budget's worth, nothing more, in this transaction.
+      expect(db._deleted).toEqual(["user1", "post1", "post2"]);
+      expect(result).toEqual({ jobId: "mock-job-id", initialSummary: { users: 1, posts: 2 } });
+      // onComplete is the component's to fire now, not ours.
+      expect(ctx.scheduler.runAfter).not.toHaveBeenCalled();
+
+      expect(ctx.runMutation).toHaveBeenCalledTimes(1);
+      const [ref, args] = (ctx.runMutation as any).mock.calls[0];
+      expect(ref).toBe(noopComponent.lib.createJob);
+      expect(args).toEqual({
+        // The parent stays on the frontier with its page probe; the two posts
+        // it just deleted sit above it, waiting to be expanded first (LIFO).
+        frontier: [
+          { table: "users", id: "user1", ruleIndex: 0, probeId: "post1" },
+          { table: "posts", id: "post1", ruleIndex: 0 },
+          { table: "posts", id: "post2", ruleIndex: 0 },
+        ],
+        failedIds: [],
+        batchSummary: JSON.stringify({ users: 1, posts: 2 }),
+        errors: undefined,
+        deleteHandleStr: "mock-function-handle",
+        batchSize: 2,
+        maxReadsPerBatch: 1024,
+        onCompleteHandleStr: "mock-function-handle",
+        onCompleteContext: undefined,
+      });
     });
 
-    it("should call custom deleters for first batch targets", async () => {
-      const db = createMockDb({
-        users: [{ _id: "user1", name: "Alice" }],
-        posts: [{ _id: "post1", authorId: "user1" }],
-      });
+    it("stops when the read budget runs out, however few rows it deleted", async () => {
+      const db = smallTree();
       const ctx = createMockCtx(db);
-      const deleterCalls: Array<{ id: string; doc: any }> = [];
+      const cd = new CascadingDelete(noopComponent, { rules });
 
-      const rules: CascadeConfig = {
-        users: [{ to: "posts", via: "by_author", field: "authorId" }],
-      };
+      // One read for the root, one for the posts page — then nothing left
+      // for the comments.
+      const result = await cd.deleteWithCascadeBatched(ctx, "users", "user1", {
+        batchHandlerRef,
+        maxReadsPerBatch: 2,
+      });
+
+      expect(result.jobId).toBe("mock-job-id");
+      expect(db._deleted).toEqual(["user1", "post1", "post2"]);
+      const [, args] = (ctx.runMutation as any).mock.calls[0];
+      expect(args.frontier.map((e: any) => e.id)).toEqual(["user1", "post1", "post2"]);
+    });
+
+    it("passes the fetched document to custom deleters", async () => {
+      const db = smallTree();
+      const seen: Array<{ id: string; doc: any }> = [];
       const cd = new CascadingDelete(noopComponent, {
         rules,
         deleters: {
-          users: async (_ctx: any, id: string, doc: any) => {
-            deleterCalls.push({ id, doc });
-            await _ctx.db.delete(id);
+          posts: async (ctx: any, id: string, doc: any) => {
+            seen.push({ id, doc });
+            await ctx.db.delete(id);
           },
         },
       });
 
+      await cd.deleteWithCascadeBatched(createMockCtx(db), "users", "user1", { batchHandlerRef });
+
+      expect(seen).toEqual([
+        { id: "post1", doc: { _id: "post1", authorId: "user1" } },
+        { id: "post2", doc: { _id: "post2", authorId: "user1" } },
+      ]);
+      expect(db._deleted).toContain("c1");
+    });
+
+    it("skips a row that cannot be deleted, reports it, and still completes", async () => {
+      const db = createMockDb({
+        users: [{ _id: "user1" }],
+        posts: [
+          { _id: "post1", authorId: "user1" },
+          { _id: "post2", authorId: "user1" },
+          { _id: "post3", authorId: "user1" },
+        ],
+        comments: [
+          { _id: "c1", postId: "post1" },
+          { _id: "c2", postId: "post2" },
+          { _id: "c3", postId: "post3" },
+        ],
+      });
+      const rawDelete = db.delete;
+      db.delete = async (id: string) => {
+        if (id === "post2") throw new Error("write conflict");
+        await rawDelete(id);
+      };
+      const ctx = createMockCtx(db);
+      const cd = new CascadingDelete(noopComponent, { rules });
+
       const result = await cd.deleteWithCascadeBatched(ctx, "users", "user1", {
-        batchHandlerRef: "mockRef" as any,
-        batchSize: 100,
+        batchHandlerRef,
+        onComplete: "onCompleteRef" as any,
       });
 
-      // All deleted inline, no job needed
+      // Terminated — the undeletable row did not keep the page from moving.
       expect(result.jobId).toBeNull();
-      // Custom deleter was called for user (not for post)
-      expect(deleterCalls).toHaveLength(1);
-      expect(deleterCalls[0].id).toBe("user1");
-      expect(deleterCalls[0].doc).toEqual({ _id: "user1", name: "Alice" });
-      // Both deleted
-      expect(db._deleted).toContain("user1");
-      expect(db._deleted).toContain("post1");
+      expect(db._deleted).toEqual(expect.arrayContaining(["user1", "post1", "post3", "c1", "c3"]));
+      expect(db._deleted).not.toContain("post2");
+      // Its subtree is left for reconciliation rather than walked.
+      expect(db._deleted).not.toContain("c2");
+      expect(result.initialSummary).toEqual({ users: 1, posts: 2, comments: 2 });
+      expect(ctx.scheduler.runAfter).toHaveBeenCalledWith(
+        0,
+        "mock-function-handle",
+        expect.objectContaining({ status: "failed" }),
+      );
+    });
+
+    it("detects a deleter that leaves the row in place instead of refetching it forever", async () => {
+      const db = createMockDb({
+        users: [{ _id: "user1" }],
+        posts: [
+          { _id: "post1", authorId: "user1" },
+          { _id: "post2", authorId: "user1" },
+        ],
+      });
+      const ctx = createMockCtx(db);
+      const cd = new CascadingDelete(noopComponent, {
+        rules,
+        deleters: { posts: async () => {} },
+      });
+
+      const result = await cd.deleteWithCascadeBatched(ctx, "users", "user1", {
+        batchHandlerRef,
+        onComplete: "onCompleteRef" as any,
+      });
+
+      expect(result.jobId).toBeNull();
+      expect(db._deleted).toEqual(["user1"]);
+      expect(ctx.scheduler.runAfter).toHaveBeenCalledWith(
+        0,
+        "mock-function-handle",
+        expect.objectContaining({ status: "failed" }),
+      );
+    });
+
+    it("does not loop on cycles — a deleted row cannot be fetched again", async () => {
+      const db = createMockDb({
+        tableB: [{ _id: "b1", refA: "a1" }],
+        tableA: [{ _id: "a1", refB: "b1" }],
+      });
+      const cd = new CascadingDelete(noopComponent, {
+        rules: {
+          tableA: [{ to: "tableB", via: "byRefA", field: "refA" }],
+          tableB: [{ to: "tableA", via: "byRefB", field: "refB" }],
+        },
+      });
+
+      const result = await cd.deleteWithCascadeBatched(createMockCtx(db), "tableA", "a1", {
+        batchHandlerRef,
+      });
+
+      expect(result).toEqual({ jobId: null, initialSummary: { tableA: 1, tableB: 1 } });
+    });
+
+    it("is a no-op for a root that no longer exists", async () => {
+      const db = createMockDb({ posts: [{ _id: "post1", authorId: "ghost" }] });
+      const ctx = createMockCtx(db);
+      const cd = new CascadingDelete(noopComponent, { rules });
+
+      const result = await cd.deleteWithCascadeBatched(ctx, "users", "ghost", { batchHandlerRef });
+
+      expect(result).toEqual({ jobId: null, initialSummary: {} });
+      expect(db._deleted).toHaveLength(0);
+    });
+
+    it("rejects rules with softDeleteField", async () => {
+      const cd = new CascadingDelete(noopComponent, {
+        rules: {
+          users: [{ to: "posts", via: "by_author", field: "authorId", softDeleteField: "deletedAt" }],
+        },
+      });
+
+      await expect(
+        cd.deleteWithCascadeBatched(createMockCtx(createMockDb({})), "users", "user1", {
+          batchHandlerRef,
+        }),
+      ).rejects.toThrow(/softDeleteField/);
+    });
+  });
+
+  describe("makeBatchDeleteHandler", () => {
+    const rules: CascadeConfig = {
+      users: [{ to: "posts", via: "by_author", field: "authorId" }],
+      posts: [{ to: "comments", via: "by_post", field: "postId" }],
+    };
+
+    type Job = {
+      frontier: any[];
+      failedIds: string[];
+      batchSize: number;
+      maxReadsPerBatch: number;
+    };
+
+    /**
+     * Stands in for the component: `loadJob` serves the job, `saveStep`
+     * records what the step reported. Returns the ctx and the recorded saves.
+     */
+    function stepCtx(db: any, job: Job | null) {
+      const saves: any[] = [];
+      const ctx = {
+        ...createMockCtx(db),
+        runQuery: vi.fn(async (ref: any) => (ref === noopComponent.lib.loadJob ? job : null)),
+        runMutation: vi.fn(async (ref: any, args: any) => {
+          if (ref === noopComponent.lib.saveStep) saves.push(args);
+          return null;
+        }),
+      };
+      return { ctx, saves };
+    }
+
+    function makeStep(cd: InstanceType<typeof CascadingDelete>) {
+      const def = makeBatchDeleteHandler((d: any) => d, cd);
+      return (ctx: any, jobId: string) => def.handler(ctx, { jobId });
+    }
+
+    it("stands down when the job is gone or no longer processing", async () => {
+      const db = createMockDb({ posts: [{ _id: "post1", authorId: "user1" }] });
+      const { ctx, saves } = stepCtx(db, null);
+      const step = makeStep(new CascadingDelete(noopComponent, { rules }));
+
+      await step(ctx, "job1");
+
+      expect(db._deleted).toHaveLength(0);
+      expect(saves).toHaveLength(0);
+    });
+
+    it("runs one budgeted step from the persisted frontier and reports it", async () => {
+      const db = createMockDb({
+        posts: [
+          { _id: "post1", authorId: "user1" },
+          { _id: "post2", authorId: "user1" },
+          { _id: "post3", authorId: "user1" },
+        ],
+      });
+      const { ctx, saves } = stepCtx(db, {
+        frontier: [{ table: "users", id: "user1", ruleIndex: 0 }],
+        failedIds: [],
+        batchSize: 2,
+        maxReadsPerBatch: 100,
+      });
+      const step = makeStep(new CascadingDelete(noopComponent, { rules }));
+
+      await step(ctx, "job1");
+
+      expect(db._deleted).toEqual(["post1", "post2"]);
+      expect(saves).toEqual([
+        {
+          jobId: "job1",
+          frontier: [
+            { table: "users", id: "user1", ruleIndex: 0, probeId: "post1" },
+            { table: "posts", id: "post1", ruleIndex: 0 },
+            { table: "posts", id: "post2", ruleIndex: 0 },
+          ],
+          failedIds: [],
+          batchSummary: JSON.stringify({ posts: 2 }),
+          errors: undefined,
+          done: false,
+        },
+      ]);
+    });
+
+    it("honours the persisted skip-set", async () => {
+      const db = createMockDb({
+        posts: [
+          { _id: "post1", authorId: "user1" },
+          { _id: "post2", authorId: "user1" },
+        ],
+      });
+      const { ctx, saves } = stepCtx(db, {
+        frontier: [{ table: "users", id: "user1", ruleIndex: 0 }],
+        failedIds: ["post1"],
+        batchSize: 100,
+        maxReadsPerBatch: 100,
+      });
+      const step = makeStep(new CascadingDelete(noopComponent, { rules }));
+
+      await step(ctx, "job1");
+
+      expect(db._deleted).toEqual(["post2"]);
+      expect(saves[0]).toMatchObject({ failedIds: ["post1"], done: true, frontier: [] });
+    });
+
+    it("drains a tree across steps until the frontier is empty", async () => {
+      const posts = Array.from({ length: 5 }, (_, i) => ({ _id: `post${i}`, authorId: "user1" }));
+      const comments = posts.flatMap((p) =>
+        Array.from({ length: 3 }, (_, j) => ({ _id: `${p._id}-c${j}`, postId: p._id })),
+      );
+      const db = createMockDb({ posts, comments });
+      const cd = new CascadingDelete(noopComponent, { rules });
+      const step = makeStep(cd);
+
+      // A minimal component: the job lives here, saveStep advances it.
+      let job: Job & { done: boolean } = {
+        frontier: [{ table: "users", id: "user1", ruleIndex: 0 }],
+        failedIds: [],
+        batchSize: 4,
+        maxReadsPerBatch: 100,
+        done: false,
+      };
+      const ctx = {
+        ...createMockCtx(db),
+        runQuery: vi.fn(async () => (job.done ? null : { ...job, frontier: structuredClone(job.frontier) })),
+        runMutation: vi.fn(async (_ref: any, args: any) => {
+          job = { ...job, frontier: args.frontier, failedIds: args.failedIds, done: args.done };
+          return null;
+        }),
+      };
+
+      let steps = 0;
+      while (!job.done) {
+        await step(ctx, "job1");
+        steps++;
+        if (steps > 50) throw new Error("cascade did not terminate");
+      }
+
+      expect(steps).toBeGreaterThan(1);
+      expect(db._deleted).toHaveLength(posts.length + comments.length);
+      expect(job.frontier).toEqual([]);
     });
   });
 

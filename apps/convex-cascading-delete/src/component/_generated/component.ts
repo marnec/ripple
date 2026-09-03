@@ -31,15 +31,24 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         null,
         Name
       >;
-      createBatchJob: FunctionReference<
+      createJob: FunctionReference<
         "mutation",
         "internal",
         {
           batchSize: number;
+          batchSummary: string;
           deleteHandleStr: string;
+          errors?: string;
+          failedIds: Array<string>;
+          frontier: Array<{
+            id: string;
+            probeId?: string;
+            ruleIndex: number;
+            table: string;
+          }>;
+          maxReadsPerBatch: number;
           onCompleteContext?: string;
           onCompleteHandleStr?: string;
-          targets: Array<{ id: string; table: string }>;
         },
         string,
         Name
@@ -52,27 +61,45 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           completedCount: number;
           completedSummary: string;
           error?: string;
-          status:
-            | "pending"
-            | "processing"
-            | "completed"
-            | "failed"
-            | "cancelled";
-          totalTargetCount: number;
+          pendingCount: number;
+          status: "processing" | "completed" | "failed" | "cancelled";
+          stepCount: number;
         } | null,
         Name
       >;
-      reportBatchComplete: FunctionReference<
-        "mutation",
-        "internal",
-        { batchSummary: string; errors?: string; jobId: string },
-        null,
-        Name
-      >;
-      startProcessing: FunctionReference<
-        "mutation",
+      loadJob: FunctionReference<
+        "query",
         "internal",
         { jobId: string },
+        {
+          batchSize: number;
+          failedIds: Array<string>;
+          frontier: Array<{
+            id: string;
+            probeId?: string;
+            ruleIndex: number;
+            table: string;
+          }>;
+          maxReadsPerBatch: number;
+        } | null,
+        Name
+      >;
+      saveStep: FunctionReference<
+        "mutation",
+        "internal",
+        {
+          batchSummary: string;
+          done: boolean;
+          errors?: string;
+          failedIds: Array<string>;
+          frontier: Array<{
+            id: string;
+            probeId?: string;
+            ruleIndex: number;
+            table: string;
+          }>;
+          jobId: string;
+        },
         null,
         Name
       >;

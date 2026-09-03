@@ -286,8 +286,10 @@ export const remove = mutation({
     // per job — and each task recurses into ten more tables, so the inline
     // single-transaction cascade put a large project past the write cap: the
     // mutation aborted and the same abort recurred on every retry, leaving the
-    // project permanently undeletable. Note the collection pass still walks the
-    // whole subtree read-only in this transaction; only the writes are batched.
+    // project permanently undeletable. The batched cascade streams: this
+    // transaction deletes the project row and one budget's worth of the
+    // subtree, and the rest drains step by step from a persisted frontier, so
+    // there is no project size at which it stops working.
     await cascadeDelete.deleteWithCascadeBatched(ctx, "projects", id, {
       batchHandlerRef: internal.cascadeDelete._cascadeBatchHandler,
       onComplete: internal.cascadeDelete._batchCascadeOnComplete,

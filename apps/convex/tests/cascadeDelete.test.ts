@@ -234,6 +234,10 @@ describe("cascade delete: projects.remove", () => {
       await countByIndex(t, "tasks", "by_project", "projectId", projectId),
       "the cascade must not delete a whole large project inside the calling mutation",
     ).toBeGreaterThan(0);
+    // …but the project itself is gone already: the batched cascade deletes a
+    // parent before draining its children, so the user sees the project
+    // vanish at once and never a project with half its tasks missing.
+    expect(await t.run(async (ctx) => ctx.db.get(projectId))).toBeNull();
 
     await t.finishAllScheduledFunctions(vi.runAllTimers);
 

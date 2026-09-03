@@ -4352,8 +4352,8 @@ export declare const internal: {
     _cascadeBatchHandler: FunctionReference<
       "mutation",
       "internal",
-      { jobId: string; targets: Array<{ id: string; table: string }> },
-      any
+      { jobId: string },
+      null
     >;
   };
   channelNotificationPreferences: {

@@ -36,7 +36,4 @@ export const cd = new CascadingDelete(components.convexCascadingDelete, {
   rules: cascadeRules,
 });
 
-export const _cascadeBatchHandler = makeBatchDeleteHandler(
-  internalMutation,
-  components.convexCascadingDelete
-);
+export const _cascadeBatchHandler = makeBatchDeleteHandler(internalMutation, cd);

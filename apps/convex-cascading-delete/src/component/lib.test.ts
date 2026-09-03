@@ -1,25 +1,28 @@
 /*
-(1.) Test suite for component batch deletion job lifecycle management
-(2.) Validates job creation with chunked storage, progress reporting, and state transitions
-(3.) Uses convex-test to simulate real database operations against component schema
+(1.) Test suite for the component's cascade job lifecycle
+(2.) Validates job creation, step persistence, finalization and cancellation
+(3.) Uses convex-test to run against the real component schema
 
-This test suite exercises the component's backend functions that manage batch deletion
-jobs. It verifies correct behavior of the job lifecycle from creation through completion,
-including chunked target storage, dispatch operations, cancellation, and progressive
-summary merging. The tests use convex-test to run against the actual component schema,
-ensuring that database operations, validators, and state transitions behave correctly
-in a realistic execution environment.
+The component holds the state of a batched cascade between transactions: the
+frontier, the skip-set of undeletable rows, the running summary. These tests
+drive that state machine directly — createJob → loadJob → saveStep — the way
+the app-side step handler does, and check the transitions: a step that is not
+done reschedules, a done step finalizes and fires the completion callback,
+errors mark the job failed, too many failed rows abort it, and a cancelled job
+refuses further steps.
 */
 
 /// <reference types="vite/client" />
 import { convexTest } from "convex-test";
 import { describe, it, expect, afterEach } from "vitest";
+import type { FunctionArgs } from "convex/server";
 import schema from "./schema.js";
-import { api, internal } from "./_generated/api.js";
+import { api } from "./_generated/api.js";
+import { MAX_FAILED_IDS } from "./lib.js";
 
 const modules = import.meta.glob("./**/*.ts");
 
-// Tests pass fake handle strings (e.g. "handle:dispatch") to ctx.scheduler.runAfter.
+// Tests pass fake handle strings (e.g. "handle:step") to ctx.scheduler.runAfter.
 // convex-test fires those via setTimeout(0); if they're allowed to fire AFTER the
 // next test's convexTest() replaces the global, their bookkeeping patches hit a
 // stale DatabaseFake whose transaction was never opened, surfacing as
@@ -29,531 +32,308 @@ afterEach(async () => {
   await new Promise((resolve) => setTimeout(resolve, 20));
 });
 
+const rootEntry = { table: "users", id: "user1", ruleIndex: 0 };
 
-describe("createBatchJob", () => {
-  it("should create a job with pending status and correct fields", async () => {
-    const t = convexTest(schema, modules);
-
-    const jobId = await t.mutation(api.lib.createBatchJob, {
-      targets: [
-        { table: "users", id: "user1" },
-        { table: "posts", id: "post1" },
-        { table: "posts", id: "post2" },
-      ],
-      deleteHandleStr: "handle:abc123",
-      batchSize: 100,
-    });
-
-    expect(jobId).toBeDefined();
-    expect(typeof jobId).toBe("string");
-
-    const status = await t.query(api.lib.getJobStatus, { jobId });
-    expect(status).not.toBeNull();
-    expect(status!.status).toBe("pending");
-    expect(status!.totalTargetCount).toBe(3);
-    expect(status!.completedCount).toBe(0);
-    expect(status!.completedSummary).toBe(JSON.stringify({}));
+async function createJob(
+  t: ReturnType<typeof convexTest>,
+  overrides: Partial<FunctionArgs<typeof api.lib.createJob>> = {},
+) {
+  return await t.mutation(api.lib.createJob, {
+    frontier: [rootEntry],
+    failedIds: [],
+    batchSummary: JSON.stringify({ users: 1, posts: 3 }),
+    deleteHandleStr: "handle:step",
+    batchSize: 100,
+    maxReadsPerBatch: 200,
+    ...overrides,
   });
+}
 
-  it("should store targets in chunked documents", async () => {
-    const t = convexTest(schema, modules);
-
-    // Create targets that will span multiple chunks (CHUNK_SIZE = 500)
-    const targets = Array.from({ length: 3 }, (_, i) => ({
-      table: "users",
-      id: `u${i}`,
-    }));
-
-    const jobId = await t.mutation(api.lib.createBatchJob, {
-      targets,
-      deleteHandleStr: "handle:xyz",
-      batchSize: 50,
-    });
-
-    const job = await t.run(async (ctx) => {
-      return await ctx.db.get(jobId as any);
-    });
-
-    expect(job).not.toBeNull();
-    expect((job as any).totalChunkCount).toBe(1);
-    expect((job as any).dispatchedChunkCount).toBe(0);
-
-    // Verify chunk was created
-    const chunks = await t.run(async (ctx) => {
-      return await ctx.db
-        .query("deletionTargetChunks")
-        .withIndex("by_job_chunk", (q: any) => q.eq("jobId", jobId as any))
-        .collect();
-    });
-
-    expect(chunks).toHaveLength(1);
-    expect(chunks[0].targets).toHaveLength(3);
+async function scheduled(t: ReturnType<typeof convexTest>) {
+  return await t.run(async (ctx) => {
+    return await ctx.db.system.query("_scheduled_functions").collect();
   });
+}
 
-  it("should split large target sets into multiple chunks", async () => {
+describe("createJob", () => {
+  it("stores the inline step's leftovers as a processing job and schedules the next step", async () => {
     const t = convexTest(schema, modules);
 
-    // Create 750 targets — should produce 2 chunks (500 + 250)
-    const targets = Array.from({ length: 750 }, (_, i) => ({
-      table: "items",
-      id: `item${i}`,
-    }));
-
-    const jobId = await t.mutation(api.lib.createBatchJob, {
-      targets,
-      deleteHandleStr: "handle:large",
-      batchSize: 100,
-    });
-
-    const job = await t.run(async (ctx) => {
-      return await ctx.db.get(jobId as any);
-    });
-
-    expect((job as any).totalChunkCount).toBe(2);
-
-    const chunks = await t.run(async (ctx) => {
-      return await ctx.db
-        .query("deletionTargetChunks")
-        .withIndex("by_job_chunk", (q: any) => q.eq("jobId", jobId as any))
-        .collect();
-    });
-
-    expect(chunks).toHaveLength(2);
-    expect(chunks[0].targets).toHaveLength(500);
-    expect(chunks[1].targets).toHaveLength(250);
-  });
-
-  it("should handle empty targets array", async () => {
-    const t = convexTest(schema, modules);
-
-    const jobId = await t.mutation(api.lib.createBatchJob, {
-      targets: [],
-      deleteHandleStr: "handle:empty",
-      batchSize: 100,
-    });
-
-    const status = await t.query(api.lib.getJobStatus, { jobId });
-    expect(status!.totalTargetCount).toBe(0);
-    expect(status!.completedCount).toBe(0);
-
-    const job = await t.run(async (ctx) => {
-      return await ctx.db.get(jobId as any);
-    });
-    expect((job as any).totalChunkCount).toBe(0);
-  });
-});
-
-describe("getJobStatus", () => {
-  it("should return null for non-existent job", async () => {
-    const t = convexTest(schema, modules);
-
-    const status = await t.query(api.lib.getJobStatus, {
-      jobId: "nonexistent_id_12345",
-    });
-
-    expect(status).toBeNull();
-  });
-
-  it("should return correct status fields for existing job", async () => {
-    const t = convexTest(schema, modules);
-
-    const jobId = await t.mutation(api.lib.createBatchJob, {
-      targets: [{ table: "docs", id: "d1" }],
-      deleteHandleStr: "handle:test",
-      batchSize: 10,
-    });
+    const jobId = await createJob(t);
 
     const status = await t.query(api.lib.getJobStatus, { jobId });
     expect(status).toEqual({
-      status: "pending",
-      totalTargetCount: 1,
-      completedCount: 0,
-      completedSummary: "{}",
+      status: "processing",
+      completedCount: 4,
+      pendingCount: 1,
+      stepCount: 1,
+      completedSummary: JSON.stringify({ users: 1, posts: 3 }),
       error: undefined,
     });
+
+    const job = await t.run(async (ctx) => await ctx.db.get(jobId as any));
+    expect(job).toMatchObject({
+      frontier: [rootEntry],
+      failedIds: [],
+      batchSize: 100,
+      maxReadsPerBatch: 200,
+      deleteHandleStr: "handle:step",
+    });
+
+    const jobs = await scheduled(t);
+    expect(jobs).toHaveLength(1);
+    expect(jobs[0]!.args).toEqual([{ jobId }]);
+  });
+
+  it("keeps the inline step's errors", async () => {
+    const t = convexTest(schema, modules);
+
+    const jobId = await createJob(t, {
+      failedIds: ["post9"],
+      errors: JSON.stringify(["posts:post9 - boom"]),
+    });
+
+    const status = await t.query(api.lib.getJobStatus, { jobId });
+    expect(status!.error).toBe(JSON.stringify(["posts:post9 - boom"]));
+  });
+
+  it("refuses an empty frontier — that cascade already finished inline", async () => {
+    const t = convexTest(schema, modules);
+    await expect(createJob(t, { frontier: [] })).rejects.toThrow(/empty frontier/);
+  });
+
+  it("refuses a zero budget — a step could never make progress", async () => {
+    const t = convexTest(schema, modules);
+    await expect(createJob(t, { batchSize: 0 })).rejects.toThrow(/at least 1/);
+    await expect(createJob(t, { maxReadsPerBatch: 0 })).rejects.toThrow(/at least 1/);
   });
 });
 
-describe("dispatchNextChunk", () => {
-  it("should return hasMore: false for non-existent job", async () => {
+describe("loadJob", () => {
+  it("returns what a step needs for a processing job", async () => {
     const t = convexTest(schema, modules);
+    const jobId = await createJob(t, { failedIds: ["post9"] });
 
-    const result = await t.mutation(internal.lib.dispatchNextChunk as any, {
-      jobId: "nonexistent_id_12345",
-    });
-
-    expect(result).toEqual({ hasMore: false });
-  });
-
-  it("should return hasMore: false when no chunks remain", async () => {
-    const t = convexTest(schema, modules);
-
-    const jobId = await t.mutation(api.lib.createBatchJob, {
-      targets: [],
-      deleteHandleStr: "handle:empty",
+    expect(await t.query(api.lib.loadJob, { jobId })).toEqual({
+      frontier: [rootEntry],
+      failedIds: ["post9"],
       batchSize: 100,
+      maxReadsPerBatch: 200,
     });
-
-    await t.run(async (ctx) => {
-      await ctx.db.patch(jobId as any, { status: "processing" });
-    });
-
-    const result = await t.mutation(internal.lib.dispatchNextChunk as any, {
-      jobId,
-    });
-
-    expect(result).toEqual({ hasMore: false });
   });
 
-  it("should dispatch a chunk and delete the chunk document", async () => {
+  it("returns null for a missing, cancelled or finished job so the step stands down", async () => {
     const t = convexTest(schema, modules);
 
-    const jobId = await t.mutation(api.lib.createBatchJob, {
-      targets: [
-        { table: "users", id: "u1" },
-        { table: "users", id: "u2" },
-      ],
-      deleteHandleStr: "handle:dispatch",
-      batchSize: 100,
+    expect(await t.query(api.lib.loadJob, { jobId: "nonexistent_id_12345" })).toBeNull();
+
+    const cancelled = await createJob(t);
+    await t.mutation(api.lib.cancelJob, { jobId: cancelled });
+    expect(await t.query(api.lib.loadJob, { jobId: cancelled })).toBeNull();
+
+    const finished = await createJob(t);
+    await t.mutation(api.lib.saveStep, {
+      jobId: finished,
+      frontier: [],
+      failedIds: [],
+      batchSummary: "{}",
+      done: true,
     });
-
-    await t.run(async (ctx) => {
-      await ctx.db.patch(jobId as any, { status: "processing" });
-    });
-
-    const result = await t.mutation(internal.lib.dispatchNextChunk as any, {
-      jobId,
-    });
-
-    expect(result).toEqual({ hasMore: false });
-
-    // Chunk should be deleted
-    const chunks = await t.run(async (ctx) => {
-      return await ctx.db
-        .query("deletionTargetChunks")
-        .withIndex("by_job_chunk", (q: any) => q.eq("jobId", jobId as any))
-        .collect();
-    });
-    expect(chunks).toHaveLength(0);
-
-    // Dispatched count should be incremented
-    const job = await t.run(async (ctx) => {
-      return await ctx.db.get(jobId as any);
-    });
-    expect((job as any).dispatchedChunkCount).toBe(1);
-  });
-
-  it("should return hasMore: true when more chunks exist", async () => {
-    const t = convexTest(schema, modules);
-
-    // 750 targets = 2 chunks
-    const targets = Array.from({ length: 750 }, (_, i) => ({
-      table: "items",
-      id: `item${i}`,
-    }));
-
-    const jobId = await t.mutation(api.lib.createBatchJob, {
-      targets,
-      deleteHandleStr: "handle:multi",
-      batchSize: 500,
-    });
-
-    await t.run(async (ctx) => {
-      await ctx.db.patch(jobId as any, { status: "processing" });
-    });
-
-    const result1 = await t.mutation(internal.lib.dispatchNextChunk as any, {
-      jobId,
-    });
-    expect(result1).toEqual({ hasMore: true });
-
-    const result2 = await t.mutation(internal.lib.dispatchNextChunk as any, {
-      jobId,
-    });
-    expect(result2).toEqual({ hasMore: false });
-  });
-
-  it("should return hasMore: false for cancelled job", async () => {
-    const t = convexTest(schema, modules);
-
-    const jobId = await t.mutation(api.lib.createBatchJob, {
-      targets: [{ table: "users", id: "u1" }],
-      deleteHandleStr: "handle:cancel",
-      batchSize: 100,
-    });
-
-    await t.run(async (ctx) => {
-      await ctx.db.patch(jobId as any, { status: "cancelled" });
-    });
-
-    const result = await t.mutation(internal.lib.dispatchNextChunk as any, {
-      jobId,
-    });
-
-    expect(result).toEqual({ hasMore: false });
+    expect(await t.query(api.lib.loadJob, { jobId: finished })).toBeNull();
   });
 });
 
-describe("reportBatchComplete", () => {
-  it("should increment completed count from batch summary", async () => {
+describe("saveStep", () => {
+  it("persists the new frontier, merges the summary and schedules the next step when not done", async () => {
     const t = convexTest(schema, modules);
+    const jobId = await createJob(t);
 
-    const jobId = await t.mutation(api.lib.createBatchJob, {
-      targets: [
-        { table: "users", id: "u1" },
-        { table: "posts", id: "p1" },
-        { table: "posts", id: "p2" },
-      ],
-      deleteHandleStr: "handle:test",
-      batchSize: 100,
-    });
-
-    await t.mutation(api.lib.reportBatchComplete, {
+    const nextFrontier = [rootEntry, { table: "posts", id: "post4", ruleIndex: 1, probeId: "c1" }];
+    await t.mutation(api.lib.saveStep, {
       jobId,
-      batchSummary: JSON.stringify({ users: 1, posts: 2 }),
+      frontier: nextFrontier,
+      failedIds: [],
+      batchSummary: JSON.stringify({ posts: 2, comments: 5 }),
+      done: false,
     });
 
     const status = await t.query(api.lib.getJobStatus, { jobId });
-    expect(status!.completedCount).toBe(3);
-    expect(JSON.parse(status!.completedSummary)).toEqual({
-      users: 1,
-      posts: 2,
+    expect(status).toMatchObject({
+      status: "processing",
+      completedCount: 11,
+      pendingCount: 2,
+      stepCount: 2,
+      completedSummary: JSON.stringify({ users: 1, posts: 5, comments: 5 }),
     });
+    expect(await t.query(api.lib.loadJob, { jobId })).toMatchObject({ frontier: nextFrontier });
+
+    // createJob's step plus this one.
+    expect(await scheduled(t)).toHaveLength(2);
   });
 
-  it("should merge summaries across multiple batch completions", async () => {
+  it("finalizes as completed and fires onComplete with the merged summary when done", async () => {
     const t = convexTest(schema, modules);
-
-    const jobId = await t.mutation(api.lib.createBatchJob, {
-      targets: Array.from({ length: 10 }, (_, i) => ({
-        table: i < 5 ? "users" : "posts",
-        id: `id${i}`,
-      })),
-      deleteHandleStr: "handle:merge",
-      batchSize: 5,
+    const jobId = await createJob(t, {
+      onCompleteHandleStr: "handle:onComplete",
+      onCompleteContext: JSON.stringify({ actor: "u1" }),
     });
 
-    await t.mutation(api.lib.reportBatchComplete, {
+    await t.mutation(api.lib.saveStep, {
       jobId,
-      batchSummary: JSON.stringify({ users: 3, posts: 2 }),
-    });
-
-    await t.mutation(api.lib.reportBatchComplete, {
-      jobId,
-      batchSummary: JSON.stringify({ users: 2, posts: 1 }),
+      frontier: [],
+      failedIds: [],
+      batchSummary: JSON.stringify({ posts: 2 }),
+      done: true,
     });
 
     const status = await t.query(api.lib.getJobStatus, { jobId });
-    expect(status!.completedCount).toBe(8);
-    expect(JSON.parse(status!.completedSummary)).toEqual({
-      users: 5,
-      posts: 3,
+    expect(status).toMatchObject({
+      status: "completed",
+      completedCount: 6,
+      pendingCount: 0,
+      completedSummary: JSON.stringify({ users: 1, posts: 5 }),
     });
+    expect(status!.error).toBeUndefined();
+
+    const jobs = await scheduled(t);
+    const onComplete = jobs.find((j) => j.args[0] && "summary" in (j.args[0] as object));
+    expect(onComplete!.args).toEqual([
+      {
+        summary: JSON.stringify({ users: 1, posts: 5 }),
+        status: "completed",
+        context: JSON.stringify({ actor: "u1" }),
+      },
+    ]);
   });
 
-  it("should mark job as completed when all chunks dispatched and all targets processed", async () => {
+  it("finalizes as failed when any step reported errors", async () => {
     const t = convexTest(schema, modules);
+    const jobId = await createJob(t, { onCompleteHandleStr: "handle:onComplete" });
 
-    const targets = [
-      { table: "users", id: "u1" },
-      { table: "posts", id: "p1" },
-    ];
-
-    const jobId = await t.mutation(api.lib.createBatchJob, {
-      targets,
-      deleteHandleStr: "handle:complete",
-      batchSize: 100,
-    });
-
-    // Simulate: all chunks dispatched (dispatch chunk removes chunks and increments count)
-    await t.run(async (ctx) => {
-      // Delete all chunk docs and mark as fully dispatched
-      const chunks = await ctx.db
-        .query("deletionTargetChunks")
-        .withIndex("by_job_chunk", (q: any) => q.eq("jobId", jobId as any))
-        .collect();
-      for (const chunk of chunks) {
-        await ctx.db.delete(chunk._id);
-      }
-      await ctx.db.patch(jobId as any, {
-        status: "processing",
-        dispatchedChunkCount: 1, // matches totalChunkCount
-      });
-    });
-
-    await t.mutation(api.lib.reportBatchComplete, {
+    await t.mutation(api.lib.saveStep, {
       jobId,
-      batchSummary: JSON.stringify({ users: 1, posts: 1 }),
+      frontier: [rootEntry],
+      failedIds: ["post7"],
+      batchSummary: JSON.stringify({ posts: 1 }),
+      errors: JSON.stringify(["posts:post7 - boom"]),
+      done: false,
+    });
+    await t.mutation(api.lib.saveStep, {
+      jobId,
+      frontier: [],
+      failedIds: ["post7"],
+      batchSummary: JSON.stringify({ posts: 1 }),
+      done: true,
     });
 
     const status = await t.query(api.lib.getJobStatus, { jobId });
-    expect(status!.status).toBe("completed");
-    expect(status!.completedCount).toBe(2);
+    expect(status).toMatchObject({
+      status: "failed",
+      error: JSON.stringify(["posts:post7 - boom"]),
+    });
+
+    const jobs = await scheduled(t);
+    const onComplete = jobs.find((j) => j.args[0] && "summary" in (j.args[0] as object));
+    expect(onComplete!.args[0]).toMatchObject({ status: "failed" });
   });
 
-  it("should not mark as completed if not all chunks dispatched", async () => {
+  it("aborts as failed when more rows than the cap could not be deleted, even if the step is not done", async () => {
     const t = convexTest(schema, modules);
+    const jobId = await createJob(t);
 
-    const jobId = await t.mutation(api.lib.createBatchJob, {
-      targets: [
-        { table: "users", id: "u1" },
-        { table: "users", id: "u2" },
-        { table: "users", id: "u3" },
-      ],
-      deleteHandleStr: "handle:partial",
-      batchSize: 1,
-    });
-
-    await t.run(async (ctx) => {
-      await ctx.db.patch(jobId as any, {
-        status: "processing",
-        // dispatchedChunkCount stays 0, totalChunkCount is 1
-      });
-    });
-
-    await t.mutation(api.lib.reportBatchComplete, {
+    const failedIds = Array.from({ length: MAX_FAILED_IDS + 1 }, (_, i) => `post${i}`);
+    await t.mutation(api.lib.saveStep, {
       jobId,
-      batchSummary: JSON.stringify({ users: 1 }),
-    });
-
-    const status = await t.query(api.lib.getJobStatus, { jobId });
-    expect(status!.status).toBe("processing");
-    expect(status!.completedCount).toBe(1);
-  });
-
-  it("should mark job as failed when errors occur and not all targets were deleted", async () => {
-    const t = convexTest(schema, modules);
-
-    const jobId = await t.mutation(api.lib.createBatchJob, {
-      targets: [
-        { table: "users", id: "u1" },
-        { table: "users", id: "u2" },
-      ],
-      deleteHandleStr: "handle:fail",
-      batchSize: 100,
-    });
-
-    // Simulate: all chunks dispatched, but only 1 of 2 succeeded
-    await t.run(async (ctx) => {
-      const chunks = await ctx.db
-        .query("deletionTargetChunks")
-        .withIndex("by_job_chunk", (q: any) => q.eq("jobId", jobId as any))
-        .collect();
-      for (const chunk of chunks) {
-        await ctx.db.delete(chunk._id);
-      }
-      await ctx.db.patch(jobId as any, {
-        status: "processing",
-        dispatchedChunkCount: 1,
-      });
-    });
-
-    await t.mutation(api.lib.reportBatchComplete, {
-      jobId,
-      batchSummary: JSON.stringify({ users: 1 }),
-      errors: JSON.stringify(["users:u2 - Document not found"]),
+      frontier: [rootEntry],
+      failedIds,
+      batchSummary: "{}",
+      errors: JSON.stringify(failedIds.map((id) => `posts:${id} - boom`)),
+      done: false,
     });
 
     const status = await t.query(api.lib.getJobStatus, { jobId });
     expect(status!.status).toBe("failed");
-    expect(status!.completedCount).toBe(1);
-    expect(status!.error).toBeDefined();
-    expect(JSON.parse(status!.error!)).toContain("users:u2 - Document not found");
+    const errors = JSON.parse(status!.error!) as string[];
+    expect(errors[0]).toMatch(/could not be deleted/);
+    // Bounded: the job document does not grow with the failure count.
+    expect(errors.length).toBeLessThanOrEqual(65);
+    expect(errors.at(-1)).toBe(`...and ${MAX_FAILED_IDS + 2 - 64} more`);
+
+    // Only createJob's step is scheduled — the abort schedules nothing.
+    expect(await scheduled(t)).toHaveLength(1);
   });
 
-  it("should silently handle non-existent job", async () => {
+  it("ignores a step reported after the job was cancelled", async () => {
     const t = convexTest(schema, modules);
+    const jobId = await createJob(t);
+    await t.mutation(api.lib.cancelJob, { jobId });
 
+    await t.mutation(api.lib.saveStep, {
+      jobId,
+      frontier: [],
+      failedIds: [],
+      batchSummary: JSON.stringify({ posts: 2 }),
+      done: true,
+    });
+
+    const status = await t.query(api.lib.getJobStatus, { jobId });
+    expect(status).toMatchObject({ status: "cancelled", completedCount: 4 });
+    expect(await scheduled(t)).toHaveLength(1);
+  });
+
+  it("silently handles a non-existent job", async () => {
+    const t = convexTest(schema, modules);
     await expect(
-      t.mutation(api.lib.reportBatchComplete, {
+      t.mutation(api.lib.saveStep, {
         jobId: "nonexistent_id_12345",
-        batchSummary: JSON.stringify({ users: 1 }),
-      })
+        frontier: [],
+        failedIds: [],
+        batchSummary: "{}",
+        done: true,
+      }),
     ).resolves.toBeNull();
   });
 });
 
 describe("cancelJob", () => {
-  it("should throw error for non-existent job", async () => {
+  it("throws for a non-existent job", async () => {
     const t = convexTest(schema, modules);
-
     await expect(
-      t.mutation(api.lib.cancelJob, { jobId: "nonexistent_id_12345" })
-    ).rejects.toThrow("not found");
+      t.mutation(api.lib.cancelJob, { jobId: "nonexistent_id_12345" }),
+    ).rejects.toThrow(/not found/);
   });
 
-  it("should cancel a pending job and clean up chunks", async () => {
+  it("cancels a processing job", async () => {
     const t = convexTest(schema, modules);
-
-    const jobId = await t.mutation(api.lib.createBatchJob, {
-      targets: [
-        { table: "users", id: "u1" },
-        { table: "users", id: "u2" },
-      ],
-      deleteHandleStr: "handle:cancel",
-      batchSize: 100,
-    });
+    const jobId = await createJob(t);
 
     await t.mutation(api.lib.cancelJob, { jobId });
 
     const status = await t.query(api.lib.getJobStatus, { jobId });
     expect(status!.status).toBe("cancelled");
-
-    // Chunks should be cleaned up
-    const chunks = await t.run(async (ctx) => {
-      return await ctx.db
-        .query("deletionTargetChunks")
-        .withIndex("by_job_chunk", (q: any) => q.eq("jobId", jobId as any))
-        .collect();
-    });
-    expect(chunks).toHaveLength(0);
   });
 
-  it("should no-op for already completed job", async () => {
+  it("no-ops for a job already in a terminal state", async () => {
     const t = convexTest(schema, modules);
-
-    const jobId = await t.mutation(api.lib.createBatchJob, {
-      targets: [],
-      deleteHandleStr: "handle:done",
-      batchSize: 100,
-    });
-
-    await t.run(async (ctx) => {
-      await ctx.db.patch(jobId as any, { status: "completed" });
+    const jobId = await createJob(t);
+    await t.mutation(api.lib.saveStep, {
+      jobId,
+      frontier: [],
+      failedIds: [],
+      batchSummary: "{}",
+      done: true,
     });
 
     await t.mutation(api.lib.cancelJob, { jobId });
 
     const status = await t.query(api.lib.getJobStatus, { jobId });
-    expect(status!.status).toBe("completed"); // unchanged
+    expect(status!.status).toBe("completed");
   });
 });
 
-describe("startProcessing", () => {
-  it("should throw error for non-existent job", async () => {
+describe("getJobStatus", () => {
+  it("returns null for a non-existent job", async () => {
     const t = convexTest(schema, modules);
-
-    await expect(
-      t.mutation(api.lib.startProcessing, { jobId: "nonexistent_id_12345" })
-    ).rejects.toThrow("not found");
-  });
-
-  it("should throw error if job is not in pending state", async () => {
-    const t = convexTest(schema, modules);
-
-    const jobId = await t.mutation(api.lib.createBatchJob, {
-      targets: [],
-      deleteHandleStr: "handle:already",
-      batchSize: 100,
-    });
-
-    // Manually transition to processing to test the guard
-    await t.run(async (ctx) => {
-      await ctx.db.patch(jobId as any, { status: "processing" });
-    });
-
-    await expect(
-      t.mutation(api.lib.startProcessing, { jobId })
-    ).rejects.toThrow("not in pending state");
+    expect(await t.query(api.lib.getJobStatus, { jobId: "nonexistent_id_12345" })).toBeNull();
   });
 });

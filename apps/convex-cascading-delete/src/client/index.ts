@@ -1,16 +1,17 @@
 /*
 (1.) Primary client API for cascading delete operations in application context
-(2.) Implements depth-first traversal with cycle detection for inline deletions
-(3.) Provides batch processing coordination and safety guard utilities
+(2.) Inline mode: depth-first post-order traversal in one transaction
+(3.) Batched mode: a streaming traversal spread over a chain of transactions
 
 This module exports the CascadingDelete class which serves as the main interface
-for applications using the component. The class encapsulates cascade configuration
-and provides methods for both inline and batched deletion modes. Inline mode performs
-complete traversal and deletion in a single transaction using post-order depth-first
-search with a visited set for cycle prevention. Batched mode collects all targets
-first, then coordinates distributed deletion across multiple transactions via the
-component's job management system. The patchDb utility enforces cascade-only deletion
-by intercepting direct db.delete calls.
+for applications using the component. Inline mode performs complete traversal and
+deletion in a single transaction using post-order depth-first search with a
+visited set for cycle prevention. Batched mode never materializes the deletion
+tree: each transaction pops the deepest parent off a persisted frontier, fetches
+one page of its dependents, deletes them on the spot, and pushes the ones that
+have rules of their own. A row is deleted the moment it is fetched, so the
+frontier is bounded by depth × page size regardless of how large the tree is,
+and the next page of a parent is simply "whatever the index still holds".
 */
 
 import { createFunctionHandle } from "convex/server";
@@ -25,7 +26,9 @@ import type { ComponentApi } from "../component/_generated/component.js";
 import type {
   CascadeConfig,
   DeletionSummary,
-  DeletionTarget,
+  FrontierEntry,
+  StepBudget,
+  TableDeleter,
 } from "../component/types.js";
 
 export { defineCascadeRules } from "../component/config.js";
@@ -33,7 +36,8 @@ export type {
   CascadeConfig,
   CascadeRule,
   DeletionSummary,
-  DeletionTarget,
+  FrontierEntry,
+  StepBudget,
   BatchJobStatus,
   TableDeleter,
 } from "../component/types.js";
@@ -50,33 +54,55 @@ type QueryCtx = {
   db: any;
 };
 
+/** Rows fetched per index page while expanding a parent. */
+export const PAGE_SIZE = 100;
+/** Default rows deleted per transaction of a batched cascade. */
+export const DEFAULT_BATCH_SIZE = 500;
+/**
+ * Default index reads per transaction issued by the cascade itself. Convex
+ * allows 4,096 per transaction; deleters and triggers spend from the same
+ * budget, so the default leaves them three quarters of it.
+ */
+export const DEFAULT_MAX_READS_PER_BATCH = 1024;
+/** Mirrors the component's cap; a step gives up past it. */
+const MAX_FAILED_IDS = 256;
+/** Mirrors the component's cap on the persisted frontier. */
+const MAX_FRONTIER = 4096;
+
+/** Mutable per-step scratch state shared by the inline and scheduled steps. */
+type StepState = {
+  frontier: FrontierEntry[];
+  failedIds: Set<string>;
+  summary: DeletionSummary;
+  errors: string[];
+};
+
 /**
  * Main class for managing cascading delete operations.
- * 
+ *
  * @example
  * ```typescript
  * const cd = new CascadingDelete(components.convexCascadingDelete, {
  *   rules: cascadeRules
  * });
- * 
+ *
  * // Inline mode (small deletes)
  * const summary = await cd.deleteWithCascade(ctx, "users", userId);
- * 
- * // Batched mode (large deletes)
+ *
+ * // Batched mode (any size)
  * const { jobId } = await cd.deleteWithCascadeBatched(ctx, "users", userId, {
- *   batchHandlerRef: internal.cascadeBatchHandler,
- *   batchSize: 2000
+ *   batchHandlerRef: internal.cascading._cascadeBatchHandler,
  * });
  * ```
  */
 export class CascadingDelete {
-  private rules: CascadeConfig;
-  private component: ComponentApi;
-  private deleters: Record<string, (ctx: any, id: string, doc: any) => Promise<void>>;
+  readonly rules: CascadeConfig;
+  readonly component: ComponentApi;
+  private deleters: Record<string, TableDeleter>;
 
   constructor(component: ComponentApi, options: {
     rules: CascadeConfig;
-    deleters?: Record<string, (ctx: any, id: string, doc: any) => Promise<void>>;
+    deleters?: Record<string, TableDeleter>;
   }) {
     this.component = component;
     this.rules = options.rules;
@@ -86,7 +112,7 @@ export class CascadingDelete {
   /**
    * Deletes a document and all its cascading dependents in a single transaction.
    * Uses depth-first post-order traversal with cycle detection.
-   * 
+   *
    * @param ctx - Mutation context with db access
    * @param table - Source table name
    * @param id - Document ID to delete
@@ -174,14 +200,26 @@ export class CascadingDelete {
   }
 
   /**
-   * Deletes a document and its dependents using batched processing.
-   * First batch is deleted inline, remaining batches are scheduled.
-   * 
+   * Deletes a document and its dependents across a chain of transactions.
+   *
+   * The root row goes first, in the calling transaction, along with as much
+   * of the tree as one transaction's budget allows. If anything is left the
+   * frontier is handed to the component, which schedules the batch handler;
+   * every later step does the same amount of bounded work and reschedules
+   * itself until the frontier is empty. Nothing ever enumerates the whole
+   * tree, so there is no size at which this stops working.
+   *
+   * Parents are deleted before their children (pre-order). Between steps the
+   * tree is therefore visible as children without a parent, never as a parent
+   * with its children half gone — which is also what makes the traversal
+   * cycle-safe without a visited set: a row that is already gone cannot be
+   * fetched again.
+   *
    * @param ctx - Mutation context
    * @param table - Source table name
    * @param id - Document ID to delete
    * @param options - Batch configuration
-   * @returns Job ID and initial batch summary
+   * @returns Job ID (null if the cascade finished inline) and the inline step's summary
    */
   async deleteWithCascadeBatched(
     ctx: MutationCtx,
@@ -189,59 +227,55 @@ export class CascadingDelete {
     id: string,
     options: {
       batchHandlerRef: FunctionReference<"mutation", FunctionVisibility>;
+      /** Rows deleted per transaction. Default 500. */
       batchSize?: number;
+      /** Index reads the cascade may issue per transaction. Default 1024. */
+      maxReadsPerBatch?: number;
       onComplete?: FunctionReference<"mutation", FunctionVisibility>;
       onCompleteContext?: Record<string, unknown>;
     }
   ): Promise<{ jobId: string | null; initialSummary: DeletionSummary }> {
-    const batchSize = options.batchSize || 2000;
+    this.assertBatchable();
+    const budget: StepBudget = {
+      deletes: options.batchSize ?? DEFAULT_BATCH_SIZE,
+      reads: options.maxReadsPerBatch ?? DEFAULT_MAX_READS_PER_BATCH,
+    };
+    if (budget.deletes < 1 || budget.reads < 1) {
+      throw new Error("batchSize and maxReadsPerBatch must be at least 1");
+    }
 
-    // Phase 1: Collect all targets
-    const visited = new Set<string>();
-    const targets: DeletionTarget[] = [];
-    await this.collectTargets(ctx, table, id, visited, targets);
+    const state: StepState = {
+      frontier: [],
+      failedIds: new Set(),
+      summary: {},
+      errors: [],
+    };
 
-    // Phase 2: Delete first batch inline (respects custom deleters)
-    const firstBatch = targets.slice(0, batchSize);
-    const initialSummary: DeletionSummary = {};
-
-    for (const target of firstBatch) {
-      try {
-        const deleter = this.deleters[target.table];
-        if (deleter) {
-          const doc = await ctx.db.get(target.id);
-          if (doc) {
-            try {
-              await deleter(ctx, target.id, doc);
-            } catch {
-              await ctx.db.delete(target.id);
-            }
-            initialSummary[target.table] = (initialSummary[target.table] || 0) + 1;
-          }
-        } else {
-          await ctx.db.delete(target.id);
-          initialSummary[target.table] = (initialSummary[target.table] || 0) + 1;
-        }
-      } catch {
-        // Already deleted
+    // The root, pre-order: its row goes now, its dependents are the frontier.
+    const rootDoc = await ctx.db.get(id);
+    if (rootDoc) {
+      const deleted = await this.deleteRow(ctx, table, rootDoc, state);
+      if (deleted && this.hasRules(table)) {
+        state.frontier.push({ table, id, ruleIndex: 0 });
       }
     }
 
-    // Phase 3: Schedule remaining batches (or finish inline)
-    const remaining = targets.slice(batchSize);
-    if (remaining.length === 0) {
-      // All targets fit in the first batch — call onComplete inline
+    const { done } = await this.runStep(ctx, state, { deletes: budget.deletes, reads: budget.reads - 1 });
+
+    const onCompleteContext = options.onCompleteContext
+      ? JSON.stringify(options.onCompleteContext)
+      : undefined;
+
+    if (done) {
       if (options.onComplete) {
         const handle = await createFunctionHandle(options.onComplete);
         await ctx.scheduler.runAfter(0, handle as any, {
-          summary: JSON.stringify(initialSummary),
-          status: "completed",
-          context: options.onCompleteContext
-            ? JSON.stringify(options.onCompleteContext)
-            : undefined,
+          summary: JSON.stringify(state.summary),
+          status: state.errors.length > 0 ? "failed" : "completed",
+          context: onCompleteContext,
         });
       }
-      return { jobId: null, initialSummary };
+      return { jobId: null, initialSummary: state.summary };
     }
 
     const handle = await createFunctionHandle(options.batchHandlerRef);
@@ -249,57 +283,163 @@ export class CascadingDelete {
       ? await createFunctionHandle(options.onComplete)
       : undefined;
 
-    const jobId = await ctx.runMutation(this.component.lib.createBatchJob, {
-      targets: remaining,
+    const jobId = await ctx.runMutation(this.component.lib.createJob, {
+      frontier: state.frontier,
+      failedIds: [...state.failedIds],
+      batchSummary: JSON.stringify(state.summary),
+      errors: state.errors.length > 0 ? JSON.stringify(state.errors) : undefined,
       deleteHandleStr: handle,
-      batchSize,
+      batchSize: budget.deletes,
+      maxReadsPerBatch: budget.reads,
       onCompleteHandleStr: onCompleteHandle,
-      onCompleteContext: options.onCompleteContext
-        ? JSON.stringify(options.onCompleteContext)
-        : undefined,
+      onCompleteContext,
     });
 
-    await ctx.runMutation(this.component.lib.startProcessing, { jobId });
-
-    return { jobId, initialSummary };
+    return { jobId, initialSummary: state.summary };
   }
 
   /**
-   * Collects all deletion targets without deleting (read-only traversal).
+   * One transaction's worth of a batched cascade. Exposed for the batch
+   * handler; application code calls `deleteWithCascadeBatched` instead.
+   *
+   * Pops the deepest frontier entry, fetches one page of dependents for its
+   * current rule, deletes them, pushes the ones with rules of their own, and
+   * repeats until the frontier is empty or the budget is spent. Deleting on
+   * fetch means the next page of the same rule is just the next `take`.
    */
-  private async collectTargets(
-    ctx: QueryCtx,
-    table: string,
-    id: string,
-    visited: Set<string>,
-    targets: DeletionTarget[]
-  ): Promise<void> {
-    const key = `${table}:${id}`;
-    if (visited.has(key)) {
-      return;
-    }
-    visited.add(key);
+  async runStep(
+    ctx: MutationCtx,
+    state: StepState,
+    budget: StepBudget,
+  ): Promise<{ done: boolean }> {
+    let deletes = 0;
+    let reads = 0;
+    const { frontier, failedIds } = state;
 
-    const rules = this.rules[table] || [];
+    while (frontier.length > 0) {
+      if (deletes >= budget.deletes || reads >= budget.reads) {
+        return { done: false };
+      }
+      if (failedIds.size > MAX_FAILED_IDS) {
+        state.errors.push(`aborted: more than ${MAX_FAILED_IDS} rows could not be deleted`);
+        return { done: true };
+      }
+      if (frontier.length > MAX_FRONTIER) {
+        state.errors.push(
+          `aborted: frontier exceeded ${MAX_FRONTIER} entries — a deleter is leaving rows in place`,
+        );
+        return { done: true };
+      }
 
-    for (const rule of rules) {
-      const dependents = await ctx.db
+      const top = frontier[frontier.length - 1]!;
+      const rules = this.rules[top.table] ?? [];
+      if (top.ruleIndex >= rules.length) {
+        frontier.pop();
+        continue;
+      }
+      const rule = rules[top.ruleIndex]!;
+
+      const pageSize = Math.min(PAGE_SIZE, budget.deletes - deletes);
+      const rows: any[] = await ctx.db
         .query(rule.to)
-        .withIndex(rule.via, (q: any) => q.eq(rule.field, id))
-        .collect();
+        .withIndex(rule.via, (q: any) => q.eq(rule.field, top.id))
+        .take(pageSize + failedIds.size);
+      reads++;
 
-      for (const dep of dependents) {
-        await this.collectTargets(ctx, rule.to, dep._id, visited, targets);
+      const page = rows.filter((row) => !failedIds.has(row._id)).slice(0, pageSize);
+      if (page.length === 0) {
+        top.ruleIndex++;
+        delete top.probeId;
+        continue;
+      }
+
+      // The same row heading two consecutive pages means it survived its
+      // deletion without the deleter throwing. Treat it as failed so the
+      // page moves past it instead of refetching it forever.
+      const head = page[0]!;
+      if (top.probeId === head._id) {
+        failedIds.add(head._id);
+        state.errors.push(`${rule.to}:${head._id} - deleter returned without deleting the row`);
+        continue;
+      }
+      top.probeId = head._id;
+
+      const childHasRules = this.hasRules(rule.to);
+      const pushed: FrontierEntry[] = [];
+      for (const row of page) {
+        const deleted = await this.deleteRow(ctx, rule.to, row, state);
+        deletes++;
+        if (deleted && childHasRules) {
+          pushed.push({ table: rule.to, id: row._id, ruleIndex: 0 });
+        }
+      }
+      // Depth first: the children just pushed are expanded (and popped)
+      // before this parent's rule is fetched again.
+      frontier.push(...pushed);
+    }
+
+    return { done: true };
+  }
+
+  /**
+   * Deletes one fetched row through its table's deleter, falling back to a
+   * raw delete. Returns false — and records the row as failed — only when
+   * both refuse; the row then stays where it is and is skipped from now on.
+   */
+  private async deleteRow(
+    ctx: MutationCtx,
+    table: string,
+    doc: any,
+    state: StepState,
+  ): Promise<boolean> {
+    const id: string = doc._id;
+    try {
+      const deleter = this.deleters[table];
+      if (deleter) {
+        try {
+          await deleter(ctx, id, doc);
+        } catch {
+          await ctx.db.delete(id);
+        }
+      } else {
+        await ctx.db.delete(id);
+      }
+      state.summary[table] = (state.summary[table] ?? 0) + 1;
+      return true;
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Unknown error";
+      state.failedIds.add(id);
+      state.errors.push(`${table}:${id} - ${message}`);
+      return false;
+    }
+  }
+
+  private hasRules(table: string): boolean {
+    return (this.rules[table]?.length ?? 0) > 0;
+  }
+
+  /**
+   * Soft-delete rules cannot be streamed: a soft-deleted row stays in the
+   * index, so "fetch the next page" would fetch it again. Inline mode handles
+   * them with its visited set; batched mode refuses them up front.
+   */
+  private assertBatchable(): void {
+    for (const [source, rules] of Object.entries(this.rules)) {
+      for (const rule of rules) {
+        if (rule.softDeleteField) {
+          throw new Error(
+            `Cascade rule ${source} → ${rule.to} uses softDeleteField, which ` +
+              `deleteWithCascadeBatched does not support. Use deleteWithCascade.`,
+          );
+        }
       }
     }
-
-    targets.push({ table, id });
   }
 
   /**
    * Validates that all configured indexes exist in the database.
    * Should be called once during app initialization.
-   * 
+   *
    * @param ctx - Query context with db access
    * @throws Error if any index is missing or misconfigured
    */
@@ -323,7 +463,8 @@ export class CascadingDelete {
   }
 
   /**
-   * Cancels a running batch deletion job and its underlying workflow.
+   * Cancels a running batch deletion job. The step already scheduled still
+   * fires, finds the job cancelled, and stands down.
    * No-op if the job is already in a terminal state.
    *
    * @param ctx - Mutation context
@@ -339,7 +480,7 @@ export class CascadingDelete {
   /**
    * Returns a proxied database writer that blocks direct delete calls.
    * Forces use of cascade delete methods for safety.
-   * 
+   *
    * @param db - Original database writer
    * @returns Proxied database writer with delete disabled
    */
@@ -361,63 +502,53 @@ export class CascadingDelete {
 }
 
 /**
- * Factory function to create app-side batch deletion handler.
- * 
- * @param internalMutationBuilder - Internal mutation builder from app
- * @param componentRef - Reference to the cascading delete component
- * @returns Internal mutation that processes deletion batches
- * 
+ * Factory for the app-side step of a batched cascade. The component cannot
+ * read the app's tables, so traversal runs here, in an app mutation whose
+ * handle the component schedules once per step.
+ *
+ * @param internalMutationBuilder - The app's `internalMutation` builder. Pass
+ *   the same builder every other mutation in the app uses, so any database
+ *   wrapping (triggers, custom contexts) applies to cascade deletes too.
+ * @param cascade - The configured `CascadingDelete` instance: its rules and
+ *   deleters drive the step, its component reference stores the result.
+ * @returns Internal mutation to pass as `batchHandlerRef`
+ *
  * @example
  * ```typescript
- * export const _cascadeBatchHandler = makeBatchDeleteHandler(
- *   internalMutation,
- *   components.convexCascadingDelete
- * );
+ * export const _cascadeBatchHandler = makeBatchDeleteHandler(internalMutation, cd);
  * ```
  */
 export function makeBatchDeleteHandler(
   internalMutationBuilder: any,
-  componentRef: ComponentApi,
-  deleters?: Record<string, (ctx: any, id: string, doc: any) => Promise<void>>
+  cascade: CascadingDelete,
 ) {
   return internalMutationBuilder({
-    args: {
-      targets: v.array(v.object({ table: v.string(), id: v.string() })),
-      jobId: v.string(),
-    },
-    handler: async (ctx: any, { targets, jobId }: any) => {
-      const batchSummary: Record<string, number> = {};
-      const errors: string[] = [];
+    args: { jobId: v.string() },
+    returns: v.null(),
+    handler: async (ctx: any, { jobId }: { jobId: string }) => {
+      const job = await ctx.runQuery(cascade.component.lib.loadJob, { jobId });
+      if (!job) return null; // cancelled, finalized, or gone
 
-      for (const { table, id } of targets) {
-        try {
-          const deleter = deleters?.[table];
-          if (deleter) {
-            const doc = await ctx.db.get(id);
-            if (doc) {
-              try {
-                await deleter(ctx, id, doc);
-              } catch {
-                // Deleter failed — fall back to raw delete
-                await ctx.db.delete(id);
-              }
-              batchSummary[table] = (batchSummary[table] || 0) + 1;
-            }
-          } else {
-            await ctx.db.delete(id);
-            batchSummary[table] = (batchSummary[table] || 0) + 1;
-          }
-        } catch (error: unknown) {
-          const message = error instanceof Error ? error.message : "Unknown error";
-          errors.push(`${table}:${id} - ${message}`);
-        }
-      }
-
-      await ctx.runMutation(componentRef.lib.reportBatchComplete, {
-        jobId,
-        batchSummary: JSON.stringify(batchSummary),
-        errors: errors.length > 0 ? JSON.stringify(errors) : undefined,
+      const state: StepState = {
+        frontier: job.frontier,
+        failedIds: new Set(job.failedIds),
+        summary: {},
+        errors: [],
+      };
+      const { done } = await cascade.runStep(ctx, state, {
+        deletes: job.batchSize,
+        reads: job.maxReadsPerBatch,
       });
+
+      await ctx.runMutation(cascade.component.lib.saveStep, {
+        jobId,
+        frontier: state.frontier,
+        failedIds: [...state.failedIds],
+        batchSummary: JSON.stringify(state.summary),
+        errors: state.errors.length > 0 ? JSON.stringify(state.errors) : undefined,
+        done,
+      });
+      return null;
     },
   });
 }

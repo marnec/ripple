@@ -255,9 +255,10 @@ export const get = query({
 /**
  * Hard-delete a workspace and everything in it. Uses the batched cascade
  * (the `workspaces` root in cascadeRules) because a workspace can hold a large
- * subtree — channels/messages, projects/tasks, docs, etc. Deletion drains
- * asynchronously via the cascade workpool; the row and its contents disappear
- * as batches complete. Irreversible — the UI gates this behind type-to-confirm.
+ * subtree — channels/messages, projects/tasks, docs, etc. The workspace row
+ * goes in this transaction; its contents drain asynchronously, one bounded
+ * step at a time, from a persisted frontier that never holds the whole tree.
+ * Irreversible — the UI gates this behind type-to-confirm.
  */
 export const remove = mutation({
   args: { workspaceId: v.id("workspaces") },

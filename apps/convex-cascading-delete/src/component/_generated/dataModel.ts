@@ -27,21 +27,26 @@ import type { GenericId } from "convex/values";
  */
 
 export type DataModel = {
-  deletionJobs: {
+  cascadeJobs: {
     document: {
       batchSize: number;
       completedCount: number;
       completedSummary: string;
       deleteHandleStr: string;
-      dispatchedChunkCount: number;
       error?: string;
+      failedIds: Array<string>;
+      frontier: Array<{
+        id: string;
+        probeId?: string;
+        ruleIndex: number;
+        table: string;
+      }>;
+      maxReadsPerBatch: number;
       onCompleteContext?: string;
       onCompleteHandleStr?: string;
-      status: "pending" | "processing" | "completed" | "failed" | "cancelled";
-      totalChunkCount: number;
-      totalTargetCount: number;
-      workflowId?: string;
-      _id: Id<"deletionJobs">;
+      status: "processing" | "completed" | "failed" | "cancelled";
+      stepCount: number;
+      _id: Id<"cascadeJobs">;
       _creationTime: number;
     };
     fieldPaths:
@@ -51,35 +56,18 @@ export type DataModel = {
       | "completedCount"
       | "completedSummary"
       | "deleteHandleStr"
-      | "dispatchedChunkCount"
       | "error"
+      | "failedIds"
+      | "frontier"
+      | "maxReadsPerBatch"
       | "onCompleteContext"
       | "onCompleteHandleStr"
       | "status"
-      | "totalChunkCount"
-      | "totalTargetCount"
-      | "workflowId";
+      | "stepCount";
     indexes: {
       by_id: ["_id"];
       by_creation_time: ["_creationTime"];
       byStatus: ["status", "_creationTime"];
-    };
-    searchIndexes: {};
-    vectorIndexes: {};
-  };
-  deletionTargetChunks: {
-    document: {
-      chunkIndex: number;
-      jobId: Id<"deletionJobs">;
-      targets: Array<{ id: string; table: string }>;
-      _id: Id<"deletionTargetChunks">;
-      _creationTime: number;
-    };
-    fieldPaths: "_creationTime" | "_id" | "chunkIndex" | "jobId" | "targets";
-    indexes: {
-      by_id: ["_id"];
-      by_creation_time: ["_creationTime"];
-      by_job_chunk: ["jobId", "chunkIndex", "_creationTime"];
     };
     searchIndexes: {};
     vectorIndexes: {};

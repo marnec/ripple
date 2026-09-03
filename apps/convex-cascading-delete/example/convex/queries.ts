@@ -14,13 +14,14 @@ export const getDeletionJobStatus = query({
   returns: v.union(
     v.object({
       status: v.union(
-        v.literal("pending"),
         v.literal("processing"),
         v.literal("completed"),
-        v.literal("failed")
+        v.literal("failed"),
+        v.literal("cancelled")
       ),
-      totalTargetCount: v.number(),
       completedCount: v.number(),
+      pendingCount: v.number(),
+      stepCount: v.number(),
       completedSummary: v.string(),
       error: v.optional(v.string()),
     }),

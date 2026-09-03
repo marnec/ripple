@@ -1,382 +1,248 @@
 /*
-(1.) Component backend functions for managing batch deletion job lifecycle
-(2.) Uses Convex Workflow for durable, retriable batch processing orchestration
-(3.) Chunked target storage eliminates 1MB document size limit
+(1.) Component backend functions for the batched cascade job lifecycle
+(2.) Owns the persisted frontier and drives the step chain via the scheduler
+(3.) Traversal itself runs app-side: a component cannot read the app's tables
 
-This module implements the component's core batch processing logic. Deletion targets
-are stored in chunks (separate documents) to avoid the 1MB limit. A Convex Workflow
-drives the processing loop, providing automatic retry, crash recovery, and cancellation.
-Each workflow step dispatches one chunk of targets to the app's deletion handler.
-The app's handler reports completion back via reportBatchComplete, which tracks progress
-and detects terminal state.
+A batched cascade is a chain of app mutations, one transaction each. The app's
+step handler (see `makeBatchDeleteHandler`) loads the frontier with `loadJob`,
+spends one transaction's budget deleting and expanding, then hands the result
+back through `saveStep`, which either schedules the next step or finalizes the
+job and fires the completion callback. The scheduler is the durability story:
+the next step is scheduled inside the transaction that commits the previous
+one, so a step that commits always has a successor, and one that fails with a
+system error is retried by Convex before anything is scheduled.
 */
 
 import { v } from "convex/values";
-import { mutation, query, internalMutation } from "./_generated/server.js";
-import { internal, components } from "./_generated/api.js";
+import { mutation, query } from "./_generated/server.js";
 import type { Id } from "./_generated/dataModel.js";
-import { WorkflowManager } from "@convex-dev/workflow";
-import type { FunctionReference } from "convex/server";
+import { frontierEntry, jobStatus } from "./schema.js";
 
-const CHUNK_SIZE = 500;
+/** Above this many undeletable rows the cascade is broken, not unlucky. */
+export const MAX_FAILED_IDS = 256;
+/** Error messages kept on the job document; the rest are counted. */
+const MAX_STORED_ERRORS = 64;
+/** Convex caps arrays at 8192 elements; stay well under it. */
+export const MAX_FRONTIER = 4096;
 
-const workflow = new WorkflowManager(components.workflow);
+/** Delay between steps. A breather for the scheduler, not a rate limit. */
+const STEP_DELAY_MS = 0;
 
-/**
- * Workflow that dispatches deletion target chunks sequentially.
- * Each step reads one chunk, schedules the app's batch handler, and removes the chunk.
- * Automatic retry and crash recovery are provided by the workflow engine.
- */
-export const deletionWorkflow = workflow.define({
-  args: { jobId: v.string() },
-  handler: async (step, { jobId }): Promise<null> => {
-    // Loop dispatching chunks until none remain
-    // eslint-disable-next-line no-constant-condition
-    while (true) {
-      const result = await step.runMutation(
-        internal.lib.dispatchNextChunk,
-        { jobId }
-      );
-      if (!result.hasMore) {
-        break;
-      }
-    }
-    // Mark all chunks as dispatched
-    await step.runMutation(internal.lib.markAllDispatched, { jobId });
-    return null;
-  },
-});
+const jobArgs = {
+  frontier: v.array(frontierEntry),
+  failedIds: v.array(v.string()),
+  batchSummary: v.string(),
+  errors: v.optional(v.string()),
+};
 
 /**
- * Creates a new batch deletion job with chunked target storage.
- * Targets are split into chunks of ~500 to avoid document size limits.
- *
- * @param targets - Array of documents to be deleted across batches
- * @param deleteHandleStr - Function handle string for app's batch deletion handler
- * @param batchSize - Number of documents to delete per batch (used by chunk dispatch)
- * @returns Job ID for tracking progress
+ * Persists the state left over from the inline first step and schedules the
+ * next one. Only called when the inline step ran out of budget: a cascade
+ * that finishes inline never creates a job.
  */
-export const createBatchJob = mutation({
+export const createJob = mutation({
   args: {
-    targets: v.array(v.object({ table: v.string(), id: v.string() })),
+    ...jobArgs,
     deleteHandleStr: v.string(),
     batchSize: v.number(),
+    maxReadsPerBatch: v.number(),
     onCompleteHandleStr: v.optional(v.string()),
     onCompleteContext: v.optional(v.string()),
   },
   returns: v.string(),
-  handler: async (ctx, { targets, deleteHandleStr, batchSize, onCompleteHandleStr, onCompleteContext }) => {
-    // Split targets into chunks
-    const chunks: Array<Array<{ table: string; id: string }>> = [];
-    for (let i = 0; i < targets.length; i += CHUNK_SIZE) {
-      chunks.push(targets.slice(i, i + CHUNK_SIZE));
+  handler: async (ctx, args) => {
+    if (args.batchSize < 1 || args.maxReadsPerBatch < 1) {
+      throw new Error("batchSize and maxReadsPerBatch must be at least 1");
     }
-
-    const jobId = await ctx.db.insert("deletionJobs", {
-      status: "pending",
-      totalTargetCount: targets.length,
-      totalChunkCount: chunks.length,
-      dispatchedChunkCount: 0,
-      batchSize,
-      deleteHandleStr,
-      completedCount: 0,
-      completedSummary: JSON.stringify({}),
-      onCompleteHandleStr,
-      onCompleteContext,
+    if (args.frontier.length === 0) {
+      throw new Error("createJob called with an empty frontier; the cascade is already complete");
+    }
+    const summary = JSON.parse(args.batchSummary) as Record<string, number>;
+    const jobId = await ctx.db.insert("cascadeJobs", {
+      status: "processing",
+      frontier: args.frontier,
+      failedIds: args.failedIds,
+      batchSize: args.batchSize,
+      maxReadsPerBatch: args.maxReadsPerBatch,
+      deleteHandleStr: args.deleteHandleStr,
+      completedCount: sumCounts(summary),
+      stepCount: 1,
+      completedSummary: args.batchSummary,
+      error: args.errors,
+      onCompleteHandleStr: args.onCompleteHandleStr,
+      onCompleteContext: args.onCompleteContext,
     });
 
-    // Insert target chunks
-    for (let i = 0; i < chunks.length; i++) {
-      await ctx.db.insert("deletionTargetChunks", {
-        jobId,
-        chunkIndex: i,
-        targets: chunks[i],
-      });
-    }
-
+    await ctx.scheduler.runAfter(STEP_DELAY_MS, args.deleteHandleStr as any, { jobId });
     return jobId;
   },
 });
 
 /**
- * Starts the deletion workflow for a pending job.
- * Sets status to processing and kicks off the workflow.
- *
- * @param jobId - ID of the job to start processing
+ * What a step needs to run: the frontier, the skip-set and the budgets.
+ * Returns null for a job that no longer exists or is no longer processing
+ * (cancelled, or already finalized), which tells the step to stand down.
  */
-export const startProcessing = mutation({
+export const loadJob = query({
   args: { jobId: v.string() },
-  returns: v.null(),
+  returns: v.union(
+    v.object({
+      frontier: v.array(frontierEntry),
+      failedIds: v.array(v.string()),
+      batchSize: v.number(),
+      maxReadsPerBatch: v.number(),
+    }),
+    v.null(),
+  ),
   handler: async (ctx, { jobId }) => {
-    const job = await ctx.db.get(jobId as Id<"deletionJobs">);
-    if (!job) {
-      throw new Error(`Job ${jobId} not found`);
-    }
-
-    if (job.status !== "pending") {
-      throw new Error(`Job ${jobId} is not in pending state`);
-    }
-
-    // `internal.lib.deletionWorkflow`, not the local `deletionWorkflow` object:
-    // `workflow.start` resolves a function REFERENCE, and the module-local
-    // export cast to one is not a reference — it fails with "is not a
-    // functionReference" the moment a job is actually scheduled. Unreachable
-    // while every target fits in the first inline batch, which is why it
-    // survived: only deletions past `batchSize` create a job at all.
-    const workflowId = await workflow.start(
-      ctx,
-      internal.lib.deletionWorkflow as unknown as FunctionReference<"mutation", "internal">,
-      { jobId },
-    );
-
-    await ctx.db.patch(jobId as Id<"deletionJobs">, {
-      status: "processing",
-      workflowId: workflowId as string,
-    });
+    const job = await ctx.db.get(jobId as Id<"cascadeJobs">);
+    if (!job || job.status !== "processing") return null;
+    return {
+      frontier: job.frontier,
+      failedIds: job.failedIds,
+      batchSize: job.batchSize,
+      maxReadsPerBatch: job.maxReadsPerBatch,
+    };
   },
 });
 
 /**
- * Dispatches the next chunk of targets to the app's deletion handler.
- * Called as a workflow step — reads one chunk, schedules deletion, removes chunk doc.
- *
- * @param jobId - ID of the job being processed
- * @returns Whether more chunks remain
+ * Records one step's work. Merges the batch summary and errors, stores the
+ * new frontier, then either schedules the next step or — when the frontier is
+ * empty, or the step gave up — finalizes the job and fires `onComplete`.
  */
-export const dispatchNextChunk = internalMutation({
-  args: { jobId: v.string() },
-  returns: v.object({ hasMore: v.boolean() }),
-  handler: async (ctx, { jobId }) => {
-    const job = await ctx.db.get(jobId as Id<"deletionJobs">);
-    if (!job || job.status === "cancelled") {
-      return { hasMore: false };
-    }
-
-    // Get the next undispatched chunk (lowest chunkIndex)
-    const chunk = await ctx.db
-      .query("deletionTargetChunks")
-      .withIndex("by_job_chunk", (q) => q.eq("jobId", jobId as Id<"deletionJobs">))
-      .first();
-
-    if (!chunk) {
-      return { hasMore: false };
-    }
-
-    // Schedule app's deletion handler with chunk targets
-    // Targets are batched according to job's batchSize
-    const deleteHandle = job.deleteHandleStr as any;
-    const targets = chunk.targets;
-
-    // Split chunk into sub-batches if chunk exceeds batchSize
-    for (let i = 0; i < targets.length; i += job.batchSize) {
-      const batch = targets.slice(i, i + job.batchSize);
-      await ctx.scheduler.runAfter(0, deleteHandle, {
-        targets: batch,
-        jobId,
-      });
-    }
-
-    // Remove the chunk document and update dispatched count
-    await ctx.db.delete(chunk._id);
-    await ctx.db.patch(jobId as Id<"deletionJobs">, {
-      dispatchedChunkCount: job.dispatchedChunkCount + 1,
-    });
-
-    // Check if more chunks remain
-    const nextChunk = await ctx.db
-      .query("deletionTargetChunks")
-      .withIndex("by_job_chunk", (q) => q.eq("jobId", jobId as Id<"deletionJobs">))
-      .first();
-
-    return { hasMore: nextChunk !== null };
-  },
-});
-
-/**
- * Marks job as having all chunks dispatched.
- * Called as final workflow step after all chunks have been dispatched.
- */
-export const markAllDispatched = internalMutation({
-  args: { jobId: v.string() },
-  returns: v.null(),
-  handler: async (ctx, { jobId }) => {
-    const job = await ctx.db.get(jobId as Id<"deletionJobs">);
-    if (!job) return null;
-
-    // Check if all batches have already reported completion
-    if (job.completedCount >= job.totalTargetCount && job.totalTargetCount > 0) {
-      const hasErrors = job.error;
-      const finalStatus = hasErrors && job.completedCount < job.totalTargetCount
-        ? "failed" as const
-        : "completed" as const;
-
-      await ctx.db.patch(jobId as Id<"deletionJobs">, {
-        status: finalStatus,
-      });
-
-      if (job.onCompleteHandleStr) {
-        await ctx.scheduler.runAfter(0, job.onCompleteHandleStr as any, {
-          summary: job.completedSummary,
-          status: finalStatus,
-          context: job.onCompleteContext,
-        });
-      }
-    }
-
-    return null;
-  },
-});
-
-/**
- * Records completion of a batch and updates job progress.
- * Marks job as completed when all chunks are dispatched and all targets are processed.
- *
- * @param jobId - ID of the job
- * @param batchSummary - JSON string of deletion counts for this batch
- * @param errors - Optional JSON string array of error messages for observability
- */
-export const reportBatchComplete = mutation({
+export const saveStep = mutation({
   args: {
     jobId: v.string(),
-    batchSummary: v.string(),
-    errors: v.optional(v.string()),
+    ...jobArgs,
+    done: v.boolean(),
   },
   returns: v.null(),
-  handler: async (ctx, { jobId, batchSummary, errors }) => {
-    const job = await ctx.db.get(jobId as Id<"deletionJobs">);
-    if (!job) {
+  handler: async (ctx, { jobId, frontier, failedIds, batchSummary, errors, done }) => {
+    const job = await ctx.db.get(jobId as Id<"cascadeJobs">);
+    // Cancelled between load and save: the step's deletes stand (they were
+    // real rows the cascade owned), but nothing further is scheduled.
+    if (!job || job.status !== "processing") return null;
+
+    const summary = JSON.parse(job.completedSummary) as Record<string, number>;
+    const batch = JSON.parse(batchSummary) as Record<string, number>;
+    for (const [table, count] of Object.entries(batch)) {
+      summary[table] = (summary[table] ?? 0) + count;
+    }
+
+    const tooManyFailures = failedIds.length > MAX_FAILED_IDS;
+    const finished = done || tooManyFailures;
+    // The abort reason goes first so the bounded list can never push it out.
+    const mergedErrors = mergeErrors(
+      tooManyFailures
+        ? mergeErrors(
+            JSON.stringify([`aborted: more than ${MAX_FAILED_IDS} rows could not be deleted`]),
+            job.error,
+          )
+        : job.error,
+      errors,
+    );
+    const status = !finished
+      ? ("processing" as const)
+      : mergedErrors
+        ? ("failed" as const)
+        : ("completed" as const);
+
+    await ctx.db.patch(job._id, {
+      status,
+      frontier,
+      failedIds,
+      completedCount: job.completedCount + sumCounts(batch),
+      stepCount: job.stepCount + 1,
+      completedSummary: JSON.stringify(summary),
+      error: mergedErrors,
+    });
+
+    if (!finished) {
+      await ctx.scheduler.runAfter(STEP_DELAY_MS, job.deleteHandleStr as any, { jobId });
       return null;
     }
 
-    const currentSummary = JSON.parse(job.completedSummary);
-    const batchCounts = JSON.parse(batchSummary);
-
-    for (const [table, count] of Object.entries(batchCounts)) {
-      currentSummary[table] = (currentSummary[table] || 0) + (count as number);
-    }
-
-    const batchCount = Object.values(batchCounts).reduce(
-      (sum: number, count) => sum + (count as number),
-      0
-    );
-    const newCompletedCount = job.completedCount + batchCount;
-
-    const updates: Record<string, unknown> = {
-      completedCount: newCompletedCount,
-      completedSummary: JSON.stringify(currentSummary),
-    };
-
-    // Accumulate errors for observability
-    if (errors) {
-      const batchErrors = JSON.parse(errors);
-      const existingErrors = job.error ? JSON.parse(job.error) : [];
-      updates.error = JSON.stringify([...existingErrors, ...batchErrors]);
-    }
-
-    // Terminal state: all chunks have been dispatched to batch handlers
-    // (matches old semantics where terminal = remainingTargets.length === 0)
-    const isTerminal = job.dispatchedChunkCount >= job.totalChunkCount;
-
-    if (isTerminal) {
-      const hasErrors = updates.error || job.error;
-      updates.status = hasErrors && newCompletedCount < job.totalTargetCount
-        ? "failed"
-        : "completed";
-    }
-
-    await ctx.db.patch(jobId as Id<"deletionJobs">, updates);
-
-    // Schedule callback when job reaches a terminal state (completed or failed)
-    if (isTerminal && job.onCompleteHandleStr) {
+    if (job.onCompleteHandleStr) {
       await ctx.scheduler.runAfter(0, job.onCompleteHandleStr as any, {
-        summary: JSON.stringify(currentSummary),
-        status: updates.status,
+        summary: JSON.stringify(summary),
+        status,
         context: job.onCompleteContext,
       });
     }
-
     return null;
   },
 });
 
 /**
- * Cancels a running deletion job and its workflow.
- *
- * @param jobId - ID of the job to cancel
+ * Cancels a running job. The step already scheduled still fires, sees the
+ * job is no longer processing, and returns without touching anything.
  */
 export const cancelJob = mutation({
   args: { jobId: v.string() },
   returns: v.null(),
   handler: async (ctx, { jobId }) => {
-    const job = await ctx.db.get(jobId as Id<"deletionJobs">);
+    const job = await ctx.db.get(jobId as Id<"cascadeJobs">);
     if (!job) {
       throw new Error(`Job ${jobId} not found`);
     }
-
-    if (job.status !== "pending" && job.status !== "processing") {
-      return null; // Already in terminal state
+    if (job.status !== "processing") {
+      return null; // Already in a terminal state
     }
-
-    // Cancel the workflow if it exists
-    if (job.workflowId) {
-      await workflow.cancel(ctx, job.workflowId as any);
-    }
-
-    // Clean up remaining target chunks
-    const chunks = await ctx.db
-      .query("deletionTargetChunks")
-      .withIndex("by_job_chunk", (q) => q.eq("jobId", jobId as Id<"deletionJobs">))
-      .collect();
-
-    for (const chunk of chunks) {
-      await ctx.db.delete(chunk._id);
-    }
-
-    await ctx.db.patch(jobId as Id<"deletionJobs">, {
-      status: "cancelled",
-    });
-
+    await ctx.db.patch(job._id, { status: "cancelled" });
     return null;
   },
 });
 
 /**
- * Retrieves current status of a deletion job.
- * Reactive query that updates as batches complete.
- *
- * @param jobId - ID of the job to query
- * @returns Job status with progress information
+ * Current status of a cascade job. Reactive: updates as steps commit.
  */
 export const getJobStatus = query({
   args: { jobId: v.string() },
   returns: v.union(
     v.object({
-      status: v.union(
-        v.literal("pending"),
-        v.literal("processing"),
-        v.literal("completed"),
-        v.literal("failed"),
-        v.literal("cancelled")
-      ),
-      totalTargetCount: v.number(),
+      status: jobStatus,
       completedCount: v.number(),
+      pendingCount: v.number(),
+      stepCount: v.number(),
       completedSummary: v.string(),
       error: v.optional(v.string()),
     }),
-    v.null()
+    v.null(),
   ),
   handler: async (ctx, { jobId }) => {
-    const job = await ctx.db.get(jobId as Id<"deletionJobs">);
-    if (!job) {
-      return null;
-    }
-
+    const job = await ctx.db.get(jobId as Id<"cascadeJobs">);
+    if (!job) return null;
     return {
       status: job.status,
-      totalTargetCount: job.totalTargetCount,
       completedCount: job.completedCount,
+      pendingCount: job.frontier.length,
+      stepCount: job.stepCount,
       completedSummary: job.completedSummary,
       error: job.error,
     };
   },
 });
+
+function sumCounts(summary: Record<string, number>): number {
+  return Object.values(summary).reduce((sum, n) => sum + n, 0);
+}
+
+/**
+ * Appends a step's errors to the job's, keeping the stored list bounded. The
+ * job document has to stay under 1 MiB whatever a broken deleter says. The
+ * overflow is folded into a trailing "...and N more" entry.
+ */
+function mergeErrors(existing: string | undefined, incoming: string | undefined): string | undefined {
+  if (!incoming) return existing;
+  const prior = existing ? (JSON.parse(existing) as string[]) : [];
+  const next = JSON.parse(incoming) as string[];
+  const overflowOf = (e: string) => /^\.\.\.and (\d+) more$/.exec(e);
+  const isOverflow = (e: string) => overflowOf(e) !== null;
+  const priorOverflow = prior.filter(isOverflow).reduce((n, e) => n + Number(overflowOf(e)![1]), 0);
+  const messages = [...prior.filter((e) => !isOverflow(e)), ...next.filter((e) => !isOverflow(e))];
+  const total = messages.length + priorOverflow;
+  const kept = messages.slice(0, MAX_STORED_ERRORS);
+  if (total > kept.length) kept.push(`...and ${total - kept.length} more`);
+  return JSON.stringify(kept);
+}

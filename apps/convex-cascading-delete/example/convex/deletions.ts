@@ -50,7 +50,7 @@ export const deleteOrganizationBatched = mutation({
       organizationId,
       {
         batchHandlerRef: (internal as any).cascading._cascadeBatchHandler,
-        batchSize: batchSize || 2000,
+        batchSize,
       }
     );
     return result;

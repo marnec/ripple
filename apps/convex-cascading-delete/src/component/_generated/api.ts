@@ -23,15 +23,24 @@ import { anyApi, componentsGeneric } from "convex/server";
 export const api: {
   lib: {
     cancelJob: FunctionReference<"mutation", "public", { jobId: string }, null>;
-    createBatchJob: FunctionReference<
+    createJob: FunctionReference<
       "mutation",
       "public",
       {
         batchSize: number;
+        batchSummary: string;
         deleteHandleStr: string;
+        errors?: string;
+        failedIds: Array<string>;
+        frontier: Array<{
+          id: string;
+          probeId?: string;
+          ruleIndex: number;
+          table: string;
+        }>;
+        maxReadsPerBatch: number;
         onCompleteContext?: string;
         onCompleteHandleStr?: string;
-        targets: Array<{ id: string; table: string }>;
       },
       string
     >;
@@ -43,20 +52,43 @@ export const api: {
         completedCount: number;
         completedSummary: string;
         error?: string;
-        status: "pending" | "processing" | "completed" | "failed" | "cancelled";
-        totalTargetCount: number;
+        pendingCount: number;
+        status: "processing" | "completed" | "failed" | "cancelled";
+        stepCount: number;
       } | null
     >;
-    reportBatchComplete: FunctionReference<
-      "mutation",
-      "public",
-      { batchSummary: string; errors?: string; jobId: string },
-      null
-    >;
-    startProcessing: FunctionReference<
-      "mutation",
+    loadJob: FunctionReference<
+      "query",
       "public",
       { jobId: string },
+      {
+        batchSize: number;
+        failedIds: Array<string>;
+        frontier: Array<{
+          id: string;
+          probeId?: string;
+          ruleIndex: number;
+          table: string;
+        }>;
+        maxReadsPerBatch: number;
+      } | null
+    >;
+    saveStep: FunctionReference<
+      "mutation",
+      "public",
+      {
+        batchSummary: string;
+        done: boolean;
+        errors?: string;
+        failedIds: Array<string>;
+        frontier: Array<{
+          id: string;
+          probeId?: string;
+          ruleIndex: number;
+          table: string;
+        }>;
+        jobId: string;
+      },
       null
     >;
   };
@@ -70,44 +102,6 @@ export const api: {
  * const myFunctionReference = internal.myModule.myFunction;
  * ```
  */
-export const internal: {
-  lib: {
-    deletionWorkflow: FunctionReference<
-      "mutation",
-      "internal",
-      {
-        args?: { jobId: string };
-        context?: any;
-        docs?: "To call a workflow directly, nest its arguments: { args: { ...yourWorkflowArgs } }";
-        generationNumber?: number;
-        onComplete?: string;
-        startAsync?: boolean;
-        workflowId?: string;
-      },
-      | string
-      | {
-          kind: "complete";
-          runResult:
-            | { kind: "success"; returnValue: any }
-            | { error: string; kind: "failed" }
-            | { kind: "canceled" };
-        }
-    >;
-    dispatchNextChunk: FunctionReference<
-      "mutation",
-      "internal",
-      { jobId: string },
-      { hasMore: boolean }
-    >;
-    markAllDispatched: FunctionReference<
-      "mutation",
-      "internal",
-      { jobId: string },
-      null
-    >;
-  };
-} = anyApi as any;
+export const internal: {} = anyApi as any;
 
-export const components = componentsGeneric() as unknown as {
-  workflow: import("@convex-dev/workflow/_generated/component.js").ComponentApi<"workflow">;
-};
+export const components = componentsGeneric() as unknown as {};

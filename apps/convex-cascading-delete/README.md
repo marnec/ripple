@@ -1,18 +1,17 @@
 # Convex Cascading Delete
 
-[![npm version](https://badge.fury.io/js/@00akshatsinha00%2Fconvex-cascading-delete.svg)](https://www.npmjs.com/package/@00akshatsinha00/convex-cascading-delete)
-
 A Convex component for managing cascading deletes across related documents. Configure relationships via existing indexes, then delete documents safely knowing all related records will be cleaned up automatically with clear consistency guarantees.
 
 ## Why Use This Component?
 
 - **Works with existing schemas** - No migration to special schema definitions; uses your existing `defineTable` and indexes
 - **Explicit configuration** - Clear, declarative rules for cascade relationships defined in one place
-- **Two deletion modes** - Inline (atomic, single transaction) for small deletes, batched (scheduled) for large trees
-- **Progress tracking** - React hook for real-time batch deletion progress with reactive updates
+- **Two deletion modes** - Inline (atomic, single transaction) for small trees, batched (streaming, scheduled) for trees of any size
+- **No size ceiling in batched mode** - The tree is discovered as it is deleted; nothing ever enumerates it whole
+- **Progress tracking** - React hook for real-time deletion progress with reactive updates
 - **Safety guards** - Optional `patchDb` helper prevents accidental direct `db.delete` calls
 - **Index validation** - Catch configuration errors at startup, not at delete time
-- **Circular handling** - Automatically handles circular and diamond dependencies via visited set
+- **Circular handling** - Diamonds and cycles are safe in both modes
 - **Full observability** - Returns deletion summary with per-table document counts
 - **Non-invasive** - Drop-in component that doesn't replace your schema builder or require code changes beyond deletion calls
 
@@ -27,7 +26,7 @@ Run `npm create convex` or follow any of the [Convex quickstarts](https://docs.c
 ### Step 1: Install the package
 
 ```bash
-npm install @00akshatsinha00/convex-cascading-delete
+npm install convex-cascading-delete
 ```
 
 ### Step 2: Add the component to your Convex app
@@ -35,7 +34,7 @@ npm install @00akshatsinha00/convex-cascading-delete
 ```ts
 // convex/convex.config.ts
 import { defineApp } from "convex/server";
-import convexCascadingDelete from "@00akshatsinha00/convex-cascading-delete/convex.config";
+import convexCascadingDelete from "convex-cascading-delete/convex.config";
 
 const app = defineApp();
 app.use(convexCascadingDelete);
@@ -51,7 +50,7 @@ import {
   CascadingDelete,
   defineCascadeRules,
   makeBatchDeleteHandler
-} from "@00akshatsinha00/convex-cascading-delete";
+} from "convex-cascading-delete";
 import { components } from "./_generated/api";
 import { internalMutation } from "./_generated/server";
 
@@ -69,11 +68,10 @@ export const cd = new CascadingDelete(components.convexCascadingDelete, {
   rules: cascadeRules
 });
 
-// Required for batched mode - exports an internal mutation that processes deletion batches
-export const _cascadeBatchHandler = makeBatchDeleteHandler(
-  internalMutation,
-  components.convexCascadingDelete
-);
+// Required for batched mode: the internal mutation that runs one step of a
+// batched cascade. Pass the same `internalMutation` builder the rest of your
+// app uses, so any database wrapping (triggers, custom contexts) applies here.
+export const _cascadeBatchHandler = makeBatchDeleteHandler(internalMutation, cd);
 ```
 
 ## Quick Start
@@ -97,7 +95,7 @@ export const deleteUser = mutation({
 });
 ```
 
-For large deletion trees, use batched mode:
+For trees that may not fit one transaction, use batched mode:
 
 ```ts
 // convex/organizations.ts
@@ -113,13 +111,11 @@ export const deleteOrganization = mutation({
       ctx,
       "organizations",
       orgId,
-      {
-        batchHandlerRef: internal.cascading._cascadeBatchHandler,
-        batchSize: 2000
-      }
+      { batchHandlerRef: internal.cascading._cascadeBatchHandler }
     );
     // result.jobId can be used to track progress via useDeletionJobStatus hook
-    // result.initialSummary contains counts from the first inline batch
+    // (null if the whole tree fit in this transaction)
+    // result.initialSummary contains counts from the inline first step
     return result;
   }
 });
@@ -160,15 +156,16 @@ Main interface for deletion operations.
 #### Constructor
 
 ```ts
-const cd = new CascadingDelete(components.convexCascadingDelete, { rules });
+const cd = new CascadingDelete(components.convexCascadingDelete, { rules, deleters });
 ```
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
 | `component` | `ComponentApi` | Component reference from `components.convexCascadingDelete` |
 | `options.rules` | `CascadeConfig` | Rules from `defineCascadeRules()` |
+| `options.deleters` | `Record<string, TableDeleter>` (optional) | Per-table `(ctx, id, doc) => Promise<void>` called instead of `ctx.db.delete` — e.g. to drop a storage blob first. A deleter that throws is retried with a raw delete. |
 
-#### `deleteWithCascade(ctx, table, id)`
+#### `deleteWithCascade(ctx, table, id, options?)`
 
 Deletes a document and all its cascading dependents in a single transaction. Uses depth-first post-order traversal (children deleted before parents) with a visited set for cycle detection.
 
@@ -182,15 +179,16 @@ const summary: DeletionSummary = await cd.deleteWithCascade(ctx, "users", userId
 | `ctx` | `MutationCtx` | Convex mutation context |
 | `table` | `string` | Source table name |
 | `id` | `string` | Document ID to delete |
+| `options.onComplete` | `(ctx, summary) => Promise<void>` (optional) | Called in the same transaction once the cascade is done |
 | **Returns** | `DeletionSummary` | Map of table names to deleted document counts |
 
-**Best for:** Small to medium deletion trees (fewer than 4,000 documents)
+**Best for:** Small deletion trees — everything must fit one transaction's limits (see [Performance Characteristics](#performance-characteristics))
 
 **Consistency:** Fully atomic - all deletes succeed or all fail within a single Convex transaction
 
 #### `deleteWithCascadeBatched(ctx, table, id, options)`
 
-Deletes a document and its dependents across multiple batched transactions. Collects all targets first via read-only traversal, deletes the first batch inline, then schedules remaining batches via the component's job system.
+Deletes a document and its dependents across a chain of transactions. The root row is deleted in the calling transaction along with as much of the tree as one transaction's budget allows; if anything is left, the traversal frontier is handed to the component, which schedules the batch handler once per step until the frontier is empty.
 
 ```ts
 const result = await cd.deleteWithCascadeBatched(
@@ -199,11 +197,14 @@ const result = await cd.deleteWithCascadeBatched(
   orgId,
   {
     batchHandlerRef: internal.cascading._cascadeBatchHandler,
-    batchSize: 2000  // Optional, defaults to 2000
+    batchSize: 500,           // Optional: rows deleted per transaction
+    maxReadsPerBatch: 1024,   // Optional: index reads per transaction
+    onComplete: internal.cascading.onCascadeDone,   // Optional
+    onCompleteContext: { actorId },                  // Optional
   }
 );
 // Returns: { jobId: "j57a...", initialSummary: { organizations: 1, teams: 3 } }
-// jobId is null if all targets fit in the first batch
+// jobId is null if the whole tree fit in the first transaction
 ```
 
 | Parameter | Type | Description |
@@ -212,14 +213,23 @@ const result = await cd.deleteWithCascadeBatched(
 | `table` | `string` | Source table name |
 | `id` | `string` | Document ID to delete |
 | `options.batchHandlerRef` | `FunctionReference<"mutation">` | Reference to your exported batch handler (from `makeBatchDeleteHandler`) |
-| `options.batchSize` | `number` (optional) | Documents per batch, defaults to 2000 |
-| **Returns** | `{ jobId: string \| null, initialSummary: DeletionSummary }` | Job ID for tracking (null if all deleted inline) and first-batch summary |
+| `options.batchSize` | `number` (optional) | Rows deleted per transaction, defaults to 500 |
+| `options.maxReadsPerBatch` | `number` (optional) | Index reads (`db.query` / `db.get`) the cascade itself issues per transaction, defaults to 1024. Convex allows 4,096 per transaction; deleters and triggers spend from the same budget, so leave them headroom |
+| `options.onComplete` | `FunctionReference<"mutation">` (optional) | Scheduled once when the job reaches a terminal state, with `{ summary, status, context }` (all strings; `summary` and `context` are JSON) |
+| `options.onCompleteContext` | `Record<string, unknown>` (optional) | Passed through to `onComplete` as JSON |
+| **Returns** | `{ jobId: string \| null, initialSummary: DeletionSummary }` | Job ID for tracking (null if everything was deleted inline) and the inline step's summary |
 
-**Best for:** Large deletion trees (any size)
+**Best for:** Any tree that might not fit one transaction — there is no size at which this stops working
 
-**Consistency:** Per-batch atomic, inter-batch eventual. Each batch is a separate Convex transaction.
+**Consistency:** Per-step atomic, inter-step eventual. Parents are deleted before their children (pre-order), so between steps the tree is visible as children without a parent, never as a parent with half its children gone.
+
+**Not supported:** rules with `softDeleteField`. A soft-deleted row stays in its index, which a streaming traversal would fetch again; batched mode throws up front if any rule sets it.
 
 **Progress tracking:** Pass the returned `jobId` to the `useDeletionJobStatus` React hook
+
+#### `cancelBatchJob(ctx, jobId)`
+
+Cancels a running job. The step already scheduled still fires, finds the job cancelled, and stands down. No-op if the job is already in a terminal state.
 
 #### `validateRules(ctx)`
 
@@ -250,28 +260,25 @@ export const safeDeleteUser = mutation({
 });
 ```
 
-### `makeBatchDeleteHandler(internalMutationBuilder, componentRef)`
+### `makeBatchDeleteHandler(internalMutationBuilder, cd)`
 
-Factory function that creates the app-side internal mutation for processing deletion batches. This function must be exported from your convex code so the component's scheduler can invoke it via a function handle.
+Factory function that creates the app-side internal mutation running one step of a batched cascade. It must be exported from your convex code so the component's scheduler can invoke it via a function handle.
 
 ```ts
-import { makeBatchDeleteHandler } from "@00akshatsinha00/convex-cascading-delete";
-import { components } from "./_generated/api";
+import { makeBatchDeleteHandler } from "convex-cascading-delete";
 import { internalMutation } from "./_generated/server";
+import { cd } from "./cascading";
 
-export const _cascadeBatchHandler = makeBatchDeleteHandler(
-  internalMutation,
-  components.convexCascadingDelete
-);
+export const _cascadeBatchHandler = makeBatchDeleteHandler(internalMutation, cd);
 ```
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `internalMutationBuilder` | `InternalMutation` | Your app's `internalMutation` builder from `_generated/server` |
-| `componentRef` | `ComponentApi` | Component reference from `components.convexCascadingDelete` |
+| `internalMutationBuilder` | `InternalMutation` | Your app's `internalMutation` builder — the same one the rest of the app uses, so any database wrapping applies to cascade deletes too |
+| `cd` | `CascadingDelete` | The configured instance: its rules and deleters drive the step, its component reference stores the result |
 | **Returns** | `FunctionReference<"mutation">` | Internal mutation to pass as `batchHandlerRef` |
 
-**How it works:** The returned mutation receives a batch of `{ table, id }` targets, deletes each one via `ctx.db.delete(id)`, then reports completion back to the component via `reportBatchComplete`. The component's scheduler calls this function handle with each batch.
+**How it works:** Each invocation loads the job's frontier from the component, spends one transaction's budget deleting and expanding, and reports back through the component, which schedules the next step or finalizes the job.
 
 ### React Hook
 
@@ -279,8 +286,10 @@ export const _cascadeBatchHandler = makeBatchDeleteHandler(
 
 Monitors batch deletion progress with reactive updates. Wraps the component's `getJobStatus` query.
 
+A batched cascade discovers the tree as it deletes it, so there is no total to compute a percentage from. `completedCount` grows as steps commit; `pendingCount` is how many parents are still being expanded.
+
 ```tsx
-import { useDeletionJobStatus } from "@00akshatsinha00/convex-cascading-delete/react";
+import { useDeletionJobStatus } from "convex-cascading-delete/react";
 import { api } from "../convex/_generated/api";
 
 function DeletionProgress({ jobId }: { jobId: string | null }) {
@@ -288,12 +297,12 @@ function DeletionProgress({ jobId }: { jobId: string | null }) {
 
   if (!status) return null;
 
-  const progress = (status.completedCount / status.totalTargetCount) * 100;
-
   return (
     <div>
-      <progress value={progress} max={100} />
-      <p>{status.status}: {status.completedCount} / {status.totalTargetCount}</p>
+      <p>
+        {status.status}: {status.completedCount} documents deleted in {status.stepCount} steps
+        {status.status === "processing" && ` (${status.pendingCount} parents pending)`}
+      </p>
       {status.status === "completed" && (
         <pre>{JSON.stringify(JSON.parse(status.completedSummary), null, 2)}</pre>
       )}
@@ -312,11 +321,12 @@ function DeletionProgress({ jobId }: { jobId: string | null }) {
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `status` | `"pending" \| "processing" \| "completed" \| "failed"` | Current job state |
-| `totalTargetCount` | `number` | Total documents to delete |
+| `status` | `"processing" \| "completed" \| "failed" \| "cancelled"` | Current job state |
 | `completedCount` | `number` | Documents deleted so far |
+| `pendingCount` | `number` | Parents whose dependents are still being enumerated |
+| `stepCount` | `number` | Transactions the cascade has used, the inline one included |
 | `completedSummary` | `string` | JSON string mapping table names to deleted counts |
-| `error` | `string \| undefined` | Error message if job failed |
+| `error` | `string \| undefined` | JSON string array of error messages, if any row could not be deleted |
 
 ## Exported Types
 
@@ -324,12 +334,14 @@ All types are importable from the main entry point:
 
 ```ts
 import type {
-  CascadeRule,       // { to: string; via: string; field: string }
+  CascadeRule,       // { to: string; via: string; field: string; softDeleteField?: string }
   CascadeConfig,     // { [sourceTable: string]: CascadeRule[] }
   DeletionSummary,   // { [tableName: string]: number }
-  DeletionTarget,    // { table: string; id: string }
-  BatchJobStatus,    // { status, totalTargetCount, completedCount, completedSummary, error? }
-} from "@00akshatsinha00/convex-cascading-delete";
+  TableDeleter,      // (ctx, id, doc) => Promise<void>
+  FrontierEntry,     // { table, id, ruleIndex, probeId? } — persisted traversal state
+  StepBudget,        // { deletes: number; reads: number }
+  BatchJobStatus,    // { status, completedCount, pendingCount, stepCount, completedSummary, error? }
+} from "convex-cascading-delete";
 ```
 
 ## Schema Requirements
@@ -420,7 +432,7 @@ const rules = defineCascadeRules({
 
 ### Circular Dependencies
 
-The component handles circular references automatically via a visited set. No infinite loops:
+Both modes handle circular references. Inline mode keeps a visited set; batched mode deletes a row the moment it fetches it, so a row already gone cannot be fetched again. No infinite loops:
 
 ```ts
 const rules = defineCascadeRules({
@@ -432,7 +444,6 @@ const rules = defineCascadeRules({
   ]
 });
 
-// Safe - visited set prevents re-processing already-seen documents
 const summary = await cd.deleteWithCascade(ctx, "users", userId);
 ```
 
@@ -461,96 +472,91 @@ export const processUser = mutation({
 
 ## Best Practices
 
-1. **Start with inline mode** - Use `deleteWithCascade` for most cases; it's simpler and fully atomic
-2. **Switch to batched for large trees** - Use `deleteWithCascadeBatched` when deleting more than 4,000 documents to avoid transaction limits
-3. **Validate rules on startup** - Call `validateRules()` in a dev-only initialization function to catch misconfigured indexes early
-4. **Use patchDb in critical mutations** - Prevent accidental direct deletes that would leave orphaned records
-5. **Monitor batch progress** - Use the `useDeletionJobStatus` hook to show users real-time deletion feedback
-6. **Test cascade rules** - Verify relationships work as expected before production using the testing helpers
+1. **Start with inline mode** - Use `deleteWithCascade` for trees you know are small; it's simpler and fully atomic
+2. **Use batched mode for anything unbounded** - A table whose per-parent fanout has no ceiling (messages under a channel, tasks under a project) belongs in `deleteWithCascadeBatched`, whatever its size today
+3. **Size the budgets for your deleters** - The defaults leave three quarters of Convex's read budget to deleters and triggers. If yours read a lot per row (aggregates, denormalized lookups), lower `batchSize` / `maxReadsPerBatch`
+4. **Validate rules on startup** - Call `validateRules()` in a dev-only initialization function to catch misconfigured indexes early
+5. **Use patchDb in critical mutations** - Prevent accidental direct deletes that would leave orphaned records
+6. **Watch for `failed` jobs** - A failed job means rows the cascade could not delete were left behind; `error` names them. Have a reconciliation path for orphans
+7. **Test cascade rules** - Verify relationships work as expected before production using the testing helpers
 
 ## Architecture Overview
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│  YOUR APP                                                       │
-│                                                                 │
-│  ┌──────────────────────────────────┐                           │
-│  │  Your Mutation                   │                           │
-│  │                                  │                           │
-│  │  const cd = new CascadingDelete( │                           │
-│  │    components.convexCascadingDel,│                           │
-│  │    { rules: cascadeRules }       │                           │
-│  │  );                              │                           │
-│  │                                  │  ctx.db (YOUR tables)     │
-│  │  // Inline mode:                 │─────► .query(table)       │
-│  │  cd.deleteWithCascade(ctx,       │       .withIndex(idx,...) │
-│  │    "teams", teamId)              │       .collect()          │
-│  │                                  │       .delete(id)         │
-│  │  // Batched mode:                │                           │
-│  │  cd.deleteWithCascadeBatched(ctx,│                           │
-│  │    "teams", teamId, opts)        │                           │
-│  │                                  │                           │
-│  └──────────┬───────────────────────┘                           │
-│             │                                                   │
-│             │ ctx.runMutation(component.lib.createBatchJob, ...)│
-│             │ ctx.runQuery(component.lib.getJobStatus, ...)     │
-│             ▼                                                   │
-│  ┌──────────────────────────────────────────────────────────┐   │
-│  │  COMPONENT (Isolated — own DB, own transactions)         │   │
-│  │                                                          │   │
-│  │  Table: deletionJobs                                     │   │
-│  │    { status, targets, deleteHandle, batchSize, summary } │   │
-│  │                                                          │   │
-│  │  Functions:                                              │   │
-│  │    createBatchJob(targets, handle, batchSize)            │   │
-│  │    processNextBatch(jobId)                               │   │
-│  │      ├─ scheduler.runAfter(0, deleteHandle, batch)     ──┼──►│
-│  │      └─ scheduler.runAfter(200ms, self, jobId)           │   │
-│  │    getJobStatus(jobId) → reactive query                  │   │
-│  │    reportBatchComplete(jobId, summary)                   │   │
-│  └──────────────────────────────────────────────────────────┘   │
-│             │                                                   │
-│             │ Function handle callback                          │
-│             ▼                                                   │
-│  ┌──────────────────────────────────────────────────────────┐   │
-│  │  Your Batch Delete Handler (via makeBatchDeleteHandler)  │   │
-│  │                                                          │   │
-│  │  handler: async (ctx, { targets, jobId }) => {           │   │
-│  │    for (t of targets) await ctx.db.delete(t.id);         │   │
-│  │    await ctx.runMutation(component.reportBatchComplete,  │   │
-│  │      { jobId, summary });                                │   │
-│  │  }                                                       │   │
-│  └──────────────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────┐
+│  YOUR APP                                                            │
+│                                                                      │
+│  ┌──────────────────────────────────┐                                │
+│  │  Your Mutation                   │                                │
+│  │                                  │                                │
+│  │  cd.deleteWithCascadeBatched(    │  ctx.db (YOUR tables)          │
+│  │    ctx, "orgs", orgId, opts)     │─────► .get(root) → delete      │
+│  │                                  │       .query(child)            │
+│  │  1. delete the root row          │       .withIndex(idx, eq)      │
+│  │  2. run one budgeted step        │       .take(page) → delete each│
+│  │  3. frontier left? → createJob   │                                │
+│  └──────────┬───────────────────────┘                                │
+│             │ ctx.runMutation(component.lib.createJob, { frontier })  │
+│             ▼                                                        │
+│  ┌──────────────────────────────────────────────────────────────┐    │
+│  │  COMPONENT (Isolated — own DB, own transactions)             │    │
+│  │                                                              │    │
+│  │  Table: cascadeJobs                                          │    │
+│  │    { status, frontier[], failedIds[], budgets, summary }     │    │
+│  │                                                              │    │
+│  │  createJob(frontier, …)  ──► scheduler.runAfter(0, handler)  │──┐ │
+│  │  loadJob(jobId)          → frontier + budgets                │  │ │
+│  │  saveStep(frontier, …)   ──► more? runAfter(0, handler)      │──┤ │
+│  │                          ──► done? runAfter(0, onComplete)   │  │ │
+│  │  getJobStatus(jobId)     → reactive query                    │  │ │
+│  └──────────────────────────────────────────────────────────────┘  │ │
+│             ▲                                                      │ │
+│             │ runQuery(loadJob) / runMutation(saveStep)            │ │
+│  ┌──────────┴───────────────────────────────────────────────────┐  │ │
+│  │  Your Batch Handler (via makeBatchDeleteHandler)             │◄─┘ │
+│  │                                                              │    │
+│  │  handler: async (ctx, { jobId }) => {                        │    │
+│  │    job = loadJob(jobId)                                      │    │
+│  │    pop deepest parent → take(page) of its current rule       │    │
+│  │      → delete each row now (deleter or db.delete)            │    │
+│  │      → push rows that have rules of their own                │    │
+│  │    repeat until frontier empty or budget spent               │    │
+│  │    saveStep(jobId, frontier, summary, errors, done)          │    │
+│  │  }                                                           │    │
+│  └──────────────────────────────────────────────────────────────┘    │
+└──────────────────────────────────────────────────────────────────────┘
 ```
 
-**Key architectural constraint:** Convex components cannot access your app's tables. All document traversal and deletion runs in your app's mutation context using `ctx.db`. The component only manages batch job state (creation, progress, completion) in its own isolated database.
+**Key architectural constraint:** Convex components cannot access your app's tables. All document traversal and deletion runs in your app's mutation context using `ctx.db`. The component only holds the state between steps — the frontier — in its own isolated database.
+
+**Why the frontier stays small:** a row is deleted the moment it is fetched, so the frontier only ever holds parents that are already gone and still have dependents to enumerate — at most one page of siblings per level of your cascade graph, however wide the tree is. "The next page" of a parent is simply whatever its index still holds.
 
 ## Consistency Guarantees
 
 ### Inline Mode (`deleteWithCascade`)
 - **Fully atomic** - All deletes succeed or all fail within a single Convex transaction
 - **ACID compliant** - Leverages Convex's built-in transactional guarantees
+- **Post-order** - Children are deleted before parents
 - **Immediate** - Returns complete `DeletionSummary` synchronously
 
 ### Batched Mode (`deleteWithCascadeBatched`)
-- **Per-batch atomic** - Each batch is a separate Convex transaction
-- **Inter-batch eventual** - Batches process asynchronously with 200ms delay between them
-- **First batch inline** - Initial batch is deleted in the calling mutation for immediate feedback
-- **Remaining batches scheduled** - Processed via the component's scheduler using function handles
+- **Per-step atomic** - Each step is a separate Convex transaction
+- **Inter-step eventual** - Steps chain through the scheduler; the next is scheduled inside the transaction that commits the previous one
+- **Pre-order** - The root goes in the calling transaction, dependents drain afterwards. Readers may see children without a parent, never a parent with half its children gone
+- **Undeletable rows are skipped, not retried** - A row neither its deleter nor a raw delete can remove is recorded in `error`, skipped on every later page, and left for you to reconcile. More than 256 of them abort the job as `failed`
 - **Progress observable** - Use `useDeletionJobStatus` hook or `getJobStatus` query for real-time status
 
 ## Performance Characteristics
 
 | Characteristic | Detail |
 |---|---|
-| **Inline mode limit** | ~4,000 documents (based on Convex's 16K write limit per transaction) |
-| **Batch size** | Configurable, defaults to 2,000 documents per batch |
-| **Traversal algorithm** | Depth-first, post-order (children deleted before parents) |
-| **Cycle detection** | O(1) lookup per document via `Set<string>` |
+| **Inline mode limit** | One transaction: 16,000 writes, 4,096 index reads (each rule query and `db.get` is one), 32,000 documents scanned |
+| **Batched mode limit** | None. Each step is bounded by `batchSize` deletes and `maxReadsPerBatch` reads; the frontier is bounded by depth × page size |
+| **Defaults** | `batchSize` 500, `maxReadsPerBatch` 1,024, page size 100 |
+| **Traversal algorithm** | Inline: depth-first post-order. Batched: depth-first pre-order over a persisted stack |
+| **Cycle handling** | Inline: `Set<string>` visited set. Batched: deleted rows cannot be fetched again |
 | **Index usage** | Efficient `.withIndex()` queries — no table scans |
-| **Batch scheduling delay** | 200ms between batches to prevent scheduler flooding |
-| **Convex limits respected** | 16K writes, 32K document scans, 4,096 index reads, 1s execution per transaction |
+| **Steps per cascade** | Roughly `rows / batchSize`, or `(rows × rules per row) / maxReadsPerBatch` for rule-heavy tables, whichever is larger |
 
 ## Testing
 
@@ -558,7 +564,7 @@ The package exports a test helper for use with `convex-test`:
 
 ```ts
 import { convexTest } from "convex-test";
-import { register } from "@00akshatsinha00/convex-cascading-delete/test";
+import { register } from "convex-cascading-delete/test";
 import schema from "./schema";
 
 const modules = import.meta.glob("./convex/**/*.ts");
@@ -567,7 +573,9 @@ test("cascading delete works", async () => {
   const t = convexTest(schema, modules);
   register(t, "convexCascadingDelete");
 
-  // ... your test code using the component
+  // ... your test code using the component.
+  // Batched cascades chain scheduled steps: drain them with
+  // await t.finishAllScheduledFunctions(vi.runAllTimers);
 });
 ```
 
@@ -592,7 +600,7 @@ npm run dev
 The example app includes:
 - **Seed data buttons** - Create sample organizations with teams, members, projects, tasks, and comments
 - **Inline delete** - Delete an organization atomically in a single transaction
-- **Batched delete** - Delete an organization across multiple batched transactions with real-time progress
+- **Batched delete** - Delete an organization across chained transactions with real-time progress
 - **Document counters** - See counts update reactively across all 6 tables
 - **REST API** - HTTP endpoint at `/api/deletion-job-status?jobId=...` for external job monitoring
 
@@ -621,14 +629,18 @@ const status = await ctx.runQuery(
   { jobId }
 );
 console.log(status);
-// { status: "processing", totalTargetCount: 500, completedCount: 200, ... }
+// { status: "processing", completedCount: 200, pendingCount: 3, stepCount: 4, ... }
 ```
 
-If a job is stuck in `"processing"` state, it may be due to the batch handler function not being properly exported or a deployment mismatch.
+A job whose `stepCount` stops growing while `processing` means a step failed to commit — most often a step that overran a Convex transaction limit because deleters or triggers read more than `maxReadsPerBatch` left them. Lower the budgets and delete again; the frontier is still there, but a new cascade from the same root is the simplest recovery (already-deleted rows are simply not found).
 
-### Transaction limit exceeded
+### Job finished as `failed`
 
-If inline mode fails with a transaction limit error, switch to batched mode:
+`error` lists the rows no deleter could remove (and, past 256 of them, the abort). Those rows and their subtrees are still in your tables; reconcile them and re-run the cascade from the root if needed.
+
+### Transaction limit exceeded in inline mode
+
+Switch to batched mode:
 
 ```ts
 // Instead of:
@@ -637,7 +649,6 @@ await cd.deleteWithCascade(ctx, "organizations", orgId);
 // Use:
 await cd.deleteWithCascadeBatched(ctx, "organizations", orgId, {
   batchHandlerRef: internal.cascading._cascadeBatchHandler,
-  batchSize: 1000  // Reduce batch size if needed
 });
 ```
 
@@ -648,10 +659,6 @@ Use type assertions for dynamic table access:
 ```ts
 const summary = await cd.deleteWithCascade(ctx, "users", userId as any);
 ```
-
-## Live Demo
-
-Try the interactive demo: [https://convex-cascading-delete.vercel.app](https://convex-cascading-delete.vercel.app)
 
 ## Found a bug? Feature request?
 

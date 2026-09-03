@@ -179,17 +179,11 @@ export function DemoTab({
       {jobStatus && (
         <div className="progress-section">
           <h3 className="progress-title">Batch Deletion Progress</h3>
-          <div className="progress-bar-container">
-            <div
-              className="progress-bar"
-              style={{
-                width: `${(jobStatus.completedCount / jobStatus.totalTargetCount) * 100}%`,
-              }}
-            />
-          </div>
           <p className="progress-text">
-            {jobStatus.status}: {jobStatus.completedCount} /{" "}
-            {jobStatus.totalTargetCount} documents
+            {jobStatus.status}: {jobStatus.completedCount} documents deleted in{" "}
+            {jobStatus.stepCount} steps
+            {jobStatus.status === "processing" &&
+              ` (${jobStatus.pendingCount} parents still expanding)`}
           </p>
           {jobStatus.status === "completed" && (
             <div className="summary-grid">

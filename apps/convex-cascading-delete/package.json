@@ -9,7 +9,7 @@
   "bugs": {
     "url": "https://github.com/akshatsinha0/convex-cascading-delete/issues"
   },
-  "version": "0.1.1",
+  "version": "0.2.0",
   "license": "Apache-2.0",
   "keywords": [
     "convex",
@@ -62,8 +62,5 @@
     "typescript-eslint": "8.68.0",
     "vite": "8.2.2",
     "vitest": "4.1.11"
-  },
-  "dependencies": {
-    "@convex-dev/workflow": "^0.4.6"
   }
 }
