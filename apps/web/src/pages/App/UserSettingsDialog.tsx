@@ -1,3 +1,4 @@
+import { forgetCachedQueries } from "@/lib/query-cache";
 import {
   ResponsiveDialog,
   ResponsiveDialogBody,
@@ -54,6 +55,10 @@ export function UserSettingsDialog({
     setLeaving(true);
     try {
       await leaveWorkspace({ workspaceId: workspaceId as Id<"workspaces"> });
+      // The answers kept on this device for that workspace — its sidebar, its
+      // lists — are no longer ours to show. Every such row names the
+      // workspace in its arguments.
+      void forgetCachedQueries((key) => key.includes(workspaceId));
       toast.success("You left the workspace");
       onOpenChange(false);
       void navigate("/workspaces");

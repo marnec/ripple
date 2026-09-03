@@ -9,6 +9,8 @@ import {
   CardTitle,
 } from "@ripple/ui/components/card";
 import { useAnimatedQuery } from "@/hooks/use-animated-query";
+import { useCachedValue } from "@/hooks/use-cached-query";
+import { queryCacheKey } from "@/lib/query-cache";
 import { useIsMobile } from "@/hooks/use-mobile";
 import type { ChannelVisibilityFilter, FavoriteFilter } from "@/hooks/use-debounced-search";
 import { ChannelVisibility } from "@ripple/shared/enums";
@@ -125,6 +127,29 @@ function useResourceSearch(
   );
 
   const active = resourceType === "channel" ? channelPagination : resourcePagination;
+
+  // The unfiltered listing is kept on the device and served while the query
+  // has no answer — a cold load offline, or the first visit to this page in a
+  // session that has since lost the network. Only the unfiltered listing:
+  // every search string would otherwise become its own row, and offline it
+  // is the plain list a person comes here for. A copy cannot page further, so
+  // it reports itself exhausted; and it is never stored while it is being
+  // served, since that would just write it back to itself.
+  const unfiltered =
+    !searchText && !tags && isFavorite === undefined && channelVisibility === undefined;
+  const cacheKey = unfiltered
+    ? queryCacheKey(
+        resourceType === "channel" ? SEARCH_APIS.channel : SEARCH_APIS[resourceType],
+        { workspaceId },
+      )
+    : null;
+  const kept = useCachedValue<SearchResult[]>(
+    cacheKey,
+    active.status === "LoadingFirstPage" ? undefined : active.results,
+  );
+  if (!kept.isLive && kept.value !== undefined) {
+    return { results: kept.value, status: "Exhausted", loadMore: () => {} };
+  }
   return {
     results: active.results,
     status: active.status,

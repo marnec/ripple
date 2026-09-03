@@ -17,7 +17,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { useSidebarSections } from "@/hooks/use-sidebar-sections";
 import type { QueryParams } from "@convex/types/routes";
 import { useWorkspaceSidebar } from "@/contexts/WorkspaceSidebarContext";
-import { useQuery } from "convex-helpers/react/cache";
+import { useCachedQuery } from "@/hooks/use-cached-query";
 import { LayoutGroup, m } from "framer-motion";
 import { CalendarDays, LayoutDashboard, ListTodo, MessageCircle, MessageSquare } from "lucide-react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
@@ -47,8 +47,13 @@ export function AppSidebar() {
   const [settings] = useUserSettings();
   const { isOpen, toggle } = useSidebarSections();
 
-  const workspaces = useQuery(api.workspaces.list);
-  const activeWorkspace = useQuery(api.workspaces.get, workspaceId ? { id: workspaceId } : "skip");
+  // Both cached on the device: the switcher and the workspace name are the
+  // frame the rest of the sidebar hangs from, and offline neither answers.
+  const workspaces = useCachedQuery(api.workspaces.list, {}).value;
+  const activeWorkspace = useCachedQuery(
+    api.workspaces.get,
+    workspaceId ? { id: workspaceId } : "skip",
+  ).value;
   const sidebarData = useWorkspaceSidebar();
 
   const handleChannelSelect = (id: string | null) => {
