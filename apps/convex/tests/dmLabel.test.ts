@@ -70,6 +70,51 @@ describe("DM labels are derived from participants", () => {
     expect(data.channels.find((c) => c._id === dmId)?.name).toBe("Zelda");
   });
 
+  it("reads the denormalized membership name, not the users row", async () => {
+    const t = createTestContext();
+    const { asAlice, workspaceId, bobId, dmId } = await setupDm(t);
+
+    // Raw patch, no triggers: the users row changes but the membership copy
+    // does not. If the label followed the users row it would say "Detached";
+    // it must not, because that read is what put every DM partner's sidebar
+    // into the invalidation set of every sign-in and profile edit.
+    await t.run(async (ctx) => {
+      await ctx.db.patch(bobId, { name: "Detached" });
+    });
+
+    const data = await asAlice.query(api.workspaceSidebarData.get, { workspaceId });
+
+    expect(data.channels.find((c) => c._id === dmId)?.name).toBe("Bob Bobson");
+    expect(vi).toBeDefined();
+  });
+
+  it("falls back to the users row when a membership predates the name column", async () => {
+    const t = createTestContext();
+    const { asAlice, workspaceId, bobId, dmId } = await setupDm(t);
+
+    // Strip the denormalized copy the way an unbackfilled row would lack it.
+    // The fallback is the live row, never a placeholder — a placeholder here
+    // would disagree with `membersByChannel`, which resolves the same person.
+    await t.run(async (ctx) => {
+      const membership = await ctx.db
+        .query("channelMembers")
+        .withIndex("by_channel_user", (q) => q.eq("channelId", dmId).eq("userId", bobId))
+        .unique();
+      if (!membership) throw new Error("missing membership");
+      await ctx.db.replace(membership._id, {
+        channelId: membership.channelId,
+        workspaceId: membership.workspaceId,
+        userId: membership.userId,
+        role: membership.role,
+        email: membership.email,
+      });
+    });
+
+    const data = await asAlice.query(api.workspaceSidebarData.get, { workspaceId });
+
+    expect(data.channels.find((c) => c._id === dmId)?.name).toBe("Bob Bobson");
+  });
+
   it("schedules nothing when a participant is renamed", async () => {
     const t = createTestContext();
     const { bobId } = await setupDm(t);

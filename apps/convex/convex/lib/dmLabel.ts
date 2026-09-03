@@ -47,8 +47,19 @@ async function participantNames(
   const others = members.filter((m) => m.userId !== excludeUserId);
   const shown = others.slice(0, MAX_LABELLED_PARTICIPANTS);
 
+  // The membership row carries the participant's display name, kept in step
+  // with `users` by the users trigger in the same transaction as the rename.
+  // Reading it here keeps the `users` document out of this label's read set:
+  // that row is patched on every OAuth sign-in (`auth.ts`) and profile edit,
+  // and the label is resolved inside the always-mounted sidebar query, so a
+  // point read per participant meant every DM partner's sidebar re-ran on
+  // events that never change the label. The live row stays the correctness
+  // path — a row from before the column existed falls back to it rather than
+  // to a placeholder.
   const names = await Promise.all(
-    shown.map(async (m) => getUserDisplayName(await ctx.db.get(m.userId))),
+    shown.map(async (m) =>
+      m.name !== undefined ? m.name : getUserDisplayName(await ctx.db.get(m.userId)),
+    ),
   );
   return { names: names.sort(), overflow: others.length - shown.length };
 }

@@ -33,9 +33,6 @@ keyboard accessiblity
     - [ ] kanban active-backlog overflow strategy when a project's uncompleted set grows past the read cap
     - [ ] `AddTasksToCycleDialog` "show completed too" toggle if users request it
 
-- deferred refactors
-    - [ ] `workspaceSidebarData.get` is channels-only now (the projects/documents/diagrams/spreadsheets `.collect()` moved to `nodes.suggest` / `breadcrumb.getResourceNames`). Residual cost on the always-mounted query: `channels` + `channelMembers` + `userChannelState` still join the invalidation set of every connected member, plus a per-hidden-DM latest-message read and a per-unnamed-DM `channelMembers.collect()` for the display name. Denormalize the DM name before considering a digest table.
-
 - [ ] External integrations
     - [ ] github issues
         - v1 deferrals (revisit after first ship):
