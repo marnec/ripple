@@ -1,9 +1,27 @@
 import * as Y from "yjs";
 import { gridTypes } from "@ripple/shared/spreadsheetDoc";
 
-/** The grid every spreadsheet starts life with. */
-export const DEFAULT_ROWS = 100;
-export const DEFAULT_COLS = 30;
+/**
+ * The grid every spreadsheet starts life with.
+ *
+ * Deliberately small. Every seeded cell is a `Y.Map` entry that is synced,
+ * snapshotted and rendered as a `<td>`, so the empty grid is pure cost until
+ * someone types in it — 100×30 was 3000 cells of it. One to two screens is
+ * enough to start, and the grid grows on demand: typing past the last row,
+ * the context menu, or the "add rows / columns" buttons under the grid.
+ */
+export const DEFAULT_ROWS = 50;
+export const DEFAULT_COLS = 12;
+
+/**
+ * The row count sheets were seeded with before the reduction above.
+ *
+ * Only `SpreadsheetYjsBinding.compactRows` uses it: that is the repair path for
+ * an old non-idempotent bootstrap that accumulated rows, and it trims trailing
+ * empty rows down to this floor. Pointing it at `DEFAULT_ROWS` instead would
+ * make every existing 100-row sheet silently lose half its rows on open.
+ */
+export const LEGACY_DEFAULT_ROWS = 100;
 
 /**
  * The empty state of a spreadsheet grid, as one canonical Yjs update.

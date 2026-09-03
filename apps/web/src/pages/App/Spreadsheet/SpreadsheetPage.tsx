@@ -35,6 +35,7 @@ import {
 import { FormulaBar } from "./FormulaBar";
 import { ConfirmRefShiftDialog } from "./ConfirmRefShiftDialog";
 import { SpreadsheetContextMenu } from "./SpreadsheetContextMenu";
+import { SpreadsheetExtendBar } from "./SpreadsheetExtendBar";
 import type { SpreadsheetYjsBinding } from "@/lib/spreadsheet-yjs-binding";
 import type { GridSelection } from "@/lib/spreadsheet-formula-refs";
 
@@ -182,9 +183,30 @@ const JSpreadsheetGrid = memo(function JSpreadsheetGrid({
     return () => wrapper.removeEventListener("mousedown", onMouseDown);
   }, [preventBlurOnClick]);
 
+  // The grid's own scroll container (`.jss_content`) is what moved — scroll it
+  // to the far end so the rows/columns just added are the ones on screen.
+  // Without this, clicking from the top of the sheet looks like nothing
+  // happened: the new cells are a screen or more below the fold.
+  const revealEnd = (axis: "rows" | "columns") => {
+    const content = wrapperRef.current?.querySelector(".jss_content");
+    if (!(content instanceof HTMLElement)) return;
+    if (axis === "rows") content.scrollTop = content.scrollHeight;
+    else content.scrollLeft = content.scrollWidth;
+  };
+
   return (
-    <>
-      <div ref={wrapperRef} className="h-full" />
+    <div className="flex h-full min-h-0 flex-col">
+      <div ref={wrapperRef} className="min-h-0 flex-1" />
+      <SpreadsheetExtendBar
+        onAddRows={(count) => {
+          bindingRef.current?.appendRows(count);
+          revealEnd("rows");
+        }}
+        onAddColumns={(count) => {
+          bindingRef.current?.appendColumns(count);
+          revealEnd("columns");
+        }}
+      />
       {menu && (
         <SpreadsheetContextMenu
           menu={menu}
@@ -208,7 +230,7 @@ const JSpreadsheetGrid = memo(function JSpreadsheetGrid({
         onDismiss={() => {}}
         visible={!!formulaPicker?.visible}
       />
-    </>
+    </div>
   );
 });
 

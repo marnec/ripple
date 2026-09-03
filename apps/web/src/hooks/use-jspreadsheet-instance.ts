@@ -1,4 +1,8 @@
-import { seedEmptyGrid } from "@/lib/collab/empty-grid";
+import {
+  DEFAULT_COLS,
+  DEFAULT_ROWS,
+  seedEmptyGrid,
+} from "@/lib/collab/empty-grid";
 import { SpreadsheetYjsBinding } from "@/lib/spreadsheet-yjs-binding";
 import { BOOTSTRAP_ORIGIN } from "@/lib/yjs-origins";
 import jspreadsheet from "jspreadsheet-ce";
@@ -69,7 +73,9 @@ export function useJSpreadsheetInstance({
     let binding: SpreadsheetYjsBinding | null = null;
 
     const instance = jspreadsheet(container, {
-      worksheets: [{ minDimensions: [30, 100], editable }],
+      // [cols, rows] — the same grid `seedEmptyGrid` writes into Yjs, so an
+      // empty sheet renders exactly what the document says it holds.
+      worksheets: [{ minDimensions: [DEFAULT_COLS, DEFAULT_ROWS], editable }],
       tabs: false,
       toolbar: false,
       contextMenu: () => null,

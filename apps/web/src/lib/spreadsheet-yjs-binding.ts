@@ -5,7 +5,11 @@ import { SpreadsheetFormulaTracker } from "@/lib/spreadsheet-formula-tracker";
 import { SpreadsheetOverlayManager } from "@/lib/spreadsheet-overlay-manager";
 import { SpreadsheetRemoteCursors } from "@/lib/spreadsheet-remote-cursors";
 import { ensureSpreadsheetStyles } from "@/lib/spreadsheet-table-viewport";
-import { DEFAULT_COLS, DEFAULT_ROWS } from "@/lib/collab/empty-grid";
+import {
+  DEFAULT_COLS,
+  DEFAULT_ROWS,
+  LEGACY_DEFAULT_ROWS,
+} from "@/lib/collab/empty-grid";
 import * as Y from "yjs";
 import { gridTypes } from "@ripple/shared/spreadsheetDoc";
 
@@ -144,7 +148,7 @@ export class SpreadsheetYjsBinding {
     // told what the spreadsheet contains.
 
     // Compact rows accumulated by the previous (non-idempotent) init bug.
-    if (this.yData.length > DEFAULT_ROWS) this.compactRows();
+    if (this.yData.length > LEGACY_DEFAULT_ROWS) this.compactRows();
 
     ensureSpreadsheetStyles();
 
@@ -198,12 +202,14 @@ export class SpreadsheetYjsBinding {
   // Initialization
   // ---------------------------------------------------------------------------
 
-  /** Remove trailing empty rows beyond DEFAULT_ROWS (fixes prior accumulation bug). */
+  /** Remove trailing empty rows beyond LEGACY_DEFAULT_ROWS (fixes prior
+   *  accumulation bug). The floor is the *old* seed size, not the current one:
+   *  a sheet seeded back when that was 100 rows keeps all 100. */
   private compactRows() {
     const colCount = (this.yMeta.get("colCount") as number) ?? DEFAULT_COLS;
-    let lastNonEmpty = DEFAULT_ROWS - 1;
+    let lastNonEmpty = LEGACY_DEFAULT_ROWS - 1;
 
-    for (let r = this.yData.length - 1; r >= DEFAULT_ROWS; r--) {
+    for (let r = this.yData.length - 1; r >= LEGACY_DEFAULT_ROWS; r--) {
       const rowMap = this.yData.get(r);
       let hasContent = false;
       for (let c = 0; c < colCount; c++) {
@@ -379,14 +385,18 @@ export class SpreadsheetYjsBinding {
     const insertAt = sorted[0].row;
 
     this.yData.doc!.transact(() => {
-      for (let i = 0; i < sorted.length; i++) {
-        const at = sorted[i].row + i;
-        this.ensureRows(at > 0 ? at - 1 : 0);
+      for (const { row } of sorted) {
+        // jspreadsheet reports each new row at its *final* index (see
+        // `insertRow` in jspreadsheet-ce: `row: e + t + (insertBefore ? 0 : 1)`),
+        // so a multi-row insert already arrives as consecutive indices. Adding
+        // the loop counter on top of that scattered them one row further apart
+        // each time, which left rowOrder short of yData.
+        this.ensureRows(row > 0 ? row - 1 : 0);
         const rowMap = new Y.Map<string>();
         for (let c = 0; c < colCount; c++) rowMap.set(String(c), "");
-        this.yData.insert(at, [rowMap]);
-        if (at <= this.yRowOrder.length) {
-          this.yRowOrder.insert(at, [makeStableId("r")]);
+        this.yData.insert(row, [rowMap]);
+        if (row <= this.yRowOrder.length) {
+          this.yRowOrder.insert(row, [makeStableId("r")]);
         }
       }
     }, this.localWriteOrigin);
@@ -470,6 +480,26 @@ export class SpreadsheetYjsBinding {
     }, this.localWriteOrigin);
 
     this.shiftFormulaRefs({ type: "deleteCol", index: deleteAt, count: numCols });
+  }
+
+  /**
+   * Grow the grid past its last row / column.
+   *
+   * Driven through the worksheet rather than Yjs directly, so the write takes
+   * the same path a context-menu insert does: jspreadsheet renders the cells
+   * and calls `oninsertrow` / `oninsertcolumn` back into this binding, which is
+   * what puts them in the document. Omitting the index makes jspreadsheet clamp
+   * to the end, and appending shifts no existing coordinate — no formula ref
+   * moves, so there is nothing to confirm with the user first.
+   */
+  appendRows(count: number) {
+    if (count < 1) return;
+    this.worksheet.insertRow(count);
+  }
+
+  appendColumns(count: number) {
+    if (count < 1) return;
+    this.worksheet.insertColumn(count);
   }
 
   /**
@@ -627,7 +657,12 @@ export class SpreadsheetYjsBinding {
         const rows = delta.insert as Y.Map<string>[];
         for (let i = 0; i < rows.length; i++) {
           try {
-            this.worksheet.insertRow(1, index + i, true);
+            const at = index + i;
+            // `insertRow(1, at, true)` clamps `at` to the last existing row, so
+            // a peer appending past the end would land one row too high here.
+            const rowCount = this.worksheet.rows?.length ?? at;
+            if (at >= rowCount) this.worksheet.insertRow(1, rowCount - 1, false);
+            else this.worksheet.insertRow(1, at, true);
             const rowMap = rows[i];
             const colCount = (this.yMeta.get("colCount") as number) ?? DEFAULT_COLS;
             for (let c = 0; c < colCount; c++) {

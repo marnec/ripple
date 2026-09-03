@@ -2,8 +2,6 @@ NEXT STEPS:
 
 - cascade delete collection phase is bounded even for batched deletes and will hit a ceiling for extremely large cascaded entities.
 
-- reduce default initial n cols and rows in spreadhseet, this improves client performance, add btn to add quickly col and rows at the ends
-
 - add a dependency view to tasks
 
 - consider introducing document snapshots
