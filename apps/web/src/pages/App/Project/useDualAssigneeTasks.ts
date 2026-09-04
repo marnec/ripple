@@ -1,4 +1,5 @@
 import { useQuery } from "convex-helpers/react/cache";
+import { useState } from "react";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 import type { TaskFilters } from "./TaskToolbar";
@@ -24,6 +25,13 @@ export const MY_TASKS_CAP = 200;
  * kanban's done column already is.
  *
  * `truncated` is the +1 trick: the query is asked for one more than the cap.
+ *
+ * Because the tag filter and completion axis are query *arguments*, changing
+ * either opens a new subscription that reads `undefined` until it lands. The
+ * last loaded list is held across that gap so the page keeps its content and
+ * rows enter / exit through the list's AnimatePresence, instead of the whole
+ * view collapsing to a spinner and remounting. Same derived-state pattern as
+ * Tasks.tsx; `undefined` is only ever returned before the first load.
  */
 export function useDualAssigneeTasks(
   workspaceId: Id<"workspaces"> | undefined,
@@ -43,7 +51,15 @@ export function useDualAssigneeTasks(
       : "skip",
   );
 
-  const raw = filters.completionFilter === "uncompleted" ? active : completed;
-  const truncated = (raw?.length ?? 0) > MY_TASKS_CAP;
-  return { tasks: truncated ? raw!.slice(0, MY_TASKS_CAP) : raw, truncated };
+  const live = filters.completionFilter === "uncompleted" ? active : completed;
+  // setState-during-render is React's derived-state pattern; the Object.is
+  // guard prevents a loop, and an undefined `live` is deliberately not
+  // written so the previous list stays up until fresh data arrives.
+  const [held, setHeld] = useState(live);
+  if (live !== undefined && !Object.is(live, held)) {
+    setHeld(live);
+  }
+
+  const truncated = (held?.length ?? 0) > MY_TASKS_CAP;
+  return { tasks: truncated ? held!.slice(0, MY_TASKS_CAP) : held, truncated };
 }
