@@ -873,6 +873,12 @@ export declare const api: {
       { cycleId: Id<"cycles">; taskId: Id<"tasks"> },
       null
     >;
+    addTasks: FunctionReference<
+      "mutation",
+      "public",
+      { cycleId: Id<"cycles">; taskIds: Array<Id<"tasks">> },
+      number
+    >;
     create: FunctionReference<
       "mutation",
       "public",
@@ -1044,6 +1050,19 @@ export declare const api: {
       "public",
       { cycleId: Id<"cycles">; taskId: Id<"tasks"> },
       null
+    >;
+    suggestAddableTasks: FunctionReference<
+      "query",
+      "public",
+      { cycleId: Id<"cycles">; limit?: number; query?: string },
+      Array<{
+        _id: Id<"tasks">;
+        completed: boolean;
+        number?: number;
+        projectKey?: string;
+        statusColor?: string;
+        title: string;
+      }>
     >;
     update: FunctionReference<
       "mutation",
@@ -3397,6 +3416,7 @@ export declare const api: {
       "public",
       {
         completed: boolean;
+        limit?: number;
         tagNames?: Array<string>;
         workspaceId: Id<"workspaces">;
       },
@@ -3677,6 +3697,19 @@ export declare const api: {
         pageStatus?: "SplitRecommended" | "SplitRequired" | null;
         splitCursor?: string | null;
       }
+    >;
+    listMineInRange: FunctionReference<
+      "query",
+      "public",
+      { rangeEnd: string; rangeStart: string; workspaceId: Id<"workspaces"> },
+      Array<{
+        _id: Id<"tasks">;
+        completed: boolean;
+        dueDate?: string;
+        plannedStartDate?: string;
+        projectId: Id<"projects">;
+        title: string;
+      }>
     >;
     markDescriptionEdited: FunctionReference<
       "mutation",

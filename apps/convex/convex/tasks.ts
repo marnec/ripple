@@ -729,7 +729,7 @@ export async function enrichTasks(
 /** Suggestions returned per call when the caller doesn't say. */
 const TASK_SUGGEST_DEFAULT_LIMIT = 7;
 
-const taskSuggestionValidator = v.object({
+export const taskSuggestionValidator = v.object({
   _id: v.id("tasks"),
   title: v.string(),
   completed: v.boolean(),
@@ -817,6 +817,23 @@ export const suggest = query({
   },
 });
 
+/**
+ * `listByAssignee` is capped, not paginated. The view it feeds (My Tasks)
+ * groups by project, and one cursor over `by_workspace_assignee_completed`
+ * interleaves projects — groups would grow as the user scrolls and every
+ * group count would be wrong until `isDone`. Paginating per project instead
+ * needs one subscription per project, and the set of projects is only known
+ * after reading the assigned set. So: the newest N, a `hasMore` signal the
+ * client derives from the +1 trick, and a link into the project list view,
+ * which is the paginated surface.
+ *
+ * The active branch is self-limiting (people close things); the completed
+ * branch grows forever. Bounding the latter structurally — auto-archive, the
+ * way Linear does it — is a tracked README item.
+ */
+const LIST_BY_ASSIGNEE_DEFAULT_LIMIT = 200;
+const LIST_BY_ASSIGNEE_MAX_LIMIT = 500;
+
 export const listByAssignee = query({
   args: {
     workspaceId: v.id("workspaces"),
@@ -824,8 +841,13 @@ export const listByAssignee = query({
     // Optional server-side tag filter. Drives off
     // `taskTags.by_workspace_assignee_tag_completed` so a tag filter avoids
     // collecting every assigned task just to drop most. AND semantics across
-    // multiple tags.
+    // multiple tags — but the cap below applies to the *driver* tag's join
+    // rows before the AND is evaluated, so a multi-tag filter can return fewer
+    // than `limit` matches while more exist. My Tasks' toolbar enforces a
+    // single tag for that reason.
     tagNames: v.optional(v.array(v.string())),
+    // Newest-first cap. Clamped server-side; the default applies when absent.
+    limit: v.optional(v.number()),
   },
   returns: v.array(v.object({
     ...baseTaskFields,
@@ -834,8 +856,13 @@ export const listByAssignee = query({
     project: v.union(projectValidator, v.null()),
     projectKey: v.optional(v.string()),
   })),
-  handler: async (ctx, { workspaceId, completed, tagNames }) => {
+  handler: async (ctx, { workspaceId, completed, tagNames, limit }) => {
     const { userId } = await requireWorkspaceMember(ctx, workspaceId);
+
+    const take = Math.max(
+      1,
+      Math.min(limit ?? LIST_BY_ASSIGNEE_DEFAULT_LIMIT, LIST_BY_ASSIGNEE_MAX_LIMIT),
+    );
 
     let workspaceTasks: Doc<"tasks">[];
 
@@ -866,7 +893,8 @@ export const listByAssignee = query({
             .eq("tagId", driverTagId)
             .eq("completed", completed),
         )
-        .collect();
+        .order("desc")
+        .take(take);
 
       const fetched = await getAll(ctx.db, joins.map((j) => j.taskId));
       workspaceTasks = fetched.filter((t): t is NonNullable<typeof t> => t !== null);
@@ -882,7 +910,8 @@ export const listByAssignee = query({
         .withIndex("by_workspace_assignee_completed", (q) =>
           q.eq("workspaceId", workspaceId).eq("assigneeId", userId).eq("completed", completed)
         )
-        .collect();
+        .order("desc")
+        .take(take);
     }
 
     // Deduped enrichment. Both branches select on `assigneeId = userId`, so
@@ -909,6 +938,85 @@ export const listByAssignee = query({
         projectKey: project?.key,
       };
     });
+  },
+});
+
+const calendarTaskValidator = v.object({
+  _id: v.id("tasks"),
+  projectId: v.id("projects"),
+  title: v.string(),
+  completed: v.boolean(),
+  dueDate: v.optional(v.string()),
+  plannedStartDate: v.optional(v.string()),
+});
+
+/**
+ * The caller's active tasks with a date inside `[rangeStart, rangeEnd]`
+ * (ISO `YYYY-MM-DD`, inclusive). Feeds the dashboard calendar, which draws a
+ * task from `plannedStartDate ?? dueDate` to `dueDate` and previously
+ * subscribed to `listByAssignee` — every assigned task in the workspace — to
+ * find the dated handful, and was re-run by every edit to the undated rest.
+ *
+ * One indexed range scan per date axis, unioned by id. A task with only a
+ * dueDate starts on it, so the dueDate scan finds it; a task with only a
+ * plannedStartDate ends on it, so that scan does. The one shape this misses
+ * is a task that *straddles* the window — starts before it and is due after
+ * it — which at the calendar's 90-day window is a task planned to run longer
+ * than a quarter.
+ */
+export const listMineInRange = query({
+  args: {
+    workspaceId: v.id("workspaces"),
+    rangeStart: v.string(),
+    rangeEnd: v.string(),
+  },
+  returns: v.array(calendarTaskValidator),
+  handler: async (ctx, { workspaceId, rangeStart, rangeEnd }) => {
+    const { userId } = await requireWorkspaceMember(ctx, workspaceId);
+    if (rangeEnd < rangeStart) return [];
+
+    // Bounded by one person's open, dated tasks inside a window the caller
+    // sizes at 90 days — a full quarter of a single assignee's calendar.
+    // Taking a page would drop tasks off the calendar with no signal, which
+    // is worse than a read this narrow.
+    const [byStart, byDue] = await Promise.all([
+      // eslint-disable-next-line @convex-dev/no-collect-in-query
+      ctx.db
+        .query("tasks")
+        .withIndex("by_workspace_assignee_completed_plannedStartDate", (q) =>
+          q
+            .eq("workspaceId", workspaceId)
+            .eq("assigneeId", userId)
+            .eq("completed", false)
+            .gte("plannedStartDate", rangeStart)
+            .lte("plannedStartDate", rangeEnd),
+        )
+        .collect(),
+      // eslint-disable-next-line @convex-dev/no-collect-in-query
+      ctx.db
+        .query("tasks")
+        .withIndex("by_workspace_assignee_completed_dueDate", (q) =>
+          q
+            .eq("workspaceId", workspaceId)
+            .eq("assigneeId", userId)
+            .eq("completed", false)
+            .gte("dueDate", rangeStart)
+            .lte("dueDate", rangeEnd),
+        )
+        .collect(),
+    ]);
+
+    const byId = new Map<Id<"tasks">, Doc<"tasks">>();
+    for (const task of [...byStart, ...byDue]) byId.set(task._id, task);
+
+    return [...byId.values()].map((task) => ({
+      _id: task._id,
+      projectId: task.projectId,
+      title: task.title,
+      completed: task.completed,
+      dueDate: task.dueDate,
+      plannedStartDate: task.plannedStartDate,
+    }));
   },
 });
 

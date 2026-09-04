@@ -2085,6 +2085,20 @@ export type DataModel = {
         "completed",
         "_creationTime",
       ];
+      by_workspace_assignee_completed_dueDate: [
+        "workspaceId",
+        "assigneeId",
+        "completed",
+        "dueDate",
+        "_creationTime",
+      ];
+      by_workspace_assignee_completed_plannedStartDate: [
+        "workspaceId",
+        "assigneeId",
+        "completed",
+        "plannedStartDate",
+        "_creationTime",
+      ];
       by_workspace_completed: ["workspaceId", "completed", "_creationTime"];
       by_yjsSnapshotId: ["yjsSnapshotId", "_creationTime"];
     };

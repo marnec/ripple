@@ -47,18 +47,27 @@ function ProjectTasksContent({
 }) {
   const isMobile = useIsMobile();
   const location = useLocation();
-  const rawInitial = (location.state as { initialCompletionFilter?: "uncompleted" | "completed" | "all" } | null)
-    ?.initialCompletionFilter;
+  const routeState = location.state as {
+    initialCompletionFilter?: "uncompleted" | "completed" | "all";
+    initialAssigneeIds?: string[];
+  } | null;
+  const rawInitial = routeState?.initialCompletionFilter;
   // The legacy "all" mode no longer exists — coerce any stale link/state to
   // "completed" since that's the more useful landing for someone clicking
   // through from a completed-task affordance (e.g. the kanban overflow pill).
   const initialCompletionFilter: CompletionFilter =
     rawInitial === "completed" || rawInitial === "all" ? "completed" : "uncompleted";
+  // My Tasks' "all my tasks in <project>" link seeds the viewer here when its
+  // own capped view overflowed.
+  const initialAssigneeIds = routeState?.initialAssigneeIds ?? [];
 
-  // The kanban overflow pill navigates here with state.initialCompletionFilter
-  // set to "completed", so users land on the list view with the right filter.
+  // Affordances that navigate here with a preset filter (the kanban overflow
+  // pill, My Tasks' per-project link) want the list view — it's the surface
+  // built for scanning many, and the only paginated one.
   const [view, setView] = useState<"list" | "board">(
-    isMobile || initialCompletionFilter !== "uncompleted" ? "list" : "board",
+    isMobile || initialCompletionFilter !== "uncompleted" || initialAssigneeIds.length > 0
+      ? "list"
+      : "board",
   );
 
   // Force list view on mobile — kanban doesn't work on small screens
@@ -67,7 +76,7 @@ function ProjectTasksContent({
 
   const [filters, setFilters] = useState<TaskFilters>({
     completionFilter: initialCompletionFilter,
-    assigneeIds: [],
+    assigneeIds: initialAssigneeIds,
     priorities: [],
     tags: [],
   });

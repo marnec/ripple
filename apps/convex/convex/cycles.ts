@@ -1,12 +1,13 @@
 import { ConvexError, v } from "convex/values";
-import { query } from "./_generated/server";
+import { query, type MutationCtx } from "./_generated/server";
 import { mutation } from "./functions";
 import { Doc, Id } from "./_generated/dataModel";
 import { logActivity } from "./auditLog";
 import type { CycleStatus } from "@ripple/shared/types/cycles";
 import { cycleStatusValidator, taskStatusValidator, userValidator } from "./validators";
-import { baseTaskFields, enrichTasks } from "./tasks";
+import { baseTaskFields, enrichTasks, taskSuggestionValidator } from "./tasks";
 import { requireWorkspaceMember, requireResourceMember, checkResourceMember } from "./authHelpers";
+import { getAll } from "convex-helpers/server/relationships";
 
 const cycleWithProgressValidator = v.object({
   _id: v.id("cycles"),
@@ -248,6 +249,53 @@ export const listByProject = query({
   },
 });
 
+/**
+ * File one task into an already-authorized cycle. Returns whether a join row
+ * was written (false when the task was already in the cycle).
+ */
+async function addTaskToCycle(
+  ctx: MutationCtx,
+  cycle: Doc<"cycles">,
+  userId: Id<"users">,
+  taskId: Id<"tasks">,
+): Promise<boolean> {
+  // The caller authorized the CYCLE; `taskId` is unrelated to it. The join
+  // row's projectId is copied from the cycle, so without this check a foreign
+  // task is filed into a local cycle and `listCycleTasks` then returns it
+  // enriched — including the assignee's email.
+  const task = await ctx.db.get(taskId);
+  if (!task) throw new ConvexError("Task not found");
+  if (task.projectId !== cycle.projectId) {
+    throw new ConvexError("Task does not belong to this cycle's project");
+  }
+
+  // Idempotent: skip if already in cycle
+  const existing = await ctx.db
+    .query("cycleTasks")
+    .withIndex("by_cycle_task", (q) => q.eq("cycleId", cycle._id).eq("taskId", taskId))
+    .first();
+  if (existing) return false;
+
+  await ctx.db.insert("cycleTasks", {
+    cycleId: cycle._id,
+    taskId,
+    projectId: cycle.projectId,
+    // Seeded here, then maintained by the tasks trigger. The trigger only
+    // fires on update, so a join row created after the task was completed
+    // would otherwise read as incomplete until the task was next touched.
+    completed: task.completed,
+    addedBy: userId,
+  });
+
+  await logActivity(ctx, {
+    userId, resourceType: "cycles", resourceId: cycle._id,
+    action: "task_added", newValue: task.title,
+    resourceName: cycle.name, scope: cycle.workspaceId,
+  });
+
+  return true;
+}
+
 export const addTask = mutation({
   args: {
     cycleId: v.id("cycles"),
@@ -256,42 +304,137 @@ export const addTask = mutation({
   returns: v.null(),
   handler: async (ctx, { cycleId, taskId }) => {
     const { userId, resource: cycle } = await requireResourceMember(ctx, "cycles", cycleId);
+    await addTaskToCycle(ctx, cycle, userId, taskId);
+    return null;
+  },
+});
 
-    // The gate above authorized the CYCLE; `taskId` is unrelated to it. The
-    // join row's projectId is copied from the cycle, so without this check a
-    // foreign task is filed into a local cycle and `listCycleTasks` then
-    // returns it enriched — including the assignee's email.
-    const task = await ctx.db.get(taskId);
-    if (!task) throw new ConvexError("Task not found");
-    if (task.projectId !== cycle.projectId) {
-      throw new ConvexError("Task does not belong to this cycle's project");
+/** Upper bound on one `addTasks` call — the picker offers at most 50. */
+const ADD_TASKS_MAX_BATCH = 100;
+
+/**
+ * One transaction for the whole selection. The add-to-cycle dialog used to
+ * fire one `addTask` per selected task in parallel: N mutations, each
+ * re-reading the cycle, all contending on it under OCC. Returns how many
+ * join rows were written (already-present tasks are skipped, not errors).
+ */
+export const addTasks = mutation({
+  args: {
+    cycleId: v.id("cycles"),
+    taskIds: v.array(v.id("tasks")),
+  },
+  returns: v.number(),
+  handler: async (ctx, { cycleId, taskIds }) => {
+    if (taskIds.length > ADD_TASKS_MAX_BATCH) {
+      throw new ConvexError(`At most ${ADD_TASKS_MAX_BATCH} tasks can be added at once`);
+    }
+    const { userId, resource: cycle } = await requireResourceMember(ctx, "cycles", cycleId);
+
+    let added = 0;
+    for (const taskId of new Set(taskIds)) {
+      if (await addTaskToCycle(ctx, cycle, userId, taskId)) added++;
+    }
+    return added;
+  },
+});
+
+/** Rows the add-to-cycle picker shows when the caller doesn't say. */
+const SUGGEST_ADDABLE_DEFAULT_LIMIT = 25;
+
+/**
+ * Candidate feed for the add-to-cycle dialog. Replaces a subscription to the
+ * project's entire active task list that the dialog substring-filtered in JS
+ * to fill a 16rem scroll box — the same shape `tasks.suggest` was written to
+ * retire for the `#` mention menu.
+ *
+ * Two modes, and the product stance lives in the difference:
+ * - **Browse** (no query): the project's newest active tasks. Cycle planning
+ *   is forward-looking, so finished work is not offered by default.
+ * - **Search** (query): the `nodes.by_name` search index, completed tasks
+ *   included. The one real case for a completed task in a cycle is
+ *   retroactive — "I finished it last week, it should count here" — and the
+ *   user naming the task is the signal. No toggle needed.
+ *
+ * Tasks already in the cycle are dropped server-side, so the page returned is
+ * exactly what the picker can offer. The search branch post-filters a
+ * workspace-wide index on `projectId` (the index has no project filter field),
+ * so it over-fetches and can under-fill when other projects dominate the
+ * matches — acceptable for a picker that ranks by relevance.
+ */
+export const suggestAddableTasks = query({
+  args: {
+    cycleId: v.id("cycles"),
+    query: v.optional(v.string()),
+    limit: v.optional(v.number()),
+  },
+  returns: v.array(taskSuggestionValidator),
+  handler: async (ctx, { cycleId, query: searchText, limit }) => {
+    const result = await checkResourceMember(ctx, "cycles", cycleId);
+    if (!result) return [];
+    const cycle = result.resource;
+
+    const take = Math.max(1, Math.min(limit ?? SUGGEST_ADDABLE_DEFAULT_LIMIT, 50));
+    const trimmed = (searchText ?? "").trim();
+
+    // Bounded by the cycle's size, which `listCycleTasks` already reads in
+    // full for the page this dialog opens from.
+    const inCycle = new Set(
+      (
+        // eslint-disable-next-line @convex-dev/no-collect-in-query
+        await ctx.db
+          .query("cycleTasks")
+          .withIndex("by_cycle", (q) => q.eq("cycleId", cycleId))
+          .collect()
+      ).map((ct) => ct.taskId),
+    );
+    // Headroom: rows already in the cycle are dropped after the index has
+    // spoken, so ask for that many more.
+    const candidateLimit = take + inCycle.size;
+
+    let tasks: Doc<"tasks">[];
+    if (trimmed.length > 0) {
+      const candidates = await ctx.db
+        .query("nodes")
+        .withSearchIndex("by_name", (q) =>
+          q
+            .search("name", trimmed)
+            .eq("workspaceId", cycle.workspaceId)
+            .eq("resourceType", "task")
+            .eq("searchable", true),
+        )
+        .take(Math.min(candidateLimit * 4, 200));
+      const fetched = await getAll(
+        ctx.db,
+        candidates.map((n) => n.resourceId as Id<"tasks">),
+      );
+      tasks = fetched.filter(
+        (t): t is Doc<"tasks"> => t !== null && t.projectId === cycle.projectId,
+      );
+    } else {
+      tasks = await ctx.db
+        .query("tasks")
+        .withIndex("by_project_completed", (q) =>
+          q.eq("projectId", cycle.projectId).eq("completed", false),
+        )
+        .order("desc")
+        .take(candidateLimit);
     }
 
-    // Idempotent: skip if already in cycle
-    const existing = await ctx.db
-      .query("cycleTasks")
-      .withIndex("by_cycle_task", (q) => q.eq("cycleId", cycleId).eq("taskId", taskId))
-      .first();
-    if (existing) return null;
+    tasks = tasks.filter((t) => !inCycle.has(t._id)).slice(0, take);
 
-    await ctx.db.insert("cycleTasks", {
-      cycleId,
-      taskId,
-      projectId: cycle.projectId,
-      // Seeded here, then maintained by the tasks trigger. The trigger only
-      // fires on update, so a join row created after the task was completed
-      // would otherwise read as incomplete until the task was next touched.
-      completed: task.completed,
-      addedBy: userId,
-    });
+    const project = await ctx.db.get(cycle.projectId);
+    const statusIds = [...new Set(tasks.map((t) => t.statusId))];
+    const statuses = await getAll(ctx.db, statusIds);
+    const statusMap = new Map(statusIds.map((id, i) => [id, statuses[i]]));
 
-    await logActivity(ctx, {
-      userId, resourceType: "cycles", resourceId: cycleId,
-      action: "task_added", newValue: task?.title,
-      resourceName: cycle.name, scope: cycle.workspaceId,
-    });
-
-    return null;
+    return tasks.map((t) => ({
+      _id: t._id,
+      title: t.title,
+      completed: t.completed,
+      statusColor: statusMap.get(t.statusId)?.color,
+      projectKey: project?.key,
+      number: t.number,
+    }));
   },
 });
 

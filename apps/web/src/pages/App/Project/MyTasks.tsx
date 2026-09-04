@@ -11,6 +11,7 @@ import { useQuery } from "convex-helpers/react/cache";;
 import { CheckSquare, ChevronDown, ChevronRight, ArrowRight } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import { HeaderSlot } from "@/contexts/HeaderSlotContext";
+import { useViewer } from "@/pages/App/UserContext";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 
@@ -20,7 +21,7 @@ const LazyTaskDetailSheet = React.lazy(() =>
 import { TaskRow } from "./TaskRow";
 import { TaskToolbar, type TaskFilters, type TaskSort } from "./TaskToolbar";
 import { useFilteredTasks } from "./useTaskFilters";
-import { useDualAssigneeTasks } from "./useDualAssigneeTasks";
+import { MY_TASKS_CAP, useDualAssigneeTasks } from "./useDualAssigneeTasks";
 
 type MyTask = {
   _id: string;
@@ -160,11 +161,24 @@ export function MyTasks() {
   const listRef = useRef<HTMLDivElement>(null);
   const isMobile = useIsMobile();
   const navigate = useNavigate();
+  const viewer = useViewer();
 
-  const tasks = useDualAssigneeTasks(
+  const { tasks, truncated } = useDualAssigneeTasks(
     workspaceId ? (workspaceId as Id<"workspaces">) : undefined,
-    filters.completionFilter,
+    filters,
   );
+
+  // Past the cap this view can't show everything, but the project list view
+  // can — it paginates. Land there with the viewer already in the assignee
+  // filter and the same completion axis.
+  const openInProject = (projectId: Id<"projects">) => {
+    void navigate(`/workspaces/${workspaceId}/projects/${projectId}/tasks`, {
+      state: {
+        initialCompletionFilter: filters.completionFilter,
+        initialAssigneeIds: viewer ? [viewer._id] : [],
+      },
+    });
+  };
 
   // Close swipe when tapping anywhere outside the task list
   useEffect(() => {
@@ -225,6 +239,8 @@ export function MyTasks() {
   }
 
   const totalTaskCount = filteredTasks?.length ?? 0;
+  // "200+" — the count is of what's shown, and past the cap that's not all.
+  const countLabel = `${totalTaskCount}${truncated ? "+" : ""}`;
 
   return (
     <div className="container mx-auto p-4 animate-fade-in">
@@ -239,14 +255,23 @@ export function MyTasks() {
             onSortChange={setSort}
             members={[]}
             hideAssigneeFilter
+            singleSelectTags
           />
         </div>
         {!isMobile && (
           <span className="text-xs font-medium text-muted-foreground bg-muted rounded-full px-2 py-0.5 tabular-nums shrink-0 h-7 inline-flex items-center">
-            {totalTaskCount}
+            {countLabel}
           </span>
         )}
       </div>
+
+      {truncated && (
+        <p className="mb-3 text-xs text-muted-foreground">
+          Showing your {MY_TASKS_CAP} most recent{" "}
+          {filters.completionFilter === "completed" ? "completed" : "active"} tasks. Open a
+          project to see everything assigned to you there.
+        </p>
+      )}
 
       {/* Grouped Task List */}
       {groupedTasks.length === 0 ? (
@@ -301,6 +326,19 @@ export function MyTasks() {
                           setSwipeOpenId={setSwipeOpenId}
                           onTaskClick={handleTaskClick}
                         />
+                        {/* Any group may be missing rows past the cap — the
+                            query can't say which — so every group gets the
+                            way out. */}
+                        {truncated && (
+                          <button
+                            type="button"
+                            onClick={() => openInProject(group.projectId)}
+                            className="flex w-full items-center justify-between gap-2 border-t px-3 py-2 text-xs text-muted-foreground transition-colors hover:bg-accent/40 hover:text-foreground cursor-pointer"
+                          >
+                            <span className="truncate">All my tasks in {group.projectName}</span>
+                            <ArrowRight className="h-3 w-3 shrink-0" />
+                          </button>
+                        )}
                       </div>
                     </CollapsibleContent>
                   </div>
@@ -315,7 +353,7 @@ export function MyTasks() {
       {isMobile && (
         <HeaderSlot>
           <span className="text-xs font-medium text-muted-foreground bg-muted rounded-full px-2 py-0.5 tabular-nums">
-            {totalTaskCount}
+            {countLabel}
           </span>
         </HeaderSlot>
       )}

@@ -205,8 +205,6 @@ function CycleDetailContent({
       {/* Add tasks dialog */}
       <AddTasksToCycleDialog
         cycleId={cycleId}
-        projectId={projectId}
-        existingTaskIds={new Set(cycleTasks?.map((t) => t._id) ?? [])}
         open={showAddDialog}
         onOpenChange={setShowAddDialog}
       />

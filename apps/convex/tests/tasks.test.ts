@@ -684,6 +684,53 @@ describe("listByProject — tagNames filter", () => {
   });
 });
 
+describe("listByAssignee — limit", () => {
+  it("caps at `limit`, newest first, so the +1 trick detects overflow", async () => {
+    const t = createTestContext();
+    const { workspaceId, userId, asUser } = await setupWorkspaceWithAdmin(t);
+    const { projectId } = await setupProjectWithStatuses(t, { workspaceId, userId });
+
+    const ids: Id<"tasks">[] = [];
+    for (let i = 0; i < 5; i++) {
+      ids.push(
+        await asUser.mutation(api.tasks.create, {
+          projectId, workspaceId, title: `t-${i}`, assigneeId: userId,
+        }),
+      );
+    }
+
+    const three = await asUser.query(api.tasks.listByAssignee, {
+      workspaceId, completed: false, limit: 3,
+    });
+    expect(three.map((task) => task._id)).toEqual([ids[4], ids[3], ids[2]]);
+
+    const all = await asUser.query(api.tasks.listByAssignee, {
+      workspaceId, completed: false, limit: 6,
+    });
+    expect(all).toHaveLength(5);
+  });
+
+  it("caps the tag-driven branch the same way", async () => {
+    const t = createTestContext();
+    const { workspaceId, userId, asUser } = await setupWorkspaceWithAdmin(t);
+    const { projectId } = await setupProjectWithStatuses(t, { workspaceId, userId });
+
+    const ids: Id<"tasks">[] = [];
+    for (let i = 0; i < 3; i++) {
+      ids.push(
+        await asUser.mutation(api.tasks.create, {
+          projectId, workspaceId, title: `t-${i}`, labels: ["bug"], assigneeId: userId,
+        }),
+      );
+    }
+
+    const two = await asUser.query(api.tasks.listByAssignee, {
+      workspaceId, completed: false, tagNames: ["bug"], limit: 2,
+    });
+    expect(two.map((task) => task._id)).toEqual([ids[2], ids[1]]);
+  });
+});
+
 // ── listByAssignee server-side tag filter (taskTags-driven) ──────────
 
 describe("listByAssignee — tagNames filter", () => {

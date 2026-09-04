@@ -74,6 +74,13 @@ type TaskToolbarProps = {
   members: Member[];
   sortBlocked?: boolean;
   hideAssigneeFilter?: boolean;
+  /**
+   * Tags single-select in active mode too (completed mode always is). My
+   * Tasks sets it: its query is capped, and the cap applies to the driver
+   * tag's rows before a multi-tag AND is evaluated, so a second tag would
+   * silently under-report.
+   */
+  singleSelectTags?: boolean;
 };
 
 const priorities = PRIORITIES.map((p) => ({
@@ -96,6 +103,7 @@ export function TaskToolbar({
   members,
   sortBlocked,
   hideAssigneeFilter,
+  singleSelectTags,
 }: TaskToolbarProps) {
   const isMobile = useIsMobile();
   const [completionOpen, setCompletionOpen] = useState(false);
@@ -162,6 +170,11 @@ export function TaskToolbar({
         assigneeIds: [],
         priorities: [],
       });
+      return;
+    }
+    if (singleSelectTags) {
+      const isAlreadySelected = filters.tags[0] === tag && filters.tags.length === 1;
+      onFiltersChange({ ...filters, tags: isAlreadySelected ? [] : [tag] });
       return;
     }
     const next = filters.tags.includes(tag)

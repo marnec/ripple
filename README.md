@@ -8,7 +8,9 @@ keyboard accessiblity
     - when pressing tab in a chat, it must focus the message composer
     - esc closes the comments sideba in docs
     - on login, pressing tab from email field should focus pasword field instead of password reset btn
-    - keyboard shortcut for focus mode
+    - keyboard shortcut for focus mode enter and exit
+    - pressing tab while unfocused in a spreadsheet page should focus a cell
+    - add keyboard shortcut to enter cell formula editor in the spreasheet toolbar
 
 - internationalization (i18n and localization)
 
@@ -29,9 +31,8 @@ keyboard accessiblity
     - [ ] cycle-scoped tag filter — `taskTags` already has room for a `[cycleId, tagId]` index when needed
 
 - task query scaling
-    - [ ] `listByAssignee` is workspace-scoped now, but still an unpaginated `.collect()` of every task assigned to the caller in that workspace (both the tag and no-tag branches) — needs a cap or pagination for heavy users
-    - [ ] kanban active-backlog overflow strategy when a project's uncompleted set grows past the read cap
-    - [ ] `AddTasksToCycleDialog` "show completed too" toggle if users request it
+    - [ ] kanban active-backlog overflow when a project's uncompleted set grows past the read cap. Decision deferred. Findings so far: a board-wide `limit` on the active query is wrong — it truncates in index order, so one triage/backlog column (fed by inbound integration sync, so not self-limiting) eats the budget and starves "In Progress". The cap has to be per column. Preferred shape: one `tasks.listBoard(projectId, perColumnLimit)` query that fans out `.take(cap+1)` per status over `by_project_status_position` (single subscription; the DnD optimistic update stays a one-query patch), the existing overflow pill on any truncated column, and a `[projectId, statusId]` aggregate so column counts stay honest once windowed. Product alternative to weigh first: cycle-scope the board (Linear's shape) and leave the backlog to the paginated list view — smallest code, shrinks the whole problem.
+    - [ ] auto-archive (Linear's structural bound): `archivedAt` on tasks + a workspace setting, excluded from every default read. The only thing that bounds *every* completed axis at once — done column, project lists, cycles, My Tasks — instead of capping each surface. Until then My Tasks caps both axes at the newest 200 and links into the project list view.
 
 
 - github issues milestone ↔ cycle sync (Linear skips it too; needs a new inbound kind + outbound op in both adapters)

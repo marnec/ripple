@@ -117,6 +117,10 @@ export function MyCalendarTab() {
   return <MyCalendarTabContent workspaceId={workspaceId} />;
 }
 
+/** `YYYY-MM-DD` bound for the task-date window. A day of UTC drift at the
+ *  edge of a ±45-day window is nothing. */
+const toIsoDate = (ms: number) => new Date(ms).toISOString().slice(0, 10);
+
 function MyCalendarTabContent({ workspaceId }: { workspaceId: Id<"workspaces"> }) {
   const { resolvedTheme } = useTheme();
   const isDark = resolvedTheme === "dark";
@@ -152,11 +156,14 @@ function MyCalendarTabContent({ workspaceId }: { workspaceId: Id<"workspaces"> }
     rangeStartMs,
     rangeEndMs,
   });
-  // listByAssignee is the same query MyTasks uses — Convex deduplicates the
-  // subscription, so we don't pay double even when both tabs are mounted.
-  const tasks = useQuery(api.tasks.listByAssignee, {
+  // Only the caller's tasks with a date inside the same window — tasks
+  // carry plain dates, so the bounds are `YYYY-MM-DD`. This used to be
+  // `listByAssignee`, every assigned task in the workspace, re-run by each
+  // edit to the undated ones it then threw away below.
+  const tasks = useQuery(api.tasks.listMineInRange, {
     workspaceId,
-    completed: false,
+    rangeStart: toIsoDate(rangeStartMs),
+    rangeEnd: toIsoDate(rangeEndMs),
   });
 
   // ── Member calendar overlay (busy-blocks behind own events) ──────────

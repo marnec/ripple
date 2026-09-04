@@ -603,6 +603,13 @@ export default defineSchema({
     // the caller's tasks in every workspace and filtered in JS, which also
     // made a foreign workspace's task write invalidate this subscription.
     .index("by_workspace_assignee_completed", ["workspaceId", "assigneeId", "completed"])
+    // `listMineInRange` (the dashboard calendar). A task is drawn from
+    // `plannedStartDate ?? dueDate` to `dueDate`, so one range scan per date
+    // axis finds every task with an endpoint inside the window; without them
+    // the calendar subscribed to `listByAssignee` — every assigned task in the
+    // workspace — to draw the dated handful.
+    .index("by_workspace_assignee_completed_plannedStartDate", ["workspaceId", "assigneeId", "completed", "plannedStartDate"])
+    .index("by_workspace_assignee_completed_dueDate", ["workspaceId", "assigneeId", "completed", "dueDate"])
     .index("by_project_status", ["projectId", "statusId"])
     // Read by the `isCompleted` drain: selecting the rows that still disagree
     // with the column makes each batch's own patch move them out of the range,
