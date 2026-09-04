@@ -100,11 +100,6 @@ function ChannelSettingsContent({
     ? workspaceRole === "admin"
     : currentMembership?.role === ChannelRole.ADMIN;
 
-  const channelMemberIds = new Set(channelMembers.map((m) => m.userId));
-  const availableMembers = workspaceMembers.filter(
-    (m) => !channelMemberIds.has(m._id),
-  );
-
   const isDm = isDirectMessage(channel);
   // Dismiss or leave, decided once. `canLeave` used to be spelled
   // `!isDm && !isPublicChannel(channel) && …` — a double negation standing in
@@ -202,7 +197,7 @@ function ChannelSettingsContent({
             isAdmin={isAdmin}
             currentUserId={currentUser._id}
             channelMembers={channelMembers}
-            availableMembers={availableMembers}
+            workspaceUsers={workspaceMembers}
           />
         )}
 

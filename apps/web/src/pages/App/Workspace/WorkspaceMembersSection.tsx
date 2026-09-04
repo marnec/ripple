@@ -1,20 +1,32 @@
-import { Button } from "@ripple/ui/components/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@ripple/ui/components/select";
-import { useViewer } from "../UserContext";
+import { useState } from "react";
 import { useMutation } from "convex/react";
 import { useQuery } from "convex-helpers/react/cache";
 import { ConvexError } from "convex/values";
-import { Shield, User, UserMinus } from "lucide-react";
 import { toast } from "sonner";
+
+import { ConfirmDialog } from "@/components/ConfirmDialog";
+import {
+  MemberCount,
+  MemberList,
+  MemberListEmpty,
+  MemberListItem,
+  MemberListPlaceholder,
+  MemberRoleBadge,
+  MemberRoleSelect,
+  MemberSearchInput,
+  RemoveMemberButton,
+} from "@/components/MemberList";
+import { byRoleThenName, matchesMemberQuery } from "@/lib/member-list";
+import { missingIdentityHints } from "@/lib/member-identity-hints";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
-import { missingIdentityHints } from "@/lib/member-identity-hints";
+import { useViewer } from "../UserContext";
+
+/** Above this, scanning the list beats reading it, so the filter appears. */
+const SEARCH_THRESHOLD = 8;
+
+const SYNC_HINT_TITLE =
+  "Assignee sync skips members who have not connected their account. They can connect it from their user settings.";
 
 export function WorkspaceMembersSection({
   workspaceId,
@@ -31,11 +43,24 @@ export function WorkspaceMembersSection({
   const changeRole = useMutation(api.workspaceMembers.changeRole);
   const removeMember = useMutation(api.workspaceMembers.remove);
 
-  if (!members || currentUser === undefined) return null;
+  const [query, setQuery] = useState("");
+  // The member awaiting Remove confirmation (null = dialog closed).
+  const [removeTarget, setRemoveTarget] = useState<{
+    userId: Id<"users">;
+    name: string;
+  } | null>(null);
+
+  if (members === undefined || currentUser === undefined) {
+    return <MemberListPlaceholder />;
+  }
 
   const currentMembership = members.find((m) => m.userId === currentUser?._id);
   const isAdmin = currentMembership?.role === "admin";
   const activeProviders = (installations ?? []).map((i) => i.provider);
+
+  const visible = members
+    .filter((member) => matchesMemberQuery(member, query))
+    .sort(byRoleThenName);
 
   const handleRoleChange = (targetUserId: Id<"users">, role: "admin" | "member") => {
     changeRole({ workspaceId, targetUserId, role }).catch((error) => {
@@ -45,11 +70,11 @@ export function WorkspaceMembersSection({
     });
   };
 
-  const handleRemove = (targetUserId: Id<"users">, name: string) => {
-    if (!confirm(`Are you sure you want to remove ${name} from this workspace? They will lose access to all channels and resources.`)) {
-      return;
-    }
-    removeMember({ workspaceId, targetUserId })
+  const confirmRemove = () => {
+    if (!removeTarget) return;
+    const { userId, name } = removeTarget;
+    setRemoveTarget(null);
+    removeMember({ workspaceId, targetUserId: userId })
       .then(() => toast.success(`${name} has been removed from the workspace`))
       .catch((error) => {
         if (error instanceof ConvexError) {
@@ -59,66 +84,73 @@ export function WorkspaceMembersSection({
   };
 
   return (
-    <div className="space-y-2">
-        {members.map((member) => {
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <MemberCount shown={visible.length} total={members.length} />
+        {members.length > SEARCH_THRESHOLD && (
+          <MemberSearchInput value={query} onChange={setQuery} />
+        )}
+      </div>
+
+      <MemberList>
+        {visible.map((member) => {
           const isSelf = member.userId === currentUser?._id;
           return (
-            <div
+            <MemberListItem
               key={member.membershipId}
-              className="flex items-center justify-between p-3 rounded-lg border"
+              name={member.name}
+              email={member.email}
+              image={member.image}
+              isSelf={isSelf}
+              hints={missingIdentityHints(member, activeProviders).map((label) => ({
+                label,
+                title: SYNC_HINT_TITLE,
+              }))}
             >
-              <div className="flex items-center gap-3 min-w-0">
-                <User className="w-4 h-4 text-muted-foreground shrink-0" />
-                <span className="font-medium truncate">{member.name}</span>
-                {member.role === "admin" && (
-                  <span className="flex items-center gap-1 text-xs text-muted-foreground shrink-0">
-                    <Shield className="w-3 h-3" />
-                    Admin
-                  </span>
-                )}
-                {isSelf && (
-                  <span className="text-xs text-muted-foreground shrink-0">(you)</span>
-                )}
-                {missingIdentityHints(member, activeProviders).map((hint) => (
-                  <span
-                    key={hint}
-                    className="text-xs text-muted-foreground/70 shrink-0"
-                    title="Assignee sync skips members who have not connected their account. They can connect it from their user settings."
-                  >
-                    {hint}
-                  </span>
-                ))}
-              </div>
-
-              {isAdmin && !isSelf && (
-                <div className="flex items-center gap-2 shrink-0">
-                  <Select
+              {isAdmin && !isSelf ? (
+                <>
+                  <MemberRoleSelect
                     value={member.role}
-                    onValueChange={(role) =>
-                      handleRoleChange(member.userId, role as "admin" | "member")
+                    memberName={member.name}
+                    onValueChange={(role) => handleRoleChange(member.userId, role)}
+                  />
+                  <RemoveMemberButton
+                    memberName={member.name}
+                    onClick={() =>
+                      setRemoveTarget({ userId: member.userId, name: member.name })
                     }
-                  >
-                    <SelectTrigger className="w-27.5">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="admin">Admin</SelectItem>
-                      <SelectItem value="member">Member</SelectItem>
-                    </SelectContent>
-                  </Select>
-
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleRemove(member.userId, member.name)}
-                  >
-                    <UserMinus className="w-4 h-4" />
-                  </Button>
-                </div>
+                  />
+                </>
+              ) : (
+                <MemberRoleBadge role={member.role} />
               )}
-            </div>
+            </MemberListItem>
           );
         })}
+
+        {visible.length === 0 && (
+          <MemberListEmpty>No members match “{query}”.</MemberListEmpty>
+        )}
+      </MemberList>
+
+      <ConfirmDialog
+        open={removeTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setRemoveTarget(null);
+        }}
+        onConfirm={confirmRemove}
+        title="Remove member?"
+        description={
+          removeTarget && (
+            <>
+              Remove <span className="font-medium">{removeTarget.name}</span> from
+              this workspace? They will lose access to all its channels and
+              resources. You can invite them again later.
+            </>
+          )
+        }
+        confirmLabel="Remove"
+      />
     </div>
   );
 }

@@ -34,10 +34,8 @@ keyboard accessiblity
     - [ ] `AddTasksToCycleDialog` "show completed too" toggle if users request it
 
 
-- [ ] github issues
-    - deferred, not planned: milestone ↔ cycle sync (Linear skips it too; needs a new inbound kind + outbound op in both adapters)
-- [ ] gitlab 
-    - deferred: self-hosted GitLab — `GITLAB_BASE` in `gitlab/oauthClient.ts` (already parameterized on `cfg.base`), plus literals in `gitlab/outboundGateway.ts`, `gitlab/webhook.ts`, `gitlab/forceResyncAction.ts`, `core/syncOutMutations.ts` (issue URL) and web `TaskGithubBranchActions.tsx` (MR URL). A per-integration base URL covers the PAT path; OAuth would also need per-workspace app credentials. Linear does PAT-only.
+- github issues milestone ↔ cycle sync (Linear skips it too; needs a new inbound kind + outbound op in both adapters)
+- self-hosted GitLab - `GITLAB_BASE` in `gitlab/oauthClient.ts` (already parameterized on `cfg.base`), plus literals in `gitlab/outboundGateway.ts`, `gitlab/webhook.ts`, `gitlab/forceResyncAction.ts`, `core/syncOutMutations.ts` (issue URL) and web `TaskGithubBranchActions.tsx` (MR URL). A per-integration base URL covers the PAT path; OAuth would also need per-workspace app credentials. Linear does PAT-only.
 
 - I don't really know how to handle unread messages, they kind of work right now but god save me
 
