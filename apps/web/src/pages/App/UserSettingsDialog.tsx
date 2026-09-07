@@ -251,7 +251,9 @@ export function UserSettingsDialog({
                 onClick={() => {
                   if (workspaceId) {
                     onOpenChange(false);
-                    void navigate(`/workspaces/${workspaceId}/settings`);
+                    void navigate(
+                      `/workspaces/${workspaceId}/settings?tab=notifications`,
+                    );
                   }
                 }}
                 className={`flex items-center gap-2 text-sm w-full rounded-md px-2 py-2 transition-colors ${
