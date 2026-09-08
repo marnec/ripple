@@ -2,7 +2,7 @@ import { v } from "convex/values";
 import { getUserDisplayName } from "@ripple/shared/displayName";
 import type { Doc, Id } from "../_generated/dataModel";
 import { query, type QueryCtx } from "../_generated/server";
-import { auditLog, canonicalAction } from "../auditLog";
+import { auditLog } from "../auditLog";
 import { requirePlatformAdmin } from "../authHelpers";
 
 /**
@@ -171,7 +171,7 @@ function toEntry(
   return {
     _id: entry._id,
     timestamp: entry.timestamp,
-    action: canonicalAction(entry.action),
+    action: entry.action,
     severity: entry.severity,
     resourceType: entry.resourceType,
     resourceId: entry.resourceId,

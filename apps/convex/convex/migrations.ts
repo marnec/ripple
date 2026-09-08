@@ -494,8 +494,7 @@ export const migrateTaskLabelsToTags = migrations.define({
  * `tasks.label_add` / `tasks.label_remove` → `tasks.tag_add` / `tasks.tag_remove`.
  * The audit trail lives in a component, so this cannot be a `migrations.define`
  * and is not part of `runAll`. Self-scheduling: one call walks the whole table
- * in batches. Until it has run, `auditLog.canonicalAction` maps the old verbs
- * at read time.
+ * in batches. Has run in prod; kept for any deployment that predates the rename.
  *
  * Run once per deployment: npx convex run migrations:migrateAuditLabelVerbs
  */

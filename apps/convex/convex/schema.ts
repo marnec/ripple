@@ -493,11 +493,8 @@ export default defineSchema({
     // denormalized projection `documents.tags` is. `syncTaskTags` (tagSync.ts)
     // keeps the `tags` dictionary and the `taskTags` join in step with it.
     tags: v.optional(v.array(v.string())),
-    // DEPRECATED — renamed to `tags`. Widened so the writers could stop;
-    // `migrateTaskLabelsToTags` (runAll) copies it across and clears the
-    // column. Delete this line once that has run everywhere — the same
-    // widen → migrate → narrow that `projects.tags` / `nodes.tags` used.
-    labels: v.optional(v.array(v.string())),
+    // `labels` (the column's previous name) was dropped here —
+    // migrateTaskLabelsToTags (runAll) moved it across.
     completed: v.boolean(), // denormalized from status.isCompleted for efficient filtering
     creatorId: v.id("users"), // who created the task
     position: v.optional(v.string()), // fractional index for ordering within status column

@@ -1955,7 +1955,6 @@ export type DataModel = {
         url: string;
       }>;
       importJobId?: Id<"taskImportJobs">;
-      labels?: Array<string>;
       number?: number;
       plannedStartDate?: string;
       position?: string;
@@ -1994,7 +1993,6 @@ export type DataModel = {
       | "externalRefFrozen.url"
       | "externalRefs"
       | "importJobId"
-      | "labels"
       | "number"
       | "plannedStartDate"
       | "position"

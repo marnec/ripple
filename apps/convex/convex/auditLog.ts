@@ -5,22 +5,6 @@ import type { Id } from "./_generated/dataModel";
 
 export const auditLog = new AuditLog(components.auditLog);
 
-/**
- * Verbs written before a rename, keyed by the stored `action`. Every reader of
- * task audit rows (`taskActivity`, `workspaceTimeline`, `admin/activity`) maps
- * through this so a not-yet-migrated row renders under its current name
- * instead of falling through to a raw-verb fallback. Drop an entry once its
- * data migration (`migrations.migrateAuditLabelVerbs`) has run everywhere.
- */
-const LEGACY_ACTIONS: Record<string, string> = {
-  "tasks.label_add": "tasks.tag_add",
-  "tasks.label_remove": "tasks.tag_remove",
-};
-
-export function canonicalAction(action: string): string {
-  return LEGACY_ACTIONS[action] ?? action;
-}
-
 type ResourceType =
   | "tasks"
   | "documents"
