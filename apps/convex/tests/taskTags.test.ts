@@ -45,13 +45,13 @@ async function listEntityTagsForResource(t: Ctx, resourceId: string) {
 // ── syncTaskTags via tasks.create / tasks.update ─────────────────────
 
 describe("syncTaskTags via tasks.create / tasks.update", () => {
-  it("creates taskTags rows on task create with labels", async () => {
+  it("creates taskTags rows on task create with tags", async () => {
     const t = createTestContext();
     const { workspaceId, userId, asUser } = await setupWorkspaceWithAdmin(t);
     const { projectId } = await setupProject(t, { workspaceId, userId });
 
     const taskId = await asUser.mutation(api.tasks.create, {
-      projectId, workspaceId, title: "x", labels: ["bug", "frontend"],
+      projectId, workspaceId, title: "x", tags: ["bug", "frontend"],
     });
 
     const joins = await listTaskTags(t, taskId);
@@ -70,7 +70,7 @@ describe("syncTaskTags via tasks.create / tasks.update", () => {
     const { projectId } = await setupProject(t, { workspaceId, userId });
 
     const taskId = await asUser.mutation(api.tasks.create, {
-      projectId, workspaceId, title: "x", labels: ["  Bug  ", "bug", "FRONTEND", "frontend"],
+      projectId, workspaceId, title: "x", tags: ["  Bug  ", "bug", "FRONTEND", "frontend"],
     });
 
     const joins = await listTaskTags(t, taskId);
@@ -83,24 +83,24 @@ describe("syncTaskTags via tasks.create / tasks.update", () => {
     const { projectId } = await setupProject(t, { workspaceId, userId });
 
     const taskId = await asUser.mutation(api.tasks.create, {
-      projectId, workspaceId, title: "x", labels: ["bug", "ui"],
+      projectId, workspaceId, title: "x", tags: ["bug", "ui"],
     });
-    await asUser.mutation(api.tasks.update, { taskId, labels: ["ui", "perf"] });
+    await asUser.mutation(api.tasks.update, { taskId, tags: ["ui", "perf"] });
 
     const joins = await listTaskTags(t, taskId);
     expect(joins.map((j) => j.tagName).sort()).toEqual(["perf", "ui"]);
   });
 
-  it("re-applying the same labels is idempotent", async () => {
+  it("re-applying the same tags is idempotent", async () => {
     const t = createTestContext();
     const { workspaceId, userId, asUser } = await setupWorkspaceWithAdmin(t);
     const { projectId } = await setupProject(t, { workspaceId, userId });
 
     const taskId = await asUser.mutation(api.tasks.create, {
-      projectId, workspaceId, title: "x", labels: ["bug"],
+      projectId, workspaceId, title: "x", tags: ["bug"],
     });
-    await asUser.mutation(api.tasks.update, { taskId, labels: ["bug"] });
-    await asUser.mutation(api.tasks.update, { taskId, labels: ["bug"] });
+    await asUser.mutation(api.tasks.update, { taskId, tags: ["bug"] });
+    await asUser.mutation(api.tasks.update, { taskId, tags: ["bug"] });
 
     const joins = await listTaskTags(t, taskId);
     expect(joins).toHaveLength(1);
@@ -116,7 +116,7 @@ describe("taskTags.completed sync trigger", () => {
     const { projectId, doneId } = await setupProject(t, { workspaceId, userId });
 
     const taskId = await asUser.mutation(api.tasks.create, {
-      projectId, workspaceId, title: "x", labels: ["bug"],
+      projectId, workspaceId, title: "x", tags: ["bug"],
     });
     expect((await listTaskTags(t, taskId))[0].completed).toBe(false);
 
@@ -136,7 +136,7 @@ describe("taskTags uniqueness trigger", () => {
     const { projectId } = await setupProject(t, { workspaceId, userId });
 
     const taskId = await asUser.mutation(api.tasks.create, {
-      projectId, workspaceId, title: "x", labels: ["bug"],
+      projectId, workspaceId, title: "x", tags: ["bug"],
     });
     const joins = await listTaskTags(t, taskId);
     const tagId = joins[0].tagId;
@@ -162,7 +162,7 @@ describe("cascade on task delete", () => {
     const { projectId } = await setupProject(t, { workspaceId, userId });
 
     const taskId = await asUser.mutation(api.tasks.create, {
-      projectId, workspaceId, title: "x", labels: ["bug", "frontend"],
+      projectId, workspaceId, title: "x", tags: ["bug", "frontend"],
     });
     expect(await listTaskTags(t, taskId)).toHaveLength(2);
 
@@ -183,7 +183,7 @@ describe("deleteTag spans entityTags + taskTags", () => {
     const docId = await asUser.mutation(api.documents.create, { workspaceId });
     await asUser.mutation(api.documents.updateTags, { id: docId, tags: ["shared"] });
     const taskId = await asUser.mutation(api.tasks.create, {
-      projectId, workspaceId, title: "x", labels: ["shared"],
+      projectId, workspaceId, title: "x", tags: ["shared"],
     });
 
     const allTags = await t.run(async (ctx) =>
@@ -199,7 +199,7 @@ describe("deleteTag spans entityTags + taskTags", () => {
     const doc = await t.run(async (ctx) => ctx.db.get(docId));
     const task = await t.run(async (ctx) => ctx.db.get(taskId));
     expect(doc?.tags ?? []).toEqual([]);
-    expect(task?.labels ?? []).toEqual([]);
+    expect(task?.tags ?? []).toEqual([]);
 
     // Both join tables cleared
     expect(await listEntityTagsForResource(t, docId)).toHaveLength(0);

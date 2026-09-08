@@ -349,7 +349,7 @@ export default defineSchema({
     .searchIndex("by_name", { searchField: "name", filterFields: ["workspaceId"] }),
 
   // Centralized workspace tag dictionary. Source of truth for autocomplete,
-  // future rename/metadata. The denormalized `tags`/`labels` arrays on each
+  // future rename/metadata. The denormalized `tags` arrays on each
   // resource remain as a projection for fast combined-filter search inside
   // each resource's `.search` query.
   // No usageCount column — entity counts (if ever needed) come from an
@@ -489,7 +489,15 @@ export default defineSchema({
       v.literal("medium"),
       v.literal("low")
     ),
-    labels: v.optional(v.array(v.string())), // freeform string labels (matches documents.tags pattern)
+    // Freeform tag names, normalized (trim + lowercase, deduped) — the same
+    // denormalized projection `documents.tags` is. `syncTaskTags` (tagSync.ts)
+    // keeps the `tags` dictionary and the `taskTags` join in step with it.
+    tags: v.optional(v.array(v.string())),
+    // DEPRECATED — renamed to `tags`. Widened so the writers could stop;
+    // `migrateTaskLabelsToTags` (runAll) copies it across and clears the
+    // column. Delete this line once that has run everywhere — the same
+    // widen → migrate → narrow that `projects.tags` / `nodes.tags` used.
+    labels: v.optional(v.array(v.string())),
     completed: v.boolean(), // denormalized from status.isCompleted for efficient filtering
     creatorId: v.id("users"), // who created the task
     position: v.optional(v.string()), // fractional index for ordering within status column
@@ -1664,15 +1672,15 @@ export default defineSchema({
     // halts BOTH directions) and to PR sync / outbound push / explicit import,
     // all of which keep working. Gated in `handleGithubWebhook`.
     inboundIssueSyncDisabled: v.optional(v.boolean()),
-    // Tag→repo routing: when creating an issue from a task whose labels match
+    // Tag→repo routing: when creating an issue from a task whose tags match
     // exactly one repo's tag set, that repo is preselected in the create-issue
     // dialog. A tag belongs to at most one repo within a project (enforced in
-    // setRepoTagRules). Normalized (trim+lowercase) to match tasks.labels.
+    // setRepoTagRules). Normalized (trim+lowercase) to match tasks.tags.
     // Absent/empty = no routing rule for this repo.
     autoSelectTags: v.optional(v.array(v.string())),
     // Priority ↔ label map: the provider label that stands for each Ripple
     // priority. A vocabulary separate from tags — stripped before anything
-    // reaches `tasks.labels` / `taskTags` (`priorityLabels.splitPriorityLabels`)
+    // reaches `tasks.tags` / `taskTags` (`priorityLabels.splitPriorityLabels`)
     // and re-added when computing the outbound label set
     // (`withPriorityLabel`); `taskIntegrationLinks.externalLabels` keeps
     // mirroring the FULL provider set so the echo guard works unchanged.

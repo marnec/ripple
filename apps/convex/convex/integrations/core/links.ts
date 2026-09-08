@@ -428,7 +428,7 @@ export const setBranchSourceDefaults = mutation({
  * Route a single tag to a repo (`linkId`) or clear its routing (`linkId: null`)
  * within a project. Admin-only (a project-wide setting, like
  * `setBranchStatusMap`). The tag is normalized (trim + lowercase) to match
- * `tasks.labels` so the create-issue preselection is a plain set intersection.
+ * `tasks.tags` so the create-issue preselection is a plain set intersection.
  *
  * A tag belongs to at most one repo. This enforces that *atomically*: it strips
  * the tag from every link in the project, then adds it to the target (if any),

@@ -17,17 +17,17 @@ export interface GithubIssueDraft {
 /**
  * The repo a task's tags route to, per the admin's tag→repo rules
  * (`link.autoSelectTags`). Returns a link id only on an *unambiguous* match:
- * if the task's labels point to exactly one distinct repo. Zero matches or a
- * cross-repo conflict (labels pointing at two different repos) both return
+ * if the task's tags point to exactly one distinct repo. Zero matches or a
+ * cross-repo conflict (tags pointing at two different repos) both return
  * `null` — "conflict ⇒ no preference". Matching is case-insensitive; rules and
- * labels are both stored normalized (trim + lowercase) so this is a plain set
+ * tags are both stored normalized (trim + lowercase) so this is a plain set
  * intersection. Pure (no hooks) so it can be unit-tested directly.
  */
 export function pickRepoForTags(
   links: ActiveRepoLink[],
-  labels: string[],
+  tags: string[],
 ): Id<"projectIntegrationLinks"> | null {
-  const taskTags = new Set(labels.map((l) => l.trim().toLowerCase()));
+  const taskTags = new Set(tags.map((l) => l.trim().toLowerCase()));
   if (taskTags.size === 0) return null;
 
   const matched = new Set<Id<"projectIntegrationLinks">>();
@@ -50,7 +50,7 @@ export function pickRepoForTags(
 export function useGithubIssueDraft(
   sourceTitle: string,
   links: ActiveRepoLink[],
-  labels: string[] = [],
+  tags: string[] = [],
 ): GithubIssueDraft {
   const [rawTitle, setRawTitle] = useState<string | null>(null);
   const [repoLinkId, setRepoLinkId] =
@@ -60,7 +60,7 @@ export function useGithubIssueDraft(
     title: rawTitle ?? sourceTitle,
     setTitle: setRawTitle,
     repoLinkId:
-      repoLinkId ?? pickRepoForTags(links, labels) ?? links[0]?._id ?? null,
+      repoLinkId ?? pickRepoForTags(links, tags) ?? links[0]?._id ?? null,
     setRepoLinkId,
     reset: () => {
       setRawTitle(null);

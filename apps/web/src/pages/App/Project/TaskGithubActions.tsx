@@ -30,7 +30,7 @@ export function TaskGithubActions({
   projectId,
   workspaceId,
 }: {
-  task: Pick<Doc<"tasks">, "_id" | "title" | "completed" | "labels" | "externalRefs">;
+  task: Pick<Doc<"tasks">, "_id" | "title" | "completed" | "tags" | "externalRefs">;
   projectId: Id<"projects">;
   workspaceId: Id<"workspaces">;
 }) {
@@ -70,7 +70,7 @@ export function TaskGithubActions({
           <CreateGithubIssueDialog
             taskId={task._id}
             taskTitle={task.title}
-            taskLabels={task.labels ?? []}
+            taskTags={task.tags ?? []}
             projectId={projectId}
             workspaceId={workspaceId}
             open={issueDialogOpen}

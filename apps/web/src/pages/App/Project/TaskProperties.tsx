@@ -42,7 +42,7 @@ type TaskPropertiesProps = {
     assigneeId?: Id<"users"> | null;
     assignee: { name?: string | null; image?: string } | null;
     externalAssignees?: ExternalAssignee[];
-    labels?: string[];
+    tags?: string[];
     dueDate?: string;
     plannedStartDate?: string;
     estimate?: number;
@@ -81,7 +81,7 @@ export function TaskProperties({
   }) ?? [];
 
   const normalizedQuery = newTag.trim().toLowerCase();
-  const appliedSet = new Set(task.labels ?? []);
+  const appliedSet = new Set(task.tags ?? []);
   const suggestions = normalizedQuery
     ? allWorkspaceTags
         .filter((t) => t.includes(normalizedQuery) && !appliedSet.has(t))
@@ -103,7 +103,7 @@ export function TaskProperties({
   }
 
   const pickSuggestion = (tag: string) => {
-    const current = task.labels ?? [];
+    const current = task.tags ?? [];
     if (!current.includes(tag)) onSetTags([...current, tag]);
     setNewTag("");
     setAutocompleteOpen(false);
@@ -112,7 +112,7 @@ export function TaskProperties({
   const handleAddFromInput = () => {
     const trimmed = newTag.trim();
     if (!trimmed) return;
-    const current = task.labels ?? [];
+    const current = task.tags ?? [];
     if (!current.includes(trimmed)) {
       onSetTags([...current, trimmed]);
     }
@@ -320,11 +320,11 @@ export function TaskProperties({
           <div className="flex flex-wrap items-center gap-1">
             <TagPickerButton
               workspaceId={task.workspaceId}
-              value={task.labels ?? []}
+              value={task.tags ?? []}
               onChange={onSetTags}
               triggerVariant="pill"
             />
-            {task.labels?.map((tag) => (
+            {task.tags?.map((tag) => (
               <Badge
                 key={tag}
                 variant="secondary"

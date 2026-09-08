@@ -59,7 +59,7 @@ describe("tasks.updatePosition maintains denormalized columns", () => {
     const { projectId, doneId } = await setupProject(t, { workspaceId, userId });
 
     const taskId = await asUser.mutation(api.tasks.create, {
-      projectId, workspaceId, title: "drag me", labels: ["bug"],
+      projectId, workspaceId, title: "drag me", tags: ["bug"],
     });
     expect((await listTaskTags(t, taskId))[0].completed).toBe(false);
 
@@ -76,7 +76,7 @@ describe("tasks.updatePosition maintains denormalized columns", () => {
     const { projectId, doneId } = await setupProject(t, { workspaceId, userId });
 
     const taskId = await asUser.mutation(api.tasks.create, {
-      projectId, workspaceId, title: "drag me", labels: ["bug"],
+      projectId, workspaceId, title: "drag me", tags: ["bug"],
     });
     await asUser.mutation(api.tasks.updatePosition, {
       taskId, statusId: doneId, position: "a1",
@@ -105,7 +105,7 @@ describe("taskStatuses.update maintains denormalized columns", () => {
     const { projectId, todoId } = await setupProject(t, { workspaceId, userId });
 
     const taskId = await asUser.mutation(api.tasks.create, {
-      projectId, workspaceId, title: "in todo", labels: ["bug"],
+      projectId, workspaceId, title: "in todo", tags: ["bug"],
     });
     expect((await listTaskTags(t, taskId))[0].completed).toBe(false);
 

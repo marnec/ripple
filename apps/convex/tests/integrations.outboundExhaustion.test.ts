@@ -108,7 +108,7 @@ async function setupLinkedTask(
       completed: false,
       creatorId: userId,
       assigneeId: userId,
-      labels: [],
+      tags: [],
       externalRefs: withTaskLink
         ? [
             {
@@ -257,7 +257,7 @@ describe("label and assignee pushes", () => {
     const t = createTestContext();
     const { taskId, taskLinkId } = await setupLinkedTask(t);
     await t.run(async (ctx) => {
-      await ctx.db.patch(taskId, { labels: ["bug"] });
+      await ctx.db.patch(taskId, { tags: ["bug"] });
     });
 
     await t.run((ctx) => maybeEnqueueLabelsPush(ctx, taskId));

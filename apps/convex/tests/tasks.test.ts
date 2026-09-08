@@ -149,12 +149,12 @@ describe("tasks.create", () => {
       workspaceId,
       title: "Urgent bug",
       priority: "urgent",
-      labels: ["bug", "frontend"],
+      tags: ["bug", "frontend"],
     });
 
     const task = await t.run(async (ctx) => ctx.db.get(taskId));
     expect(task?.priority).toBe("urgent");
-    expect(task?.labels).toEqual(["bug", "frontend"]);
+    expect(task?.tags).toEqual(["bug", "frontend"]);
   });
 
   it("rejects unauthenticated users", async () => {
@@ -609,11 +609,11 @@ describe("listByProject — tagNames filter", () => {
     const { projectId, doneId } = await setupProjectWithStatuses(t, { workspaceId, userId });
 
     const a = await asUser.mutation(api.tasks.create, {
-      projectId, workspaceId, title: "tagged-active", labels: ["bug"],
+      projectId, workspaceId, title: "tagged-active", tags: ["bug"],
     });
     await asUser.mutation(api.tasks.create, { projectId, workspaceId, title: "untagged-active" });
     const c = await asUser.mutation(api.tasks.create, {
-      projectId, workspaceId, title: "tagged-done", labels: ["bug"],
+      projectId, workspaceId, title: "tagged-done", tags: ["bug"],
     });
     await asUser.mutation(api.tasks.update, { taskId: c, statusId: doneId });
 
@@ -634,13 +634,13 @@ describe("listByProject — tagNames filter", () => {
     const { projectId } = await setupProjectWithStatuses(t, { workspaceId, userId });
 
     const both = await asUser.mutation(api.tasks.create, {
-      projectId, workspaceId, title: "both", labels: ["bug", "frontend"],
+      projectId, workspaceId, title: "both", tags: ["bug", "frontend"],
     });
     await asUser.mutation(api.tasks.create, {
-      projectId, workspaceId, title: "only-bug", labels: ["bug"],
+      projectId, workspaceId, title: "only-bug", tags: ["bug"],
     });
     await asUser.mutation(api.tasks.create, {
-      projectId, workspaceId, title: "only-frontend", labels: ["frontend"],
+      projectId, workspaceId, title: "only-frontend", tags: ["frontend"],
     });
 
     const result = await asUser.query(api.tasks.listByProject, {
@@ -655,7 +655,7 @@ describe("listByProject — tagNames filter", () => {
     const { projectId } = await setupProjectWithStatuses(t, { workspaceId, userId });
 
     await asUser.mutation(api.tasks.create, {
-      projectId, workspaceId, title: "x", labels: ["bug"],
+      projectId, workspaceId, title: "x", tags: ["bug"],
     });
 
     const result = await asUser.query(api.tasks.listByProject, {
@@ -671,10 +671,10 @@ describe("listByProject — tagNames filter", () => {
     const { projectId: pB } = await setupProjectWithStatuses(t, { workspaceId, userId, name: "B" });
 
     const a = await asUser.mutation(api.tasks.create, {
-      projectId: pA, workspaceId, title: "a", labels: ["shared"],
+      projectId: pA, workspaceId, title: "a", tags: ["shared"],
     });
     await asUser.mutation(api.tasks.create, {
-      projectId: pB, workspaceId, title: "b", labels: ["shared"],
+      projectId: pB, workspaceId, title: "b", tags: ["shared"],
     });
 
     const result = await asUser.query(api.tasks.listByProject, {
@@ -719,7 +719,7 @@ describe("listByAssignee — limit", () => {
     for (let i = 0; i < 3; i++) {
       ids.push(
         await asUser.mutation(api.tasks.create, {
-          projectId, workspaceId, title: `t-${i}`, labels: ["bug"], assigneeId: userId,
+          projectId, workspaceId, title: `t-${i}`, tags: ["bug"], assigneeId: userId,
         }),
       );
     }
@@ -749,10 +749,10 @@ describe("listByAssignee — tagNames filter", () => {
     });
 
     const mine = await asUser.mutation(api.tasks.create, {
-      projectId, workspaceId, title: "mine", labels: ["bug"], assigneeId: userId,
+      projectId, workspaceId, title: "mine", tags: ["bug"], assigneeId: userId,
     });
     await asUser.mutation(api.tasks.create, {
-      projectId, workspaceId, title: "theirs", labels: ["bug"], assigneeId: otherId,
+      projectId, workspaceId, title: "theirs", tags: ["bug"], assigneeId: otherId,
     });
     await asUser.mutation(api.tasks.create, {
       projectId, workspaceId, title: "untagged-mine", assigneeId: userId,
@@ -779,7 +779,7 @@ describe("listByAssignee — tagNames filter", () => {
     });
 
     const taskId = await asUser.mutation(api.tasks.create, {
-      projectId, workspaceId, title: "transfer", labels: ["bug"], assigneeId: otherId,
+      projectId, workspaceId, title: "transfer", tags: ["bug"], assigneeId: otherId,
     });
 
     const beforeReassign = await asUser.query(api.tasks.listByAssignee, {
@@ -801,10 +801,10 @@ describe("listByAssignee — tagNames filter", () => {
     const { projectId, doneId } = await setupProjectWithStatuses(t, { workspaceId, userId });
 
     const active = await asUser.mutation(api.tasks.create, {
-      projectId, workspaceId, title: "active", labels: ["bug"], assigneeId: userId,
+      projectId, workspaceId, title: "active", tags: ["bug"], assigneeId: userId,
     });
     const done = await asUser.mutation(api.tasks.create, {
-      projectId, workspaceId, title: "done", labels: ["bug"], assigneeId: userId,
+      projectId, workspaceId, title: "done", tags: ["bug"], assigneeId: userId,
     });
     await asUser.mutation(api.tasks.update, { taskId: done, statusId: doneId });
 

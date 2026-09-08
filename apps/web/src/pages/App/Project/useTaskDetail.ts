@@ -1,7 +1,7 @@
 import { useMutation } from "convex/react";
 import { useQuery } from "convex-helpers/react/cache";;
 import { useWorkspaceMembers } from "@/contexts/WorkspaceMembersContext";
-import { taskLabelsOptimisticUpdate } from "@/lib/tag-optimistic";
+import { taskTagsOptimisticUpdate } from "@/lib/tag-optimistic";
 import { useViewer } from "../UserContext";
 import { useState } from "react";
 import { api } from "@convex/_generated/api";
@@ -50,7 +50,7 @@ export function useTaskDetail({
   const currentUser = useViewer();
 
   const updateTask = useMutation(api.tasks.update).withOptimisticUpdate(
-    taskLabelsOptimisticUpdate(),
+    taskTagsOptimisticUpdate(),
   );
   const removeTask = useMutation(api.tasks.remove);
 

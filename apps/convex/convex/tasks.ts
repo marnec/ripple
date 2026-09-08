@@ -113,7 +113,7 @@ export const baseTaskFields = {
   statusId: v.id("taskStatuses"),
   assigneeId: v.optional(v.id("users")),
   priority: priorityValidator,
-  labels: v.optional(v.array(v.string())),
+  tags: v.optional(v.array(v.string())),
   completed: v.boolean(),
   creatorId: v.id("users"),
   position: v.optional(v.string()),
@@ -232,7 +232,7 @@ export const create = mutation({
         v.literal("low")
       )
     ),
-    labels: v.optional(v.array(v.string())),
+    tags: v.optional(v.array(v.string())),
     position: v.optional(v.string()),
     dueDate: v.optional(v.string()),
     plannedStartDate: v.optional(v.string()),
@@ -311,7 +311,7 @@ export const create = mutation({
       statusId,
       assigneeId: args.assigneeId,
       priority: args.priority ?? "medium",
-      labels: args.labels,
+      tags: args.tags,
       completed: status.isCompleted,
       creatorId: userId,
       position,
@@ -321,8 +321,8 @@ export const create = mutation({
       estimate: args.estimate,
     });
 
-    // Sync initial labels to the central tag tables (ID is known only after insert).
-    if (args.labels && args.labels.length > 0) {
+    // Sync initial tags to the central tag tables (ID is known only after insert).
+    if (args.tags && args.tags.length > 0) {
       const normalized = await syncTaskTags(ctx, {
         workspaceId: project.workspaceId,
         projectId: args.projectId,
@@ -331,15 +331,15 @@ export const create = mutation({
         dueDate: args.dueDate,
         plannedStartDate: args.plannedStartDate,
         assigneeId: args.assigneeId,
-        nextTagNames: args.labels,
+        nextTagNames: args.tags,
       });
-      // Replace the as-typed labels with the normalized list, in case
+      // Replace the as-typed tags with the normalized list, in case
       // normalization changed anything (whitespace / casing / dedupe).
       if (
-        normalized.length !== (args.labels?.length ?? 0) ||
-        normalized.some((t: string, i: number) => t !== args.labels?.[i])
+        normalized.length !== (args.tags?.length ?? 0) ||
+        normalized.some((t: string, i: number) => t !== args.tags?.[i])
       ) {
-        await ctx.db.patch(taskId, { labels: normalized });
+        await ctx.db.patch(taskId, { tags: normalized });
       }
     }
 
@@ -487,7 +487,7 @@ export const listByProject = query({
 
       if (tagIds.length > 1) {
         tasks = tasks.filter(
-          (task) => task.labels !== undefined && required.every((n) => task.labels!.includes(n)),
+          (task) => task.tags !== undefined && required.every((n) => task.tags!.includes(n)),
         );
       }
     } else {
@@ -901,7 +901,7 @@ export const listByAssignee = query({
 
       if (tagIds.length > 1) {
         workspaceTasks = workspaceTasks.filter(
-          (task) => task.labels !== undefined && required.every((n) => task.labels!.includes(n)),
+          (task) => task.tags !== undefined && required.every((n) => task.tags!.includes(n)),
         );
       }
     } else {
@@ -1034,14 +1034,14 @@ export const update = mutation({
         v.literal("low")
       )
     ),
-    labels: v.optional(v.array(v.string())),
+    tags: v.optional(v.array(v.string())),
     position: v.optional(v.string()),
     dueDate: v.optional(v.union(v.string(), v.null())),
     plannedStartDate: v.optional(v.union(v.string(), v.null())),
     estimate: v.optional(v.union(v.number(), v.null())),
   },
   returns: v.null(),
-  handler: async (ctx, { taskId, title, statusId, assigneeId, priority, labels, position, dueDate, plannedStartDate, estimate }) => {
+  handler: async (ctx, { taskId, title, statusId, assigneeId, priority, tags, position, dueDate, plannedStartDate, estimate }) => {
     const { userId, resource: task } = await requireResourceMember(ctx, "tasks", taskId);
 
     // Build patch object with only provided fields
@@ -1056,8 +1056,8 @@ export const update = mutation({
       patch.assigneeId = assigneeId;
     }
     if (priority !== undefined) patch.priority = priority;
-    if (labels !== undefined) {
-      patch.labels = await syncTaskTags(ctx, {
+    if (tags !== undefined) {
+      patch.tags = await syncTaskTags(ctx, {
         workspaceId: task.workspaceId,
         projectId: task.projectId,
         taskId,
@@ -1067,7 +1067,7 @@ export const update = mutation({
         // Use the incoming assigneeId override when present so the new
         // taskTags rows agree with the post-patch task row.
         assigneeId: assigneeId === null ? undefined : assigneeId ?? task.assigneeId,
-        nextTagNames: labels,
+        nextTagNames: tags,
       });
     }
     if (position !== undefined) patch.position = position;
@@ -1126,16 +1126,16 @@ export const update = mutation({
         taskTitle: task.title,
       });
     }
-    if (labels !== undefined) {
-      const oldLabels = task.labels ?? [];
-      const newLabels = patch.labels ?? [];
-      const added = newLabels.filter((l: string) => !oldLabels.includes(l));
-      const removed = oldLabels.filter((l) => !newLabels.includes(l));
-      for (const label of added) {
-        await logTaskActivity(ctx, { taskId, userId, workspaceId: task.workspaceId, type: "label_add", newValue: label, taskTitle: task.title });
+    if (tags !== undefined) {
+      const oldTags = task.tags ?? [];
+      const newTags = patch.tags ?? [];
+      const added = newTags.filter((t: string) => !oldTags.includes(t));
+      const removed = oldTags.filter((t) => !newTags.includes(t));
+      for (const tag of added) {
+        await logTaskActivity(ctx, { taskId, userId, workspaceId: task.workspaceId, type: "tag_add", newValue: tag, taskTitle: task.title });
       }
-      for (const label of removed) {
-        await logTaskActivity(ctx, { taskId, userId, workspaceId: task.workspaceId, type: "label_remove", oldValue: label, taskTitle: task.title });
+      for (const tag of removed) {
+        await logTaskActivity(ctx, { taskId, userId, workspaceId: task.workspaceId, type: "tag_remove", oldValue: tag, taskTitle: task.title });
       }
     }
     if (dueDate !== undefined && dueDate !== task.dueDate) {
@@ -1227,7 +1227,7 @@ export const update = mutation({
     // outbound set includes the mapped label, and on a link without one the
     // set is unchanged and the echo gate drops it.
     if (
-      labels !== undefined ||
+      tags !== undefined ||
       (priority !== undefined && priority !== task.priority)
     ) {
       await maybeEnqueueLabelsPush(ctx, taskId);

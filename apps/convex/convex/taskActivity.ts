@@ -3,7 +3,7 @@ import { query } from "./_generated/server";
 import { getAll } from "convex-helpers/server/relationships";
 import { getUserDisplayName } from "@ripple/shared/displayName";
 import type { Id } from "./_generated/dataModel";
-import { auditLog } from "./auditLog";
+import { auditLog, canonicalAction } from "./auditLog";
 import { checkResourceMember } from "./authHelpers";
 import { externalAuthorsByComment } from "./utils/commentExternalAuthors";
 
@@ -100,7 +100,8 @@ export const timeline = query({
     // Build unified timeline items. Skip `comment_create` audit entries — the comment itself already
     // represents that event in the timeline; the audit row would just duplicate it as a generic "made a change".
     const activityItems = auditEntries.flatMap((entry) => {
-      const type = entry.action.startsWith("tasks.") ? entry.action.slice(6) : entry.action;
+      const action = canonicalAction(entry.action);
+      const type = action.startsWith("tasks.") ? action.slice(6) : action;
       if (type === "comment_create") return [];
       const user = entry.actorId ? userMap.get(entry.actorId) : undefined;
       const meta = (entry.metadata ?? {}) as {

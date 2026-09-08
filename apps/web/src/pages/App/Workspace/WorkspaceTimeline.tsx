@@ -89,8 +89,8 @@ function getActionIcon(action: string) {
     case "status_change": return <CircleDot className={iconClass} />;
     case "priority_change": return <Gauge className={iconClass} />;
     case "assignee_change": return <UserRound className={iconClass} />;
-    case "label_add":
-    case "label_remove": return <Tag className={iconClass} />;
+    case "tag_add":
+    case "tag_remove": return <Tag className={iconClass} />;
     case "due_date_change":
     case "start_date_change": return <Calendar className={iconClass} />;
     case "dates_changed": return <CalendarDays className={iconClass} />;
@@ -210,10 +210,10 @@ function formatAction(entry: TimelineEntry): React.ReactNode {
       if (!oldValue && newValue) return <>{actor} assigned <span className="font-medium">{newValue}</span>{onResource}</>;
       if (oldValue && !newValue) return <>{actor} unassigned <span className="font-medium">{oldValue}</span>{onResource}</>;
       return <>{actor} reassigned <span className="font-medium">{oldValue}</span> {arrow} <span className="font-medium">{newValue}</span>{onResource}</>;
-    case "label_add":
-      return <>{actor} added label <span className="font-medium">{newValue}</span>{onResource}</>;
-    case "label_remove":
-      return <>{actor} removed label <span className="font-medium">{oldValue}</span>{onResource}</>;
+    case "tag_add":
+      return <>{actor} added tag <span className="font-medium">{newValue}</span>{onResource}</>;
+    case "tag_remove":
+      return <>{actor} removed tag <span className="font-medium">{oldValue}</span>{onResource}</>;
     case "due_date_change":
       return newValue
         ? <>{actor} set due date to <span className="font-medium">{newValue}</span>{onResource}</>

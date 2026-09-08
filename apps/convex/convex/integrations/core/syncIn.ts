@@ -533,7 +533,7 @@ async function createTaskFromEvent(
       completed: destinationStatus.isCompleted,
       nextTagNames: split.tags,
     });
-    await ctx.db.patch(taskId, { labels: tags });
+    await ctx.db.patch(taskId, { tags });
   }
 
   await ctx.db.insert("taskIntegrationLinks", {
@@ -658,7 +658,7 @@ async function applyLabelsChanged(
   const split = splitPriorityLabels(normalized, link.priorityLabels);
 
   // Reconcile the dictionary `tags` + project-scoped `taskTags` join. We then
-  // mirror that list into `tasks.labels` (denormalized projection) and the
+  // mirror that list into `tasks.tags` (denormalized projection) and the
   // full provider set into `taskIntegrationLinks.externalLabels` (the
   // last-known GitHub set).
   await syncTaskTags(ctx, {
@@ -672,7 +672,7 @@ async function applyLabelsChanged(
     nextTagNames: split.tags,
   });
 
-  await ctx.db.patch(task._id, { labels: split.tags });
+  await ctx.db.patch(task._id, { tags: split.tags });
   await ctx.db.patch(existingLink._id, {
     externalLabels: normalized,
     externalUpdatedAt: event.externalUpdatedAt,

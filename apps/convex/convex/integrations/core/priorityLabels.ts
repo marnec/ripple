@@ -7,7 +7,7 @@ import type { Doc } from "../../_generated/dataModel";
  * provider label (`projectIntegrationLinks.priorityLabels`). Those labels are
  * a vocabulary separate from tags: this module is the only place that adds
  * them to an outbound label set and strips them from an inbound one, so the
- * tag system (`tasks.labels`, `tags`, `taskTags`) never sees them.
+ * tag system (`tasks.tags`, `tags`, `taskTags`) never sees them.
  *
  * Pure — no Convex ctx — so both directions are unit-testable.
  */

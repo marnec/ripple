@@ -9,7 +9,7 @@ type FilterableTask = {
   dueDate?: string;
   startDate?: string;
   position?: string;
-  labels?: string[];
+  tags?: string[];
   [key: string]: unknown;
 };
 
@@ -45,11 +45,11 @@ export function useFilteredTasks<T extends FilterableTask>(
   }
 
   // Filter by tag (OR semantics: match any selected tag, mirrors assignee).
-  // Tasks store tags in the denormalized `labels` array kept in sync by
-  // syncTagsForResource on every create/update.
+  // Tasks store tags in the denormalized `tags` array kept in sync by
+  // syncTaskTags on every create/update.
   if (filters.tags.length > 0) {
     result = result.filter(
-      (t) => t.labels && filters.tags.some((tag) => t.labels!.includes(tag))
+      (t) => t.tags && filters.tags.some((tag) => t.tags!.includes(tag))
     );
   }
 

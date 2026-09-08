@@ -144,9 +144,9 @@ export function TaskPropertiesSection() {
           assigneeId: value === "unassigned" ? null : (value as Id<"users">),
         })
       }
-      onSetTags={(labels) => void patch({ labels })}
+      onSetTags={(tags) => void patch({ tags })}
       onRemoveTag={(tag) =>
-        void patch({ labels: (task.labels ?? []).filter((t) => t !== tag) })
+        void patch({ tags: (task.tags ?? []).filter((t) => t !== tag) })
       }
       onDueDateChange={(dueDate) => void patch({ dueDate })}
       onStartDateChange={(plannedStartDate) => void patch({ plannedStartDate })}

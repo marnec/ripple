@@ -225,7 +225,7 @@ export async function enqueueIssueCreate(
   // mirror from the same set, which is what makes the bounce-back `labeled`
   // webhooks echoes. An untagged task on an unmapped link sends nothing.
   const labels = withPriorityLabel(
-    task.labels ?? [],
+    task.tags ?? [],
     task.priority,
     projectLink.priorityLabels,
   );
@@ -386,7 +386,7 @@ export async function maybeEnqueueLabelsPush(
   // the diff below is against the FULL provider set the link mirrors, so a
   // priority change swaps its label and a tag edit leaves it in place.
   const nextLabels = withPriorityLabel(
-    target.task.labels ?? [],
+    target.task.tags ?? [],
     target.task.priority,
     target.projectLink.priorityLabels,
   );

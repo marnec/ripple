@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 import { query } from "./_generated/server";
 import { getUserDisplayName } from "@ripple/shared/displayName";
-import { auditLog } from "./auditLog";
+import { auditLog, canonicalAction } from "./auditLog";
 import { requireWorkspaceMember } from "./authHelpers";
 
 type AuditEntry = {
@@ -93,7 +93,7 @@ export const list = query({
       return {
         _id: entry._id,
         timestamp: entry.timestamp,
-        action: entry.action,
+        action: canonicalAction(entry.action),
         resourceType: entry.resourceType,
         resourceName: isCascade ? undefined : meta.resourceName,
         actorName: actor?.name ?? "System",

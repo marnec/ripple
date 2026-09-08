@@ -148,6 +148,7 @@ export const runAll = migrations.runner([
   internal.migrations.backfillTaskExternalRefs,
   internal.migrations.backfillLinkWorkspaceIntegration,
   internal.migrations.unsubscribeNonMembersFromPrivateChannels,
+  internal.migrations.migrateTaskLabelsToTags,
 ]);
 
 /**
@@ -466,6 +467,54 @@ export const migrateAuditActionPrefix = internalMutation({
       cursor: args.cursor,
       batchSize: 200,
     });
+  },
+});
+
+/**
+ * `tasks.labels` → `tasks.tags`. The column was the one place the product's
+ * "tags" vocabulary still said "labels" (a leftover from when the field was
+ * modelled on GitHub's). Copies the array across — an existing `tags` value
+ * wins, since it was written after the rename — and clears the legacy column.
+ * Idempotent: a row without `labels` is skipped.
+ */
+export const migrateTaskLabelsToTags = migrations.define({
+  table: "tasks",
+  migrateOne: async (ctx, task) => {
+    const legacy = task as Record<string, unknown>;
+    if (legacy.labels === undefined) return;
+    await ctx.db.patch(task._id, {
+      tags: task.tags ?? (legacy.labels as string[]),
+      labels: undefined,
+    } as never);
+  },
+});
+
+/**
+ * Rewrite the audit verbs that went with that column:
+ * `tasks.label_add` / `tasks.label_remove` → `tasks.tag_add` / `tasks.tag_remove`.
+ * The audit trail lives in a component, so this cannot be a `migrations.define`
+ * and is not part of `runAll`. Self-scheduling: one call walks the whole table
+ * in batches. Until it has run, `auditLog.canonicalAction` maps the old verbs
+ * at read time.
+ *
+ * Run once per deployment: npx convex run migrations:migrateAuditLabelVerbs
+ */
+export const migrateAuditLabelVerbs = internalMutation({
+  args: { cursor: v.optional(v.string()) },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const result = await auditLog.migrateActionPrefix(ctx, {
+      oldPrefix: "tasks.label_",
+      newPrefix: "tasks.tag_",
+      cursor: args.cursor,
+      batchSize: 200,
+    });
+    if (!result.isDone && result.cursor) {
+      await ctx.scheduler.runAfter(0, internal.migrations.migrateAuditLabelVerbs, {
+        cursor: result.cursor,
+      });
+    }
+    return null;
   },
 });
 
@@ -946,7 +995,7 @@ export const stripCalendarEventCancelledAt = migrations.define({
 
 // ── Tag system backfill ─────────────────────────────────────────────
 // Populate the centralized `tags` dictionary + `entityTags` join from
-// each taggable resource's denormalized `tags` (or `labels`) column.
+// each taggable resource's denormalized `tags` column.
 // Idempotent — skips dictionary rows and join rows that already exist.
 
 import type { GenericMutationCtx } from "convex/server";

@@ -30,7 +30,7 @@ async function setup() {
     workspaceId,
     projectId,
     title: "A task",
-    labels: ["alpha"],
+    tags: ["alpha"],
   });
   return { t, workspaceId, asUser, projectId, taskId };
 }

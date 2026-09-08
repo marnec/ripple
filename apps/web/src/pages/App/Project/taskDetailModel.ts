@@ -45,7 +45,7 @@ export type TaskPatch = {
   statusId?: Id<"taskStatuses">;
   priority?: "urgent" | "high" | "medium" | "low";
   assigneeId?: Id<"users"> | null;
-  labels?: string[];
+  tags?: string[];
   dueDate?: string | null;
   plannedStartDate?: string | null;
   estimate?: number | null;
@@ -62,7 +62,7 @@ const PATCH_FAILURE_MESSAGE: Record<keyof TaskPatch, string> = {
   statusId: "Couldn't change status",
   priority: "Couldn't change priority",
   assigneeId: "Couldn't change assignee",
-  labels: "Couldn't update tags",
+  tags: "Couldn't update tags",
   dueDate: "Couldn't change due date",
   plannedStartDate: "Couldn't change start date",
   estimate: "Couldn't change estimate",

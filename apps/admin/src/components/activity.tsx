@@ -182,8 +182,46 @@ function describe(entry: ActivityEntry, opts?: { subject?: boolean }) {
       if (!oldValue && newValue) return <>{actor} assigned <Quoted>{newValue}</Quoted>{on}</>;
       if (oldValue && !newValue) return <>{actor} unassigned <Quoted>{oldValue}</Quoted>{on}</>;
       return <>{actor} reassigned <Change from={oldValue} to={newValue} />{on}</>;
+    case "tag_add":
+      return <>{actor} added tag <Quoted>{newValue}</Quoted>{on}</>;
+    case "tag_remove":
+      return <>{actor} removed tag <Quoted>{oldValue}</Quoted>{on}</>;
+    case "due_date_change":
+      return newValue
+        ? <>{actor} set due date to <Quoted>{newValue}</Quoted>{on}</>
+        : <>{actor} removed due date{on}</>;
+    case "start_date_change":
+      return newValue
+        ? <>{actor} set start date to <Quoted>{newValue}</Quoted>{on}</>
+        : <>{actor} removed start date{on}</>;
+    case "estimate_change":
+      return newValue
+        ? <>{actor} set estimate to <Quoted>{newValue}h</Quoted>{on}</>
+        : <>{actor} removed estimate{on}</>;
+    case "dependency_add":
+      return <>{actor} added a dependency{on}</>;
+    case "dependency_remove":
+      return <>{actor} removed a dependency{on}</>;
     case "comment_create":
       return <>{actor} commented{on}</>;
+    case "comment_edit":
+      return <>{actor} edited a comment{on}</>;
+    case "comment_delete":
+      return <>{actor} deleted a comment{on}</>;
+    case "pr_linked":
+      return <>{actor} linked PR <Quoted>{newValue}</Quoted>{on}</>;
+    case "pr_unlinked":
+      return <>{actor} unlinked PR <Quoted>{oldValue}</Quoted>{on}</>;
+    case "issue_linked":
+      return <>{actor} linked issue <Quoted>{newValue}</Quoted>{on}</>;
+    case "issue_created":
+      return <>{actor} created issue <Quoted>{newValue}</Quoted>{on}</>;
+    case "branch_created":
+      return <>{actor} created branch <Quoted>{newValue}</Quoted>{on}</>;
+    case "status_synced":
+      return <>{actor} synced status <Change from={oldValue} to={newValue} />{on}</>;
+    case "description_synced":
+      return <>{actor} synced description{on}</>;
     default:
       return <>{actor} {verb.replace(/_/g, " ")}{noun && <> {noun}</>}{name && <> {name}</>}</>;
   }

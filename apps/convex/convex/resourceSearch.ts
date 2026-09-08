@@ -4,8 +4,8 @@ import type { Doc, Id, TableNames } from "./_generated/dataModel";
 import type { QueryCtx } from "./_generated/server";
 
 // Maps the entityTags polymorphic literal to the actual table name. Tasks
-// use `labels` not `tags` for filtering and live on a different list page,
-// so they're intentionally excluded here.
+// filter through `taskTags` rather than `entityTags` and live on a different
+// list page, so they're intentionally excluded here.
 export type ListableResourceType = "document" | "diagram" | "spreadsheet" | "project";
 
 type TableFor<T extends ListableResourceType> =

@@ -89,7 +89,7 @@ describe("createTaskPatch", () => {
     const cases: Array<[TaskPatch, string]> = [
       [{ statusId: "s1" as never }, "Couldn't change status"],
       [{ assigneeId: null }, "Couldn't change assignee"],
-      [{ labels: [] }, "Couldn't update tags"],
+      [{ tags: [] }, "Couldn't update tags"],
       [{ dueDate: null }, "Couldn't change due date"],
       [{ plannedStartDate: null }, "Couldn't change start date"],
       [{ estimate: 1 }, "Couldn't change estimate"],

@@ -656,7 +656,7 @@ export const createImportedTasks = internalMutation({
 
       // Third validation pass — structural check on the already-parsed row
       // we persisted. Uses the output schema (typed values, no coercion) so
-      // it doesn't re-reject a `labels: string[]` that the input schema
+      // it doesn't re-reject a `tags: string[]` that the input schema
       // would only accept as a raw `string`. Catches storage corruption and
       // the case where the running version's schema is tighter than the one
       // that originally accepted the row. Runs before any write, which is what
@@ -679,16 +679,15 @@ export const createImportedTasks = internalMutation({
       const position = generateKeyBetween(previousPosition, null);
       previousPosition = position;
 
-      // The CSV column is "tags" (user-facing), but the underlying task field
-      // is still `labels` (denormalized storage that syncs into `tags` /
-      // `taskTags`). syncTaskTags is the source of truth for tag membership.
+      // `tasks.tags` is a denormalized projection; syncTaskTags (below) is the
+      // source of truth for tag membership (dictionary `tags` + `taskTags`).
       const taskId = await ctx.db.insert("tasks", {
         projectId: job.projectId,
         workspaceId: job.workspaceId,
         title: row.title,
         statusId: defaultStatus._id,
         priority: row.priority ?? "medium",
-        labels: row.tags ?? undefined,
+        tags: row.tags ?? undefined,
         completed: defaultStatus.isCompleted,
         creatorId: job.creatorId,
         position,
@@ -714,7 +713,7 @@ export const createImportedTasks = internalMutation({
           normalized.length !== row.tags.length ||
           normalized.some((t: string, i: number) => t !== row.tags![i])
         ) {
-          await ctx.db.patch(taskId, { labels: normalized });
+          await ctx.db.patch(taskId, { tags: normalized });
         }
       }
 

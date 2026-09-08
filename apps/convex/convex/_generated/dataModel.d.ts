@@ -1963,6 +1963,7 @@ export type DataModel = {
       projectId: Id<"projects">;
       pullRequestState?: "draft" | "open" | "merged" | "closed";
       statusId: Id<"taskStatuses">;
+      tags?: Array<string>;
       title: string;
       workPeriods?: Array<{ completedAt?: number; startedAt: number }>;
       workspaceId: Id<"workspaces">;
@@ -2001,6 +2002,7 @@ export type DataModel = {
       | "projectId"
       | "pullRequestState"
       | "statusId"
+      | "tags"
       | "title"
       | "workPeriods"
       | "workspaceId"

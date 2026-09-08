@@ -116,8 +116,8 @@ function PageShell({
           </Button>
           <TagPickerButton
             workspaceId={workspaceId}
-            value={detail.task.labels ?? []}
-            onChange={(labels) => void detail.patch({ labels })}
+            value={detail.task.tags ?? []}
+            onChange={(tags) => void detail.patch({ tags })}
           />
           <TaskIdentity className="text-sm" />
           <TaskTitleField className="h-8 min-w-0 flex-1 border-0 bg-transparent px-2 text-lg font-semibold shadow-none focus-visible:ring-0" />

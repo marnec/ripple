@@ -145,7 +145,7 @@ describe("workspaces.overview", () => {
       workspaceId,
       projectId,
       title: "Has tags",
-      labels: ["alpha", "beta"],
+      tags: ["alpha", "beta"],
     });
 
     const overview = await asUser.query(api.workspaces.overview, { workspaceId });

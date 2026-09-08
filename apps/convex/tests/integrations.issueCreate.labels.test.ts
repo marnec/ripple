@@ -86,7 +86,7 @@ async function taskWithTags(
     // Through the triggers so `labels` fans out to the tag tables as in the app.
     const taskId = await withTriggers(ctx).db.insert("tasks", {
       projectId, workspaceId, title: "Tagged task", statusId, priority: "medium",
-      completed: false, creatorId: userId, labels: tags,
+      completed: false, creatorId: userId, tags: tags,
     });
     return { taskId, projectLinkId };
   });

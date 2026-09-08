@@ -80,7 +80,7 @@ export function CreateTaskDialog({
       workspaceId,
       title: trimmedTitle,
       plannedStartDate,
-      ...(tags.length > 0 ? { labels: tags } : {}),
+      ...(tags.length > 0 ? { tags: tags } : {}),
     })
       .then(async (taskId) => {
         // Best-effort: a task is created even if the issue request is rejected,

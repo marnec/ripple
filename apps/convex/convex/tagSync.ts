@@ -115,7 +115,7 @@ export async function syncTagsForResource(
 /**
  * Reconcile the central `tags` + `taskTags` tables with `nextTagNames` for a
  * single task. Returns the canonical (normalized + deduped) tag list, which
- * the caller patches into `tasks.labels`.
+ * the caller patches into `tasks.tags`.
  *
  * `completed` is denormalized onto `taskTags` to keep the primary access
  * pattern ("completed tasks in project P tagged X") on a single indexed
@@ -408,7 +408,7 @@ async function stripTagFromResource(
   }
 }
 
-/** As `stripTagFromResource`, over a task's `labels` — unguarded for the same reason. */
+/** As `stripTagFromResource`, over a task's `tags` — unguarded for the same reason. */
 async function stripTagFromTask(
   ctx: MutationCtx,
   taskId: Id<"tasks">,
@@ -416,6 +416,6 @@ async function stripTagFromTask(
 ): Promise<void> {
   const task = await ctx.db.get(taskId);
   if (!task) return;
-  const next = (task.labels ?? []).filter((t) => t !== tagName);
-  await ctx.db.patch(taskId, { labels: next });
+  const next = (task.tags ?? []).filter((t) => t !== tagName);
+  await ctx.db.patch(taskId, { tags: next });
 }

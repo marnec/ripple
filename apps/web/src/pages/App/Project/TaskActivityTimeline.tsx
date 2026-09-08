@@ -135,8 +135,8 @@ function getActivityIcon(type: string, provider: string) {
     case "status_change": return <CircleDot className="h-3 w-3" />;
     case "priority_change": return <Gauge className="h-3 w-3" />;
     case "assignee_change": return <UserRound className="h-3 w-3" />;
-    case "label_add": return <Tag className="h-3 w-3" />;
-    case "label_remove": return <Tag className="h-3 w-3" />;
+    case "tag_add": return <Tag className="h-3 w-3" />;
+    case "tag_remove": return <Tag className="h-3 w-3" />;
     case "title_change": return <Type className="h-3 w-3" />;
     case "due_date_change": return <Calendar className="h-3 w-3" />;
     case "start_date_change": return <Calendar className="h-3 w-3" />;
@@ -176,9 +176,9 @@ function getActivityDescription(item: TimelineItem, provider: string): React.Rea
       if (!oldValue && newValue) return <><span className="font-medium">{userName}</span> assigned to <span className="font-medium">{newValue}</span></>;
       if (oldValue && !newValue) return <><span className="font-medium">{userName}</span> unassigned <span className="font-medium">{oldValue}</span></>;
       return <><span className="font-medium">{userName}</span> reassigned from <span className="font-medium">{oldValue}</span> <ArrowRight className="inline h-3 w-3 mx-0.5" /> <span className="font-medium">{newValue}</span></>;
-    case "label_add":
+    case "tag_add":
       return <><span className="font-medium">{userName}</span> added tag <span className="font-medium">{newValue}</span></>;
-    case "label_remove":
+    case "tag_remove":
       return <><span className="font-medium">{userName}</span> removed tag <span className="font-medium">{oldValue}</span></>;
     case "title_change":
       return <><span className="font-medium">{userName}</span> renamed from &ldquo;{oldValue}&rdquo; to &ldquo;{newValue}&rdquo;</>;

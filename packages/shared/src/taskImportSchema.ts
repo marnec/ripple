@@ -50,9 +50,8 @@ const nullable = <T extends z.ZodTypeAny>(s: T) =>
  * type it — the template teaches `;` (no quoting needed) but rejecting the
  * comma silently imported whole tag lists as one tag.
  *
- * Note: the column is "tags" (user-facing terminology), but the underlying
- * task field is still named "labels" — that's the denormalized storage
- * that the central `tags` / `taskTags` tables sync from.
+ * The column lands in `tasks.tags`, the denormalized projection that the
+ * central `tags` / `taskTags` tables sync from.
  */
 export const taskImportRowSchema = z.object({
   title: z
@@ -103,7 +102,7 @@ export const taskImportRowsSchema = z.array(taskImportRowSchema);
 /**
  * Shape validation for an *already-parsed* row, i.e. the shape we persist
  * inside taskImportJobs.rows. The input schemas coerce strings → typed
- * values (labels becomes string[], estimate becomes number, blanks become
+ * values (tags becomes string[], estimate becomes number, blanks become
  * null), so re-running them on stored data would reject those typed values.
  *
  * This schema gives us a cheap structural re-check inside the workpool

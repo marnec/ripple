@@ -990,7 +990,7 @@ describe("integrations/core/syncIn.applyNormalizedEvent", () => {
 });
 
 describe("integrations/core/syncIn.applyNormalizedEvent — issue.labels_changed", () => {
-  it("creates tags + taskTags rows, patches tasks.labels, and mirrors externalLabels", async () => {
+  it("creates tags + taskTags rows, patches tasks.tags, and mirrors externalLabels", async () => {
     const t = createTestContext();
     const { workspaceId, projectId, link } = await setupInboundFixtures(t);
     await t.run((ctx) =>
@@ -1012,7 +1012,7 @@ describe("integrations/core/syncIn.applyNormalizedEvent — issue.labels_changed
         .withIndex("by_project", (q) => q.eq("projectId", projectId))
         .collect(),
     );
-    expect(task?.labels).toEqual(["bug", "good first issue"]);
+    expect(task?.tags).toEqual(["bug", "good first issue"]);
 
     const tagNames = await t.run(async (ctx) =>
       (
@@ -1075,7 +1075,7 @@ describe("integrations/core/syncIn.applyNormalizedEvent — issue.labels_changed
     expect(taskTagRows[0]?.tagName).toBe("bug");
   });
 
-  it("empty label set removes existing taskTags rows, clears tasks.labels, and clears externalLabels", async () => {
+  it("empty label set removes existing taskTags rows, clears tasks.tags, and clears externalLabels", async () => {
     const t = createTestContext();
     const { projectId, link } = await setupInboundFixtures(t);
     await t.run((ctx) =>
@@ -1109,7 +1109,7 @@ describe("integrations/core/syncIn.applyNormalizedEvent — issue.labels_changed
         .withIndex("by_project", (q) => q.eq("projectId", projectId))
         .collect(),
     );
-    expect(task?.labels).toEqual([]);
+    expect(task?.tags).toEqual([]);
 
     const taskTagRows = await t.run((ctx) =>
       ctx.db
@@ -1165,7 +1165,7 @@ describe("integrations/core/syncIn.applyNormalizedEvent — issue.labels_changed
         .withIndex("by_project", (q) => q.eq("projectId", projectId))
         .collect(),
     );
-    expect(task?.labels).toEqual(["bug"]);
+    expect(task?.tags).toEqual(["bug"]);
 
     const linkRow = await t.run((ctx) =>
       ctx.db
@@ -2149,7 +2149,7 @@ describe("integrations/core/syncIn — labels at creation", () => {
       return { task, taskLink, taskTags };
     });
 
-    expect(task?.labels).toEqual(["bug", "good first issue"]);
+    expect(task?.tags).toEqual(["bug", "good first issue"]);
     expect(taskTags.map((r) => r.tagName).sort()).toEqual(["bug", "good first issue"]);
     expect(taskLink?.externalLabels).toEqual(["bug", "good first issue"]);
   });
@@ -2189,7 +2189,7 @@ describe("integrations/core/syncIn — labels at creation", () => {
       const taskLink = await ctx.db.query("taskIntegrationLinks").withIndex("by_task", (q) => q.eq("taskId", task!._id)).unique();
       return { task, taskLink };
     });
-    expect(task?.labels ?? undefined).toBeUndefined();
+    expect(task?.tags ?? undefined).toBeUndefined();
     expect(taskLink?.externalLabels ?? undefined).toBeUndefined();
   });
 });

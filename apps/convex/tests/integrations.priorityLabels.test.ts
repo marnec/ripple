@@ -133,7 +133,7 @@ async function linkedTask(
     provider: "github" | "gitlab";
     map?: typeof MAP_STORED;
     priority: "urgent" | "high" | "medium" | "low";
-    labels: string[];
+    tags: string[];
     /** Omit to leave the task unlinked (create-issue tests). */
     externalLabels?: string[];
   },
@@ -157,7 +157,7 @@ async function linkedTask(
     });
     const taskId = await withTriggers(ctx).db.insert("tasks", {
       projectId, workspaceId, title: "Prio task", statusId, priority: opts.priority,
-      completed: false, creatorId: userId, labels: opts.labels,
+      completed: false, creatorId: userId, tags: opts.tags,
       ...(opts.externalLabels
         ? { externalRefs: [{ provider: opts.provider, repoFullName: "acme/web", issueNumber: 42, url: "https://x/42" }] }
         : {}),
@@ -207,7 +207,7 @@ describe("priority labels — outbound", () => {
     const t = createTestContext();
     const { asUser, taskId } = await linkedTask(t, {
       provider: "github", map: MAP_STORED, priority: "urgent",
-      labels: ["bug"], externalLabels: ["bug", "p0"],
+      tags: ["bug"], externalLabels: ["bug", "p0"],
     });
     const calls = stubProvider();
 
@@ -220,14 +220,14 @@ describe("priority labels — outbound", () => {
       { method: "DELETE", url: expect.stringContaining("/repos/acme/web/issues/42/labels/p0"), body: undefined },
     ]);
     expect((await readLink(t, taskId))?.externalLabels).toEqual(["bug", "p3"]);
-    expect((await t.run((ctx) => ctx.db.get(taskId)))?.labels).toEqual(["bug"]);
+    expect((await t.run((ctx) => ctx.db.get(taskId)))?.tags).toEqual(["bug"]);
   });
 
   it("GitLab: the same change goes out as one PUT with add_labels/remove_labels", async () => {
     const t = createTestContext();
     const { asUser, taskId } = await linkedTask(t, {
       provider: "gitlab", map: MAP_STORED, priority: "urgent",
-      labels: ["bug"], externalLabels: ["bug", "p0"],
+      tags: ["bug"], externalLabels: ["bug", "p0"],
     });
     const calls = stubProvider();
 
@@ -238,31 +238,31 @@ describe("priority labels — outbound", () => {
       { method: "PUT", url: expect.stringContaining("/issues/42"), body: { add_labels: "p3", remove_labels: "p0" } },
     ]);
     expect((await readLink(t, taskId))?.externalLabels).toEqual(["bug", "p3"]);
-    expect((await t.run((ctx) => ctx.db.get(taskId)))?.labels).toEqual(["bug"]);
+    expect((await t.run((ctx) => ctx.db.get(taskId)))?.tags).toEqual(["bug"]);
   });
 
   it("a tag edit pushes the tag change and leaves the priority label in place", async () => {
     const t = createTestContext();
     const { asUser, taskId } = await linkedTask(t, {
       provider: "github", map: MAP_STORED, priority: "urgent",
-      labels: ["bug"], externalLabels: ["bug", "p0"],
+      tags: ["bug"], externalLabels: ["bug", "p0"],
     });
     const calls = stubProvider();
 
-    await asUser.mutation(api.tasks.update, { taskId, labels: ["bug", "docs"] });
+    await asUser.mutation(api.tasks.update, { taskId, tags: ["bug", "docs"] });
     await t.finishAllScheduledFunctions(vi.runAllTimers);
 
     expect(calls).toEqual([
       { method: "POST", url: expect.stringContaining("/labels"), body: { labels: ["docs"] } },
     ]);
     expect((await readLink(t, taskId))?.externalLabels).toEqual(["bug", "docs", "p0"]);
-    expect((await t.run((ctx) => ctx.db.get(taskId)))?.labels).toEqual(["bug", "docs"]);
+    expect((await t.run((ctx) => ctx.db.get(taskId)))?.tags).toEqual(["bug", "docs"]);
   });
 
   it("creating an issue from a task sends its priority label with the tags; the link mirrors the sent set", async () => {
     const t = createTestContext();
     const { asUser, taskId, projectLinkId } = await linkedTask(t, {
-      provider: "github", map: MAP_STORED, priority: "high", labels: ["bug"],
+      provider: "github", map: MAP_STORED, priority: "high", tags: ["bug"],
     });
     const calls = stubProvider();
 
@@ -274,13 +274,13 @@ describe("priority labels — outbound", () => {
     expect(calls).toHaveLength(1);
     expect(calls[0].body?.labels).toEqual(["bug", "p1"]);
     expect((await readLink(t, taskId))?.externalLabels).toEqual(["bug", "p1"]);
-    expect((await t.run((ctx) => ctx.db.get(taskId)))?.labels).toEqual(["bug"]);
+    expect((await t.run((ctx) => ctx.db.get(taskId)))?.tags).toEqual(["bug"]);
   });
 
   it("a link without a map: a priority change enqueues nothing", async () => {
     const t = createTestContext();
     const { asUser, taskId } = await linkedTask(t, {
-      provider: "github", priority: "urgent", labels: ["bug"], externalLabels: ["bug"],
+      provider: "github", priority: "urgent", tags: ["bug"], externalLabels: ["bug"],
     });
     stubProvider();
 
@@ -374,7 +374,7 @@ describe("priority labels — inbound", () => {
 
     const { task, link: taskLink, joinTags, priorityChanges } = await taskState(t, projectId, asUser);
     expect(task.priority).toBe("high");
-    expect(task.labels).toEqual(["bug"]);
+    expect(task.tags).toEqual(["bug"]);
     expect(joinTags).toEqual(["bug"]);
     expect(taskLink?.externalLabels).toEqual(["bug", "p1"]);
     expect(priorityChanges).toHaveLength(1);
@@ -393,7 +393,7 @@ describe("priority labels — inbound", () => {
     await t.run((ctx) => applyNormalizedEvent(ctx, { event: opened({ labels: ["p0", "bug"] }), link }));
     const urgent = await taskState(t, projectId, asUser);
     expect(urgent.task.priority).toBe("urgent");
-    expect(urgent.task.labels).toEqual(["bug"]);
+    expect(urgent.task.tags).toEqual(["bug"]);
     expect(urgent.joinTags).toEqual(["bug"]);
     expect(urgent.link?.externalLabels).toEqual(["p0", "bug"]);
 
@@ -414,7 +414,7 @@ describe("priority labels — inbound", () => {
 
     const { task } = await taskState(t, projectId, asUser);
     expect(task.priority).toBe("high");
-    expect(task.labels).toEqual([]);
+    expect(task.tags).toEqual([]);
   });
 
   it("removing the mapped label upstream changes tags only; the priority stays", async () => {
@@ -427,7 +427,7 @@ describe("priority labels — inbound", () => {
 
     const { task, link: taskLink, priorityChanges } = await taskState(t, projectId, asUser);
     expect(task.priority).toBe("high");
-    expect(task.labels).toEqual(["bug", "docs"]);
+    expect(task.tags).toEqual(["bug", "docs"]);
     expect(taskLink?.externalLabels).toEqual(["bug", "docs"]);
     expect(priorityChanges).toHaveLength(1);
   });
@@ -461,7 +461,7 @@ describe("priority labels — inbound", () => {
 
     const { task, joinTags, priorityChanges } = await taskState(t, projectId, asUser);
     expect(task.priority).toBe("medium");
-    expect(task.labels).toEqual(["p0", "p1"]);
+    expect(task.tags).toEqual(["p0", "p1"]);
     expect(joinTags).toEqual(["p0", "p1"]);
     expect(priorityChanges).toHaveLength(0);
   });

@@ -246,9 +246,9 @@ describe("taskImports.runImport (end-to-end)", () => {
     const titles = tasks.map((t) => t.title).sort();
     expect(titles).toEqual(["First", "Second"]);
     // The mutation receives raw CSV cells and owns the transform: a "a;b"
-    // tags cell has to reach the task as a labels array, not a string.
+    // tags cell has to reach the task as a tags array, not a string.
     const first = tasks.find((t) => t.title === "First");
-    expect(first?.labels).toEqual(["alpha", "beta"]);
+    expect(first?.tags).toEqual(["alpha", "beta"]);
     expect(first?.priority).toBe("high");
     for (const task of tasks) {
       expect(task.importJobId).toBe(jobId);

@@ -984,7 +984,6 @@ export declare const api: {
         }>;
         hasBlockers: boolean;
         importJobId?: Id<"taskImportJobs">;
-        labels?: Array<string>;
         number?: number;
         plannedStartDate?: string;
         position?: string;
@@ -1007,6 +1006,7 @@ export declare const api: {
           setsStartDate?: boolean;
         } | null;
         statusId: Id<"taskStatuses">;
+        tags?: Array<string>;
         title: string;
         workPeriods?: Array<{ completedAt?: number; startedAt: number }>;
         workspaceId: Id<"workspaces">;
@@ -3264,7 +3264,6 @@ export declare const api: {
         }>;
         hasBlockers: boolean;
         importJobId?: Id<"taskImportJobs">;
-        labels?: Array<string>;
         number?: number;
         plannedStartDate?: string;
         position?: string;
@@ -3287,6 +3286,7 @@ export declare const api: {
           setsStartDate?: boolean;
         } | null;
         statusId: Id<"taskStatuses">;
+        tags?: Array<string>;
         title: string;
         workPeriods?: Array<{ completedAt?: number; startedAt: number }>;
         workspaceId: Id<"workspaces">;
@@ -3302,12 +3302,12 @@ export declare const api: {
         assigneeId?: Id<"users">;
         dueDate?: string;
         estimate?: number;
-        labels?: Array<string>;
         plannedStartDate?: string;
         position?: string;
         priority?: "urgent" | "high" | "medium" | "low";
         projectId: Id<"projects">;
         statusId?: Id<"taskStatuses">;
+        tags?: Array<string>;
         title: string;
         workspaceId: Id<"workspaces">;
       },
@@ -3376,7 +3376,6 @@ export declare const api: {
         }>;
         hasBlockers: boolean;
         importJobId?: Id<"taskImportJobs">;
-        labels?: Array<string>;
         number?: number;
         plannedStartDate?: string;
         position?: string;
@@ -3399,6 +3398,7 @@ export declare const api: {
           setsStartDate?: boolean;
         } | null;
         statusId: Id<"taskStatuses">;
+        tags?: Array<string>;
         title: string;
         workPeriods?: Array<{ completedAt?: number; startedAt: number }>;
         workspaceId: Id<"workspaces">;
@@ -3467,7 +3467,6 @@ export declare const api: {
           url: string;
         }>;
         importJobId?: Id<"taskImportJobs">;
-        labels?: Array<string>;
         number?: number;
         plannedStartDate?: string;
         position?: string;
@@ -3501,6 +3500,7 @@ export declare const api: {
           setsStartDate?: boolean;
         } | null;
         statusId: Id<"taskStatuses">;
+        tags?: Array<string>;
         title: string;
         workPeriods?: Array<{ completedAt?: number; startedAt: number }>;
         workspaceId: Id<"workspaces">;
@@ -3564,7 +3564,6 @@ export declare const api: {
         }>;
         hasBlockers: boolean;
         importJobId?: Id<"taskImportJobs">;
-        labels?: Array<string>;
         number?: number;
         plannedStartDate?: string;
         position?: string;
@@ -3587,6 +3586,7 @@ export declare const api: {
           setsStartDate?: boolean;
         } | null;
         statusId: Id<"taskStatuses">;
+        tags?: Array<string>;
         title: string;
         workPeriods?: Array<{ completedAt?: number; startedAt: number }>;
         workspaceId: Id<"workspaces">;
@@ -3666,7 +3666,6 @@ export declare const api: {
           }>;
           hasBlockers: boolean;
           importJobId?: Id<"taskImportJobs">;
-          labels?: Array<string>;
           number?: number;
           plannedStartDate?: string;
           position?: string;
@@ -3689,6 +3688,7 @@ export declare const api: {
             setsStartDate?: boolean;
           } | null;
           statusId: Id<"taskStatuses">;
+          tags?: Array<string>;
           title: string;
           workPeriods?: Array<{ completedAt?: number; startedAt: number }>;
           workspaceId: Id<"workspaces">;
@@ -3766,11 +3766,11 @@ export declare const api: {
         assigneeId?: Id<"users"> | null;
         dueDate?: string | null;
         estimate?: number | null;
-        labels?: Array<string>;
         plannedStartDate?: string | null;
         position?: string;
         priority?: "urgent" | "high" | "medium" | "low";
         statusId?: Id<"taskStatuses">;
+        tags?: Array<string>;
         taskId: Id<"tasks">;
         title?: string;
       },
@@ -6430,6 +6430,12 @@ export declare const internal: {
         scanned: number;
       }
     >;
+    migrateAuditLabelVerbs: FunctionReference<
+      "mutation",
+      "internal",
+      { cursor?: string },
+      null
+    >;
     migrateChannelIsPublicToType: FunctionReference<
       "mutation",
       "internal",
@@ -6445,6 +6451,20 @@ export declare const internal: {
       any
     >;
     migrateChannelLastReadAtToUserChannelState: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        batchSize?: number;
+        cursor?: string | null;
+        dryRun?: boolean;
+        fn?: string;
+        next?: Array<string>;
+        oneBatchOnly?: boolean;
+        reset?: boolean;
+      },
+      any
+    >;
+    migrateTaskLabelsToTags: FunctionReference<
       "mutation",
       "internal",
       {

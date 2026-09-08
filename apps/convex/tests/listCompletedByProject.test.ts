@@ -32,7 +32,7 @@ async function createCompleted(
   doneId: Id<"taskStatuses">,
   args: {
     title: string;
-    labels?: string[];
+    tags?: string[];
     assigneeId?: Id<"users">;
     priority?: "urgent" | "high" | "medium" | "low";
     dueDate?: string;
@@ -42,7 +42,7 @@ async function createCompleted(
   const taskId = await asUser.mutation(api.tasks.create, {
     projectId, workspaceId,
     title: args.title,
-    labels: args.labels,
+    tags: args.tags,
     assigneeId: args.assigneeId,
     priority: args.priority,
     dueDate: args.dueDate,
@@ -124,7 +124,7 @@ describe("listCompletedByProject — tag filter", () => {
     const { workspaceId, userId, asUser } = await setupWorkspaceWithAdmin(t);
     const { projectId, doneId } = await setupProject(t, { workspaceId, userId });
 
-    const tagged = await createCompleted(asUser, workspaceId, projectId, doneId, { title: "x", labels: ["bug"] });
+    const tagged = await createCompleted(asUser, workspaceId, projectId, doneId, { title: "x", tags: ["bug"] });
     await createCompleted(asUser, workspaceId, projectId, doneId, { title: "y" });
 
     const result = await asUser.query(api.tasks.listCompletedByProject, {
@@ -139,8 +139,8 @@ describe("listCompletedByProject — tag filter", () => {
     const { workspaceId, userId, asUser } = await setupWorkspaceWithAdmin(t);
     const { projectId, doneId } = await setupProject(t, { workspaceId, userId });
 
-    const a = await createCompleted(asUser, workspaceId, projectId, doneId, { title: "a", labels: ["bug"], dueDate: "2026-03-01" });
-    const b = await createCompleted(asUser, workspaceId, projectId, doneId, { title: "b", labels: ["bug"], dueDate: "2026-05-01" });
+    const a = await createCompleted(asUser, workspaceId, projectId, doneId, { title: "a", tags: ["bug"], dueDate: "2026-03-01" });
+    const b = await createCompleted(asUser, workspaceId, projectId, doneId, { title: "b", tags: ["bug"], dueDate: "2026-05-01" });
 
     const result = await asUser.query(api.tasks.listCompletedByProject, {
       projectId, paginationOpts: PAGE_OPTS,
@@ -153,7 +153,7 @@ describe("listCompletedByProject — tag filter", () => {
     const t = createTestContext();
     const { workspaceId, userId, asUser } = await setupWorkspaceWithAdmin(t);
     const { projectId, doneId } = await setupProject(t, { workspaceId, userId });
-    await createCompleted(asUser, workspaceId, projectId, doneId, { title: "x", labels: ["bug"] });
+    await createCompleted(asUser, workspaceId, projectId, doneId, { title: "x", tags: ["bug"] });
 
     const result = await asUser.query(api.tasks.listCompletedByProject, {
       projectId, paginationOpts: PAGE_OPTS,
@@ -169,8 +169,8 @@ describe("listCompletedByProject — tag filter", () => {
     const { projectId: pA, doneId: doneA } = await setupProject(t, { workspaceId, userId, name: "A", key: "A" });
     const { projectId: pB, doneId: doneB } = await setupProject(t, { workspaceId, userId, name: "B", key: "B" });
 
-    const inA = await createCompleted(asUser, workspaceId, pA, doneA, { title: "a", labels: ["shared"] });
-    await createCompleted(asUser, workspaceId, pB, doneB, { title: "b", labels: ["shared"] });
+    const inA = await createCompleted(asUser, workspaceId, pA, doneA, { title: "a", tags: ["shared"] });
+    await createCompleted(asUser, workspaceId, pB, doneB, { title: "b", tags: ["shared"] });
 
     const result = await asUser.query(api.tasks.listCompletedByProject, {
       projectId: pA, paginationOpts: PAGE_OPTS,
@@ -271,7 +271,7 @@ describe("listCompletedByProject — completion sync via trigger", () => {
     const { projectId, todoId, doneId } = await setupProject(t, { workspaceId, userId });
 
     const taskId = await asUser.mutation(api.tasks.create, {
-      projectId, workspaceId, title: "x", labels: ["bug"],
+      projectId, workspaceId, title: "x", tags: ["bug"],
     });
     // Active by default → not visible in completed query.
     let result = await asUser.query(api.tasks.listCompletedByProject, {

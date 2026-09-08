@@ -742,7 +742,7 @@ describe("integrations/core/outboundDispatch.maybeEnqueueLabelsPush", () => {
         priority: "medium",
         completed: false,
         creatorId: botUserId,
-        labels: taskLabels,
+        tags: taskLabels,
         externalRefs: [
           {
             provider: "github",
@@ -779,7 +779,7 @@ describe("integrations/core/outboundDispatch.maybeEnqueueLabelsPush", () => {
     return link?.lastSyncError;
   }
 
-  it("schedules the label push when task.labels has additions over externalLabels", async () => {
+  it("schedules the label push when task.tags has additions over externalLabels", async () => {
     const t = createTestContext();
     const { taskId, linkId } = await setupLinkedTask(t, {
       taskLabels: ["bug"],
@@ -794,7 +794,7 @@ describe("integrations/core/outboundDispatch.maybeEnqueueLabelsPush", () => {
     expect(err?.message).toMatch(/credentials not configured/i);
   });
 
-  it("schedules the label push when task.labels has removals from externalLabels", async () => {
+  it("schedules the label push when task.tags has removals from externalLabels", async () => {
     const t = createTestContext();
     const { taskId, linkId } = await setupLinkedTask(t, {
       taskLabels: [],
