@@ -494,7 +494,10 @@ export default defineSchema({
     // keeps the `tags` dictionary and the `taskTags` join in step with it.
     tags: v.optional(v.array(v.string())),
     // `labels` (the column's previous name) was dropped here —
-    // migrateTaskLabelsToTags (runAll) moved it across.
+    // migrateTaskLabelsToTags (runAll) moved it across. Re-declare it
+    // `v.optional(v.array(v.string()))` if a deployment still holding the
+    // column ever needs to accept a push again — Convex validates existing
+    // documents on schema push, so the narrow cannot land before the drain.
     completed: v.boolean(), // denormalized from status.isCompleted for efficient filtering
     creatorId: v.id("users"), // who created the task
     position: v.optional(v.string()), // fractional index for ordering within status column

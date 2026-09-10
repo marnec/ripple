@@ -6,6 +6,7 @@ import { v } from "convex/values";
 import { auditLog } from "./auditLog.js";
 import { cascadeDelete } from "./cascadeDelete.js";
 import { extractMessageTargets } from "./utils/blocknote.js";
+import { normalizeTagList } from "./tagSync.js";
 import {
   BROADCAST_WORKSPACE_CATEGORIES,
   BROADCAST_CHANNEL_CATEGORIES,
@@ -471,21 +472,75 @@ export const migrateAuditActionPrefix = internalMutation({
 });
 
 /**
- * `tasks.labels` → `tasks.tags`. The column was the one place the product's
- * "tags" vocabulary still said "labels" (a leftover from when the field was
- * modelled on GitHub's). Copies the array across — an existing `tags` value
- * wins, since it was written after the rename — and clears the legacy column.
- * Idempotent: a row without `labels` is skipped.
+ * Move the retired `tasks.labels` column into `tasks.tags`.
+ *
+ * Widen-migrate-narrow: `labels` stays declared on `tasks` for one release so
+ * this can run, and is dropped in the release after. Push the narrow before
+ * this has run on a deployment and the *push itself* fails — Convex validates
+ * existing documents against the new schema — so the column has to be widened
+ * back temporarily to unwedge such a deployment.
+ *
+ * Moving the column is only half the job. `tasks.tags` is a denormalized
+ * projection; the `tags` dictionary and the `taskTags` join are what the
+ * tag-filtered board queries actually partition on, and the migrations
+ * component writes through the raw db, so no trigger fills them in. A task
+ * migrated without them keeps the tags on its card and disappears from every
+ * tag-filtered board — the same failure `backfillTagsForResourceRow` exists to
+ * prevent for documents/diagrams/spreadsheets.
+ *
+ * Idempotent, which matters because `runAll` executes on every deploy: both
+ * the dictionary row and the join row are get-or-create.
  */
 export const migrateTaskLabelsToTags = migrations.define({
   table: "tasks",
   migrateOne: async (ctx, task) => {
     const legacy = task as Record<string, unknown>;
     if (legacy.labels === undefined) return;
-    await ctx.db.patch(task._id, {
-      tags: task.tags ?? (legacy.labels as string[]),
-      labels: undefined,
-    } as never);
+
+    // `tags` wins when a row somehow carries both — it went through the new
+    // write path, so it is the newer truth.
+    const names = task.tags ?? normalizeTagList(legacy.labels as string[]);
+
+    await ctx.db.patch(task._id, { tags: names, labels: undefined } as never);
+
+    const existingJoins = await ctx.db
+      .query("taskTags")
+      .withIndex("by_task", (q) => q.eq("taskId", task._id))
+      .collect();
+    const joined = new Set(existingJoins.map((tt) => tt.tagName));
+
+    for (const name of names) {
+      if (joined.has(name)) continue;
+
+      const tag = await ctx.db
+        .query("tags")
+        .withIndex("by_workspace_name", (q) =>
+          q.eq("workspaceId", task.workspaceId).eq("name", name),
+        )
+        .unique();
+
+      // A retired dictionary row is mid-drain: a join created against it now
+      // would outlive it. `syncTaskTags` throws here, but a migration that
+      // throws wedges `runAll` for every later row, so this one skips the name
+      // instead — the drain is deleting that tag anyway.
+      if (tag?.pendingDeletion) continue;
+
+      const tagId: Id<"tags"> =
+        tag?._id ??
+        (await ctx.db.insert("tags", { workspaceId: task.workspaceId, name }));
+
+      await ctx.db.insert("taskTags", {
+        workspaceId: task.workspaceId,
+        projectId: task.projectId,
+        taskId: task._id,
+        tagId,
+        tagName: name,
+        completed: task.completed,
+        dueDate: task.dueDate,
+        plannedStartDate: task.plannedStartDate,
+        assigneeId: task.assigneeId,
+      });
+    }
   },
 });
 

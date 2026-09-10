@@ -15,8 +15,15 @@ import { ChannelKind, ChannelVisibility } from "@ripple/shared/enums";
 
 const modules = import.meta.glob("../convex/**/*.ts");
 
-export function createTestContext() {
-  const t = convexTest(schema, modules);
+/**
+ * `schemaOverride` exists for the migration tests. A migration's whole job is
+ * to drain a column the schema no longer declares, and convex-test validates
+ * writes, so the legacy row cannot be seeded against the real schema — the
+ * caller passes a widened clone (see `tests/migrations.labelsToTags.test.ts`).
+ * Everything else takes the default.
+ */
+export function createTestContext(schemaOverride: typeof schema = schema) {
+  const t = convexTest(schemaOverride, modules);
   actionRetrierComponent.register(t as any);
   auditLogComponent.register(t as any);
   cascadingDeleteComponent.register(t as any);
