@@ -8,12 +8,23 @@
  * nothing else — which is exactly what these tests hand it.
  */
 
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { api, internal } from "../convex/_generated/api";
 import { EMAIL_RSVP_DOMAIN } from "@ripple/shared/constants";
 import { createTestContext, setupWorkspaceWithAdmin } from "./helpers";
 
 type T = ReturnType<typeof createTestContext>;
+
+/**
+ * Where the clock starts: the week before the first Tuesday.
+ *
+ * The staleness case below skips an occurrence to bump the series' SEQUENCE,
+ * and a skip only re-issues the pattern when the occurrence is still ahead.
+ * The dates here are absolute, so an unpinned clock stopped bumping anything
+ * once the wall clock reached September 2026 — and the stale reply was then
+ * accepted as current.
+ */
+const BEFORE_THE_FIRST_TUESDAY = Date.parse("2026-08-25T00:00:00Z");
 
 const WEEKLY_STANDUP = {
   title: "Standup",
@@ -55,7 +66,12 @@ async function guestStatus({ seriesId, asUser }: Seeded) {
 describe("a guest's emailed reply to a series", () => {
   let t: T;
   beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(BEFORE_THE_FIRST_TUESDAY);
     t = createTestContext();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it("answers the whole series, not one occurrence of it", async () => {

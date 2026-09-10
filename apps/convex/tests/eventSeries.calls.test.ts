@@ -60,11 +60,27 @@ const WEEKLY_STANDUP = {
 const FIRST_OCCURRENCE = Date.parse("2026-09-01T07:00:00Z");
 const SECOND_OCCURRENCE = Date.parse("2026-09-08T07:00:00Z");
 
+/**
+ * Where the clock starts: the week before the standup's first Tuesday.
+ *
+ * Pinning it is not decoration. The occurrences above are absolute instants,
+ * so once the wall clock reaches September 2026 an unpinned `useFakeTimers`
+ * leaves `makeStandup` running at a "now" *after* them — and the
+ * `setSystemTime(FIRST_OCCURRENCE)` below then rewinds time, which convex-test
+ * cannot follow: it keeps `_creationTime` monotonic, so the session row a join
+ * writes is stamped with the later setup instant and reads as seconds old
+ * forever. Every subsequent joiner lands inside `SESSION_JOIN_GRACE_MS` and
+ * reuses the first call's meeting, and the "one session per occurrence"
+ * assertions here quietly stop testing anything.
+ */
+const BEFORE_THE_SERIES_BEGINS = Date.parse("2026-08-25T00:00:00Z");
+
 beforeEach(() => {
   vi.clearAllMocks();
   rtkCreateMeeting.mockImplementation(() => Promise.resolve({ id: "meeting-1" }));
   rtkGetLiveParticipants.mockImplementation(() => Promise.resolve<number | null>(1));
   vi.useFakeTimers();
+  vi.setSystemTime(BEFORE_THE_SERIES_BEGINS);
 });
 afterEach(() => vi.useRealTimers());
 

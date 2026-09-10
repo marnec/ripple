@@ -28,6 +28,18 @@ vi.mock("resend", () => ({
   },
 }));
 
+/**
+ * Where every clock in this file starts: the week before the first Tuesday.
+ *
+ * The dates below are absolute instants, and half of what is asserted here
+ * turns on whether the occurrence an edit touches is still ahead — an
+ * organizer tidying up meetings that already happened mails nobody, by design
+ * (see the last describe, which sets the clock forward to prove exactly that).
+ * Left unpinned, these tests stopped meaning what they say the moment the wall
+ * clock reached September 2026.
+ */
+const BEFORE_THE_FIRST_TUESDAY = Date.parse("2026-08-25T00:00:00Z");
+
 /** Tuesday 1 September 2026, 09:00–09:30 Rome. */
 const WEEKLY_STANDUP = {
   title: "Standup",
@@ -69,6 +81,7 @@ describe("a guest invited to a series", () => {
   let t: T;
   beforeEach(() => {
     vi.useFakeTimers();
+    vi.setSystemTime(BEFORE_THE_FIRST_TUESDAY);
     sendEmail.mockReset();
     sendEmail.mockResolvedValue({ data: { id: "resend-1" }, error: null });
     process.env.AUTH_RESEND_KEY = "re_test_key";
@@ -109,6 +122,7 @@ describe("splitting a series with \"this and following\"", () => {
   let t: T;
   beforeEach(() => {
     vi.useFakeTimers();
+    vi.setSystemTime(BEFORE_THE_FIRST_TUESDAY);
     sendEmail.mockReset();
     sendEmail.mockResolvedValue({ data: { id: "resend-1" }, error: null });
     process.env.AUTH_RESEND_KEY = "re_test_key";
@@ -154,6 +168,7 @@ describe("the sequence counter a guest's client dedupes on", () => {
   let t: T;
   beforeEach(() => {
     vi.useFakeTimers();
+    vi.setSystemTime(BEFORE_THE_FIRST_TUESDAY);
     sendEmail.mockReset();
     sendEmail.mockResolvedValue({ data: { id: "resend-1" }, error: null });
     process.env.AUTH_RESEND_KEY = "re_test_key";
@@ -315,6 +330,7 @@ describe("a change that is not being announced", () => {
   let t: T;
   beforeEach(() => {
     vi.useFakeTimers();
+    vi.setSystemTime(BEFORE_THE_FIRST_TUESDAY);
     sendEmail.mockReset();
     sendEmail.mockResolvedValue({ data: { id: "resend-1" }, error: null });
     process.env.AUTH_RESEND_KEY = "re_test_key";

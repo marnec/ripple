@@ -29,6 +29,17 @@ vi.mock("resend", () => ({
   },
 }));
 
+/**
+ * Where the clock starts: the week before the first Tuesday.
+ *
+ * Both routes here are asserted to *mail the guest*, and neither does when the
+ * occurrence being skipped has already happened — a cancellation of the past
+ * is housekeeping, not news. The dates below are absolute, so without this pin
+ * the whole file inverted its own premise once the wall clock reached
+ * September 2026.
+ */
+const BEFORE_THE_FIRST_TUESDAY = Date.parse("2026-08-25T00:00:00Z");
+
 /** Tuesday 1 September 2026, 09:00–09:30 Rome, weekly, no end. */
 const WEEKLY_STANDUP = {
   title: "Standup",
@@ -56,6 +67,7 @@ describe("cancelling one occurrence reaches the roster by either route", () => {
   let t: T;
   beforeEach(() => {
     vi.useFakeTimers();
+    vi.setSystemTime(BEFORE_THE_FIRST_TUESDAY);
     sendEmail.mockReset();
     sendEmail.mockResolvedValue({ data: { id: "resend-1" }, error: null });
     process.env.AUTH_RESEND_KEY = "re_test_key";
