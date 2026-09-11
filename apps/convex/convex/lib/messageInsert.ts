@@ -80,6 +80,15 @@ export async function insertMessage(
     });
   }
 
+  // A bot's message does not buzz the channel. The assistant answers a
+  // mention its asker is already watching — the channel shows it writing —
+  // and an integration bot posts on a schedule nobody is waiting on. Pushing
+  // "new channel message" for those turns every automated line into a
+  // notification, which is the reason people switch the channel off entirely.
+  // The mention push above still fires: a bot that names a person is telling
+  // that person something.
+  if (author.isBot) return messageId;
+
   await notify(ctx, {
     category: "chatChannelMessage",
     userId: author._id,

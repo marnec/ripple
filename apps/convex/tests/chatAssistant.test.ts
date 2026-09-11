@@ -10,6 +10,7 @@ import {
   setupAuthenticatedUser,
   setupWorkspaceWithAdmin,
 } from "./helpers";
+import { deliveredPushes, resetDeliveredPushes } from "./pushProbe";
 
 /**
  * The workspace assistant answers when @-mentioned in chat — and only then,
@@ -39,6 +40,13 @@ vi.mock("@ai-sdk/azure", () => {
   };
 });
 
+// Push delivery goes through `notificationPool`, so the observable is what
+// reached the web-push helpers after the pool drains — see `pushProbe.ts`.
+vi.mock("../convex/utils/sendPushToUsers", async () => {
+  const probe = await import("./pushProbe");
+  return probe.pushDeliveryMock();
+});
+
 const REPLY_MARKDOWN = "The standup is at **10:00**.\n\nBring coffee.";
 
 type MockLanguageModel = ReturnType<typeof mockModel> & {
@@ -55,6 +63,7 @@ const AI_ENV = ["AZURE_API_KEY", "AZURE_RESOURCE_NAME", "AZURE_OPENAI_DEPLOYMENT
 let savedEnv: Record<string, string | undefined>;
 beforeEach(() => {
   vi.useFakeTimers();
+  resetDeliveredPushes();
   savedEnv = Object.fromEntries(AI_ENV.map((key) => [key, process.env[key]]));
   for (const key of AI_ENV) process.env[key] = `test-${key}`;
   installModel();
@@ -329,6 +338,61 @@ describe("a mention of the assistant", () => {
 
     const messages = await channelMessages(t, closedId);
     expect(messages.map((m) => m.userId)).toEqual([userId, botUserId]);
+  });
+});
+
+describe("the reply and push notifications", () => {
+  /**
+   * The reply is a `messages` row like any other, and every message broadcasts
+   * "new channel message" to the channel's subscribers. Without a guard that
+   * made each assistant answer buzz the person who asked it — who is watching
+   * the channel show the assistant writing — and everyone else subscribed.
+   * A bot's message is not pushed as channel traffic.
+   */
+  it("does not push the bot's answer to the channel", async () => {
+    const t = createTestContext();
+    const { asUser, channelId, botUserId, userId, workspaceId } =
+      await setupAssistantWorkspace(t);
+    // The fixture inserts the channel raw, past the trigger that materializes
+    // subscriptions, so the asker's "new channel message" row is seeded here.
+    // A colleague proves the row is live: their message reaches the asker.
+    await t.run((ctx) =>
+      ctx.db.insert("notificationSubscriptions", {
+        workspaceId,
+        userId,
+        category: "chatChannelMessage",
+        scope: channelId as string,
+      }),
+    );
+    const { userId: colleagueId, asUser: asColleague } = await setupAuthenticatedUser(t, {
+      name: "Colleague",
+      email: "colleague@example.com",
+    });
+    await t.run((ctx) =>
+      ctx.db.insert("workspaceMembers", {
+        userId: colleagueId,
+        workspaceId,
+        role: WorkspaceRole.MEMBER,
+      }),
+    );
+    await drain(t);
+
+    await send(asColleague, channelId, "morning all");
+    await drain(t);
+    expect(deliveredPushes.flatMap((p) => p.recipientIds)).toContain(userId);
+    resetDeliveredPushes();
+
+    await send(asUser, channelId, "when is the standup?", botUserId);
+    await drain(t);
+
+    const messages = await channelMessages(t, channelId);
+    expect(messages.some((m) => m.userId === botUserId)).toBe(true);
+
+    // Nothing is pushed for the reply — not to the asker, not to anyone.
+    const fromBot = deliveredPushes.filter((p) => p.title === "Assistant");
+    expect(fromBot).toEqual([]);
+    const toAsker = deliveredPushes.filter((p) => p.recipientIds.includes(userId));
+    expect(toAsker).toEqual([]);
   });
 });
 
