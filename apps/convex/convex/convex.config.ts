@@ -1,4 +1,5 @@
 import { defineApp } from "convex/server";
+import agent from "@convex-dev/agent/convex.config";
 import aggregate from "@convex-dev/aggregate/convex.config";
 import actionRetrier from "@convex-dev/action-retrier/convex.config";
 import auditLog from "convex-audit-log/convex.config.js";
@@ -12,6 +13,7 @@ import workpool from "@convex-dev/workpool/convex.config";
 const app = defineApp();
 
 app.use(actionRetrier);
+app.use(agent);
 app.use(auditLog);
 app.use(cascadingDelete);
 app.use(migrations);
@@ -24,6 +26,7 @@ app.use(workpool, { name: "subscriptionPool" });
 app.use(workpool, { name: "taskReassignPool" });
 app.use(workpool, { name: "taskImportPool" });
 app.use(workpool, { name: "transcriptPool" });
+app.use(workpool, { name: "aiPool" });
 
 // Workspace resource count aggregates (O(log n) counts per workspace)
 app.use(aggregate, { name: "documentsByWorkspace" });

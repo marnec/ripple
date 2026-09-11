@@ -4,6 +4,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
+import { AssistantAvatar } from "@/components/AssistantAvatar";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { UserAvatar } from "@/components/UserAvatar";
 import { useViewer } from "@/pages/App/UserContext";
@@ -18,6 +19,8 @@ interface UserMentionChipProps {
    * click has to place the caret rather than navigate away mid-sentence.
    */
   interactive?: boolean;
+  /** The workspace assistant: wears the Ripple mark instead of initials. */
+  isBot?: boolean;
 }
 
 /**
@@ -47,6 +50,7 @@ export function UserMentionChip({
   name,
   image,
   interactive = true,
+  isBot = false,
 }: UserMentionChipProps) {
   const viewer = useViewer();
   const navigate = useNavigate();
@@ -67,16 +71,20 @@ export function UserMentionChip({
 
   const body = (
     <>
-      <UserAvatar
-        name={name}
-        image={image}
-        alt={name}
-        className="h-4 w-4 text-[8px]"
-        fallbackClassName={cn(
-          "text-[8px] font-semibold",
-          isSelf ? "bg-background/25 text-background" : "bg-foreground/15",
-        )}
-      />
+      {isBot ? (
+        <AssistantAvatar name={name} className="h-4 w-4" />
+      ) : (
+        <UserAvatar
+          name={name}
+          image={image}
+          alt={name}
+          className="h-4 w-4 text-[8px]"
+          fallbackClassName={cn(
+            "text-[8px] font-semibold",
+            isSelf ? "bg-background/25 text-background" : "bg-foreground/15",
+          )}
+        />
+      )}
       <span className="truncate">{name}</span>
     </>
   );

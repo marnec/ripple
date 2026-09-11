@@ -13,6 +13,8 @@ import { requireChannelAccess, filterChannelRecipients } from "./authHelpers";
 import { groupReactions, reactionGroupValidator } from "./messageReactions";
 import { notify } from "./utils/notify";
 import { normalizeIds } from "./utils/ids";
+import { insertMessage } from "./lib/messageInsert";
+import { scheduleAssistantReply } from "./chatAssistant";
 
 /**
  * Ceiling on the caller-supplied row counts of `search` and
@@ -31,6 +33,8 @@ const MESSAGE_READ_MAX = 50;
 const mentionedUsersValidator = v.record(v.string(), v.object({
   name: v.union(v.string(), v.null()),
   image: v.optional(v.string()),
+  // So the chip knows not to offer a conversation with the assistant.
+  isBot: v.optional(v.boolean()),
 }));
 const mentionedTasksValidator = v.record(v.string(), v.object({
   title: v.string(),
@@ -64,6 +68,7 @@ const enrichedMessageValidator = v.object({
   replyToId: v.optional(v.id("messages")),
   author: v.string(),
   authorImage: v.optional(v.string()),
+  authorIsBot: v.optional(v.boolean()),
   replyTo: v.union(v.null(), v.object({ author: v.string(), plainText: v.string(), deleted: v.boolean(), imageUrl: v.optional(v.string()) })),
   mentionedUsers: mentionedUsersValidator,
   mentionedTasks: mentionedTasksValidator,
@@ -118,7 +123,7 @@ async function enrichWithMentionedUsers<T extends { body: string }>(
   ctx: { db: DatabaseReader },
   messages: T[],
   userMap: Map<string, Doc<"users"> | null>,
-): Promise<(T & { mentionedUsers: Record<string, { name: string | null; image?: string }> })[]> {
+): Promise<(T & { mentionedUsers: Record<string, { name: string | null; image?: string; isBot?: boolean }> })[]> {
   // Collect all mentioned user IDs across all message bodies
   const allMentionedIds = new Set<string>();
   for (const msg of messages) {
@@ -143,11 +148,11 @@ async function enrichWithMentionedUsers<T extends { body: string }>(
   // Build per-message mentionedUsers record
   return messages.map(msg => {
     const mentionedIds = extractMentionedUserIds(msg.body);
-    const mentionedUsers: Record<string, { name: string | null; image?: string }> = {};
+    const mentionedUsers: Record<string, { name: string | null; image?: string; isBot?: boolean }> = {};
     for (const id of mentionedIds) {
       const u = userMap.get(id);
       if (u) {
-        mentionedUsers[id] = { name: u.name ?? null, image: u.image };
+        mentionedUsers[id] = { name: u.name ?? null, image: u.image, isBot: u.isBot };
       }
     }
     return { ...msg, mentionedUsers };
@@ -576,7 +581,7 @@ export const list = query({
     // Add the author's name and image to each message
     const messagesWithAuthor = messagesPage.page.map((message) => {
       const user = userMap.get(message.userId);
-      return { ...message, author: getUserDisplayName(user), authorImage: user?.image };
+      return { ...message, author: getUserDisplayName(user), authorImage: user?.image, authorIsBot: user?.isBot };
     });
 
     const page = await enrichMessages(ctx, messagesWithAuthor, userMap, channel.workspaceId, userId);
@@ -587,95 +592,6 @@ export const list = query({
     };
   },
 });
-
-/**
- * The text a push notification shows for a message, read out of its body.
- *
- * `body` and `plainText` are independent args on `send` — the client composes
- * both and nothing makes them agree — so taking the notification from
- * `plainText` lets a sender put one thing in the channel and a different thing
- * on every recipient's lock screen. Everything here comes from `body`, resolved
- * through the same name maps `enrichWithReplyTo` builds so the preview reads
- * "@Alice" rather than "@user".
- *
- * A snapshot-only message has no text at all; its label is the diagram name the
- * composer wrote onto the image block, which is part of `body` too — so the
- * empty case doesn't have to fall back to the untrusted arg.
- *
- * The `workspaceId` comparisons are the same guard the read path carries: this
- * is the one place a foreign name escapes the app entirely, onto a lock screen,
- * so a project or event the sender pasted from another tenant renders as the
- * raw mention rather than its title.
- */
-async function pushTextFromBody(
-  ctx: { db: DatabaseReader },
-  body: string,
-  workspaceId: Id<"workspaces">,
-): Promise<string> {
-  const userIds = normalizeIds(ctx.db, "users", extractMentionedUserIds(body));
-  const projectIds = normalizeIds(ctx.db, "projects", extractProjectIds(body));
-  const eventIds = normalizeIds(ctx.db, "calendarEvents", extractEventMentionIds(body));
-  const seriesIds = normalizeIds(
-    ctx.db,
-    "eventSeries",
-    extractEventSeriesMentionIds(body),
-  );
-
-  const userNames = new Map<string, string>();
-  if (userIds.length > 0) {
-    const users = await getAll(ctx.db, userIds);
-    users.forEach((u, i) => {
-      if (u) userNames.set(userIds[i], getUserDisplayName(u));
-    });
-  }
-
-  const projectNames = new Map<string, string>();
-  if (projectIds.length > 0) {
-    const projects = await getAll(ctx.db, projectIds);
-    projects.forEach((p, i) => {
-      if (p && p.workspaceId === workspaceId) projectNames.set(projectIds[i], p.name);
-    });
-  }
-
-  // Events and series share one map because they share one chip: the
-  // projection looks up whichever id the mention carries, and the two id
-  // spaces cannot collide.
-  const eventTitles = new Map<string, string>();
-  if (eventIds.length > 0) {
-    const events = await getAll(ctx.db, eventIds);
-    events.forEach((e, i) => {
-      if (e && e.workspaceId === workspaceId) eventTitles.set(eventIds[i], e.title);
-    });
-  }
-  if (seriesIds.length > 0) {
-    const series = await getAll(ctx.db, seriesIds);
-    series.forEach((s, i) => {
-      if (s && s.workspaceId === workspaceId) eventTitles.set(seriesIds[i], s.title);
-    });
-  }
-
-  const text = extractPlainTextFromBody(body, userNames, projectNames, eventTitles);
-  return text || attachmentLabelFromBody(body);
-}
-
-/**
- * What to call a message that is nothing but an attachment: the diagram name a
- * snapshot carries, or the file name of a file attachment. Both are the only
- * words such a message has, so they are what a reply preview and a lock screen
- * show instead of an empty line.
- */
-function attachmentLabelFromBody(body: string): string {
-  try {
-    const blocks: { type: string; props?: { diagramName?: string; name?: string } }[] =
-      JSON.parse(body);
-    const diagramName = blocks.find((b) => b.type === "image")?.props?.diagramName;
-    if (diagramName) return diagramName;
-    return blocks.find((b) => b.type === "file")?.props?.name ?? "";
-  } catch {
-    // non-JSON body — nothing to label it with
-    return "";
-  }
-}
 
 export const send = mutation({
   args: {
@@ -705,48 +621,23 @@ export const send = mutation({
       }
     }
 
-    await ctx.db.insert("messages", {
+    const messageId = await insertMessage(ctx, {
+      author: user,
+      channel,
       body,
-      userId,
-      channelId,
       plainText,
       isomorphicId,
-      deleted: false,
       replyToId,
     });
 
-    // What every push below says, read out of the stored body — never out of
-    // the `plainText` arg, which travels beside `body` and need not agree with it.
-    const pushText = await pushTextFromBody(ctx, body, channel.workspaceId);
-
-    // Extract @mentions and schedule chat mention notifications. The mention
-    // list decides who receives the message's opening lines, so it goes through
-    // the channel rule before it reaches `notify` — the composer's @-picker is
-    // fed workspace members, which in a closed channel or DM is a wider set.
-    const mentionedUserIds = extractMentionedUserIds(body).filter(id => id !== userId);
-    const mentionRecipients = await filterChannelRecipients(ctx, channel, mentionedUserIds);
-
-    if (mentionRecipients.length > 0) {
-      await notify(ctx, {
-        category: "chatMention",
-        userId,
-        userName: getUserDisplayName(user),
-        recipientIds: mentionRecipients,
-        resourceId: channelId,
-        title: mentionTitle(getUserDisplayName(user), channel),
-        body: pushText.length > 100 ? pushText.slice(0, 97) + "..." : pushText,
-        url: `/workspaces/${channel.workspaceId}/channels/${channelId}`,
-      });
-    }
-
-    await notify(ctx, {
-      category: "chatChannelMessage",
-      userId,
-      userName: getUserDisplayName(user),
-      scope: channelId,
-      title: getUserDisplayName(user),
-      body: pushText,
-      url: `/workspaces/${channel.workspaceId}/channels/${channelId}`,
+    // A mention of the workspace assistant summons it. Decided here, in the
+    // sender's transaction, so a queued reply is never lost with the message
+    // it answers.
+    await scheduleAssistantReply(ctx, {
+      channel,
+      messageId,
+      senderId: userId,
+      mentionedUserIds: extractMentionedUserIds(body),
     });
     return null;
   },
@@ -831,7 +722,7 @@ export const search = query({
     // Add author information
     const searchResultsWithAuthor = searchResults.map((message) => {
       const user = userMap.get(message.userId);
-      return { ...message, author: getUserDisplayName(user), authorImage: user?.image };
+      return { ...message, author: getUserDisplayName(user), authorImage: user?.image, authorIsBot: user?.isBot };
     });
 
     return enrichMessages(ctx, searchResultsWithAuthor, userMap, channel.workspaceId, userId);
@@ -886,7 +777,7 @@ export const getMessageContext = query({
     // Add author information
     const messagesWithAuthor = allMessages.map((message) => {
       const user = userMap.get(message.userId);
-      return { ...message, author: getUserDisplayName(user), authorImage: user?.image };
+      return { ...message, author: getUserDisplayName(user), authorImage: user?.image, authorIsBot: user?.isBot };
     });
 
     const page = await enrichMessages(ctx, messagesWithAuthor, userMap, channel.workspaceId, userId);

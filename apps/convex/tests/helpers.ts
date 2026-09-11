@@ -3,6 +3,7 @@ import schema from "../convex/schema";
 import type { Id } from "../convex/_generated/dataModel";
 import { WorkspaceRole } from "@ripple/shared/enums/roles";
 import actionRetrierComponent from "@convex-dev/action-retrier/test";
+import agentComponent from "@convex-dev/agent/test";
 import auditLogComponent from "convex-audit-log/test";
 import aggregateComponent from "@convex-dev/aggregate/test";
 import cascadingDeleteComponent from "convex-cascading-delete/test";
@@ -25,6 +26,7 @@ const modules = import.meta.glob("../convex/**/*.ts");
 export function createTestContext(schemaOverride: typeof schema = schema) {
   const t = convexTest(schemaOverride, modules);
   actionRetrierComponent.register(t as any);
+  agentComponent.register(t as any);
   auditLogComponent.register(t as any);
   cascadingDeleteComponent.register(t as any);
   migrationsComponent.register(t as any);
@@ -37,6 +39,7 @@ export function createTestContext(schemaOverride: typeof schema = schema) {
   workpoolComponent.register(t, "taskReassignPool");
   workpoolComponent.register(t, "taskImportPool");
   workpoolComponent.register(t, "transcriptPool");
+  workpoolComponent.register(t, "aiPool");
   // Register workspace resource count aggregates
   aggregateComponent.register(t, "documentsByWorkspace");
   aggregateComponent.register(t, "diagramsByWorkspace");

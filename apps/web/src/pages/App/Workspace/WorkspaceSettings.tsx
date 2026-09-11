@@ -23,12 +23,13 @@ import {
 import { useMutation } from "convex/react";
 import { useQuery } from "convex-helpers/react/cache";;
 import { useViewer } from "../UserContext";
-import { Bell, Mail, Plug, SlidersHorizontal, Users } from "lucide-react";
+import { Bell, Mail, Plug, SlidersHorizontal, Sparkles, Users } from "lucide-react";
 import { useState } from "react";
 import { useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
+import { WorkspaceAssistantSection } from "./WorkspaceAssistantSection";
 import { WorkspaceIntegrationsSection } from "./WorkspaceIntegrationsSection";
 import { WorkspaceInvitationsSection } from "./WorkspaceInvitationsSection";
 import { WorkspaceMembersSection } from "./WorkspaceMembersSection";
@@ -80,6 +81,13 @@ export function WorkspaceSettings() {
       icon: Plug,
       description:
         "Audit and control repositories linked across this workspace. Connect new repositories from a project's settings.",
+    },
+    {
+      value: "assistant",
+      label: "Assistant",
+      icon: Sparkles,
+      description:
+        "An AI assistant that answers when mentioned in chat. Enabling it makes @Assistant available in every channel of this workspace.",
     },
     {
       value: "notifications",
@@ -164,6 +172,10 @@ export function WorkspaceSettings() {
 
         {active.value === "integrations" && (
           <WorkspaceIntegrationsSection workspaceId={id} />
+        )}
+
+        {active.value === "assistant" && (
+          <WorkspaceAssistantSection workspaceId={id} isAdmin={isAdmin} />
         )}
 
         {active.value === "notifications" && <WorkspaceNotificationSettings />}

@@ -27,6 +27,44 @@ import type { GenericId } from "convex/values";
  */
 
 export type DataModel = {
+  aiUsage: {
+    document: {
+      cacheReadTokens?: number;
+      cacheWriteTokens?: number;
+      inputTokens: number;
+      model: string;
+      outputTokens: number;
+      provider: string;
+      reasoningTokens?: number;
+      surface: string;
+      totalTokens: number;
+      userId?: Id<"users">;
+      workspaceId: Id<"workspaces">;
+      _id: Id<"aiUsage">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "cacheReadTokens"
+      | "cacheWriteTokens"
+      | "inputTokens"
+      | "model"
+      | "outputTokens"
+      | "provider"
+      | "reasoningTokens"
+      | "surface"
+      | "totalTokens"
+      | "userId"
+      | "workspaceId";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_workspace_surface: ["workspaceId", "surface", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
   appVersion: {
     document: {
       deployedAt: number;
@@ -37,6 +75,39 @@ export type DataModel = {
     indexes: {
       by_id: ["_id"];
       by_creation_time: ["_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
+  assistantChannelThreads: {
+    document: {
+      channelId: Id<"channels">;
+      threadId: string;
+      _id: Id<"assistantChannelThreads">;
+      _creationTime: number;
+    };
+    fieldPaths: "_creationTime" | "_id" | "channelId" | "threadId";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_channel: ["channelId", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
+  assistantPendingReplies: {
+    document: {
+      channelId: Id<"channels">;
+      messageId: Id<"messages">;
+      _id: Id<"assistantPendingReplies">;
+      _creationTime: number;
+    };
+    fieldPaths: "_creationTime" | "_id" | "channelId" | "messageId";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_channel: ["channelId", "_creationTime"];
+      by_message: ["messageId", "_creationTime"];
     };
     searchIndexes: {};
     vectorIndexes: {};
@@ -2296,6 +2367,23 @@ export type DataModel = {
       by_gitlab_user_id: ["gitlabUserId", "_creationTime"];
       email: ["email", "_creationTime"];
       phone: ["phone", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
+  workspaceAssistants: {
+    document: {
+      botUserId: Id<"users">;
+      workspaceId: Id<"workspaces">;
+      _id: Id<"workspaceAssistants">;
+      _creationTime: number;
+    };
+    fieldPaths: "_creationTime" | "_id" | "botUserId" | "workspaceId";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_bot_user: ["botUserId", "_creationTime"];
+      by_workspace: ["workspaceId", "_creationTime"];
     };
     searchIndexes: {};
     vectorIndexes: {};

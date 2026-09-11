@@ -6,6 +6,8 @@ import type { Doc, Id } from "../../_generated/dataModel";
 import { auditLog } from "../../auditLog";
 import { requireWorkspaceMember } from "../../authHelpers";
 import { WorkspaceRole } from "@ripple/shared/enums/roles";
+import { FeatureKey } from "@ripple/shared/enums/features";
+import { ensureWorkspaceAssistant } from "../../lib/chatAssistant";
 import { getIntegrationForLink } from "./integrationLookups";
 
 /**
@@ -48,6 +50,13 @@ export const setWorkspaceFeature = mutation({
         enabled: args.enabled,
         source: "manual",
       });
+    }
+
+    // The assistant is an identity, not a switch: enabling the feature gives
+    // the workspace its bot user, and disabling leaves it in place so the
+    // messages it wrote keep their author. Idempotent across re-enables.
+    if (args.featureKey === FeatureKey.AI_ASSISTANT && args.enabled) {
+      await ensureWorkspaceAssistant(ctx, args.workspaceId);
     }
 
     // Only fan out and log when the effective value changes. `pausedByBilling`

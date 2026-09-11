@@ -1,13 +1,24 @@
 import "@blocknote/core/fonts/inter.css";
 import "@blocknote/shadcn/style.css";
+import "@blocknote/xl-ai/style.css";
 import { DocumentActionsMenu } from "./DocumentActionsMenu";
 import { tagsOptimisticUpdate } from "@/lib/tag-optimistic";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useAutoHideScrollbar } from "@/hooks/use-autohide-scrollbar";
 import {
   BlockNoteViewEditor,
+  FormattingToolbar,
+  FormattingToolbarController,
+  getFormattingToolbarItems,
   SuggestionMenuController,
 } from "@blocknote/react";
+import {
+  AIMenuController,
+  AIToolbarButton,
+  getAISlashMenuItems,
+} from "@blocknote/xl-ai";
+import { en as aiEn } from "@blocknote/xl-ai/locales";
+import { useAuthToken } from "@convex-dev/auth/react";
 import { BlockNoteView } from "@blocknote/shadcn";
 import SomethingWentWrong from "@/pages/SomethingWentWrong";
 import type { QueryParams } from "@convex/types/routes";
@@ -40,6 +51,7 @@ const SHOW_EDITOR_REVEAL_RIPPLE = false;
 
 const documentDictionary = {
   ...richTextDictionary,
+  ai: aiEn,
   placeholders: {
     ...richTextDictionary.placeholders,
     default: "Start writing… # refs, @ mentions, / commands",
@@ -69,6 +81,7 @@ import {
 } from "./CommentsRail";
 import { richTextDictionary } from "@/lib/blocknote/rich-text-schema";
 import { getRichSlashMenuItems } from "@/lib/blocknote/slash-menu";
+import { createDocumentAI } from "@/lib/blocknote/ai";
 import { SUGGESTION_MENU_FLOATING_OPTIONS } from "@/lib/blocknote/floating";
 import { useMediaDropGuard } from "@/hooks/use-media-drop-guard";
 import { documentSchema as schema } from "./schema";
@@ -91,6 +104,16 @@ interface DocumentMeta {
 }
 
 type DocumentEditorInstance = BlockNoteEditor<any, any, any> | null;
+
+/** The default toolbar plus the AI entry point for the current selection. */
+function DocumentFormattingToolbar() {
+  return (
+    <FormattingToolbar>
+      {...getFormattingToolbarItems()}
+      <AIToolbarButton />
+    </FormattingToolbar>
+  );
+}
 
 export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) {
   const { workspaceId } = useParams<QueryParams>();
@@ -196,6 +219,16 @@ function DocumentBody({
   // workspace from a ref at call time.
   const fileUpload = useUploadFile(workspaceId);
 
+  // One assistant per document: the container remounts this component per
+  // `documentId`, so lazy state is the right lifetime. The signed-in user's
+  // token is pushed in as it rotates, so the next request carries it without
+  // the extension — and with it the editor — being recreated.
+  const [ai] = useState(() => createDocumentAI({ documentId }));
+  const authToken = useAuthToken();
+  useEffect(() => {
+    ai.setToken(authToken);
+  }, [ai, authToken]);
+
   const { editor } = useDocumentCollaboration({
     doc: surface.doc,
     documentId,
@@ -205,6 +238,7 @@ function DocumentBody({
     uploadFile: fileUpload?.uploadFile,
     dictionary: documentDictionary,
     enableComments: commentsEnabled,
+    extensions: ai.extensions,
   });
 
   // Hand the editor up so the header's actions menu can reach it.
@@ -431,8 +465,10 @@ function DocumentBody({
         theme={resolvedTheme === "dark" ? "dark" : "light"}
         renderEditor={false}
         comments={false}
-        /* Replaced below so the math items can join the defaults. */
+        /* Replaced below so the math and AI items can join the defaults. */
         slashMenu={false}
+        /* Replaced below so the AI button can join the defaults. */
+        formattingToolbar={false}
         className="flex-1 min-h-0 flex overflow-hidden"
       >
       <div
@@ -525,9 +561,13 @@ function DocumentBody({
       </div>
       </div>
       {commentsEnabled && !isMobile && <CommentsDockedRail editor={editor} />}
+      <AIMenuController />
+      <FormattingToolbarController formattingToolbar={DocumentFormattingToolbar} />
       <SuggestionMenuController
         triggerCharacter={"/"}
-        getItems={(query) => getRichSlashMenuItems(editor, query)}
+        getItems={(query) =>
+          getRichSlashMenuItems(editor, query, getAISlashMenuItems(editor))
+        }
         floatingUIOptions={SUGGESTION_MENU_FLOATING_OPTIONS}
       />
       <SuggestionMenuController

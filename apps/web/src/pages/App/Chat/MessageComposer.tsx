@@ -41,6 +41,7 @@ import { useUploadFile, type ImageUploadResult } from "../../../hooks/use-upload
 import { MESSAGE_FILE_ATTACHMENT_MAX_BYTES, formatFileSize } from "@shared/constants";
 import { useMemberSuggestions } from "../../../hooks/use-member-suggestions";
 import { useEventSuggestions } from "../../../hooks/use-event-suggestions";
+import { useAssistantSuggestion } from "@/hooks/use-assistant-suggestion";
 import { useResourceSuggestions } from "../../../hooks/use-resource-suggestions";
 import { useTaskSuggestions } from "../../../hooks/use-task-suggestions";
 import { isEditorEmpty, editorClear, blocksToPlainText } from "@/lib/editor-utils";
@@ -521,15 +522,22 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
   });
 
   const getEventItems = useEventSuggestions({ workspaceId, editor });
+  const getAssistantItems = useAssistantSuggestion({ workspaceId, editor });
 
-  // Combine members + events under a single `@` trigger. Members render
-  // first (existing behaviour); events are grouped under "Upcoming" / "Recent".
+  // Combine assistant + members + events under a single `@` trigger. The
+  // assistant is one row and comes first when the workspace has it: it is the
+  // only name in the list that answers. Members follow; events are grouped
+  // under "Upcoming" / "Recent".
   const getAtMentionItems = useMemo(() => {
     return async (query: string) => {
-      const [members, events] = await Promise.all([getMemberItems(query), getEventItems(query)]);
-      return [...members, ...events];
+      const [assistant, members, events] = await Promise.all([
+        getAssistantItems(query),
+        getMemberItems(query),
+        getEventItems(query),
+      ]);
+      return [...assistant, ...members, ...events];
     };
-  }, [getMemberItems, getEventItems]);
+  }, [getAssistantItems, getMemberItems, getEventItems]);
 
   // `#` offers tasks first, then the four workspace resource groups. Both
   // legs search server-side per keystroke (see the hooks) — this used to

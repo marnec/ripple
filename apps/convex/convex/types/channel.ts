@@ -13,7 +13,7 @@ export type ReplyToInfo = {
 
 // No `email` — see `enrichWithMentionedUsers`. Mention ids are client-authored,
 // so this record must not carry more than `users.get` gives to any id-holder.
-export type MentionedUser = { name: string | null; image?: string };
+export type MentionedUser = { name: string | null; image?: string; isBot?: boolean };
 export type MentionedTask = { title: string; projectId: string; statusColor?: string };
 export type MentionedProject = { name: string; color: string };
 export type MentionedResource = { name: string; type: "document" | "diagram" | "spreadsheet" };
@@ -40,6 +40,8 @@ export type MessageReaction = {
 export interface MessageWithAuthor extends Doc<"messages"> {
   author: string;
   authorImage?: string;
+  /** Written by the workspace assistant, not a person. */
+  authorIsBot?: boolean;
   replyTo: ReplyToInfo;
   mentionedUsers: Record<string, MentionedUser>;
   mentionedTasks: Record<string, MentionedTask>;

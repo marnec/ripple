@@ -855,6 +855,20 @@ export declare const api: {
       null
     >;
   };
+  chatAssistant: {
+    get: FunctionReference<
+      "query",
+      "public",
+      { workspaceId: Id<"workspaces"> },
+      null | { botUserId: Id<"users">; name: string }
+    >;
+    pendingReplies: FunctionReference<
+      "query",
+      "public",
+      { channelId: Id<"channels"> },
+      Array<{ messageId: Id<"messages">; since: number }>
+    >;
+  };
   collaboration: {
     getCollaborationToken: FunctionReference<
       "action",
@@ -2323,6 +2337,7 @@ export declare const api: {
           _id: Id<"messages">;
           author: string;
           authorImage?: string;
+          authorIsBot?: boolean;
           body: string;
           channelId: Id<"channels">;
           deleted: boolean;
@@ -2347,7 +2362,7 @@ export declare const api: {
           >;
           mentionedUsers: Record<
             string,
-            { image?: string; name: string | null }
+            { image?: string; isBot?: boolean; name: string | null }
           >;
           plainText: string;
           reactions: Array<{
@@ -2392,6 +2407,7 @@ export declare const api: {
           _id: Id<"messages">;
           author: string;
           authorImage?: string;
+          authorIsBot?: boolean;
           body: string;
           channelId: Id<"channels">;
           deleted: boolean;
@@ -2416,7 +2432,7 @@ export declare const api: {
           >;
           mentionedUsers: Record<
             string,
-            { image?: string; name: string | null }
+            { image?: string; isBot?: boolean; name: string | null }
           >;
           plainText: string;
           reactions: Array<{
@@ -2454,6 +2470,7 @@ export declare const api: {
         _id: Id<"messages">;
         author: string;
         authorImage?: string;
+        authorIsBot?: boolean;
         body: string;
         channelId: Id<"channels">;
         deleted: boolean;
@@ -2476,7 +2493,10 @@ export declare const api: {
           string,
           { projectId: string; statusColor?: string; title: string }
         >;
-        mentionedUsers: Record<string, { image?: string; name: string | null }>;
+        mentionedUsers: Record<
+          string,
+          { image?: string; isBot?: boolean; name: string | null }
+        >;
         plainText: string;
         reactions: Array<{
           count: number;
@@ -4170,6 +4190,26 @@ export declare const api: {
  * ```
  */
 export declare const internal: {
+  aiUsage: {
+    record: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        cacheReadTokens?: number;
+        cacheWriteTokens?: number;
+        inputTokens: number;
+        model: string;
+        outputTokens: number;
+        provider: string;
+        reasoningTokens?: number;
+        surface: string;
+        totalTokens: number;
+        userId?: Id<"users">;
+        workspaceId: Id<"workspaces">;
+      },
+      null
+    >;
+  };
   auth: {
     store: FunctionReference<
       "mutation",
@@ -4462,6 +4502,56 @@ export declare const internal: {
       "mutation",
       "internal",
       { channelId: Id<"channels"> },
+      null
+    >;
+  };
+  chatAssistant: {
+    loadReplyContext: FunctionReference<
+      "query",
+      "internal",
+      { messageId: Id<"messages"> },
+      null | {
+        botName: string;
+        botUserId: Id<"users">;
+        channelId: Id<"channels">;
+        channelName: string;
+        senderUserId: Id<"users">;
+        threadId: string;
+        transcript: Array<{
+          author: string;
+          isAssistant: boolean;
+          isTrigger: boolean;
+          text: string;
+        }>;
+        workspaceId: Id<"workspaces">;
+        workspaceName: string;
+      }
+    >;
+    postReply: FunctionReference<
+      "mutation",
+      "internal",
+      { body: string; messageId: Id<"messages">; plainText: string },
+      null
+    >;
+    replyFinished: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        context: { key: string; kind: string };
+        result:
+          | { kind: "success"; returnValue: any }
+          | { error: string; kind: "failed" }
+          | { kind: "canceled" };
+        workId: string;
+      },
+      null
+    >;
+  };
+  chatAssistantAction: {
+    reply: FunctionReference<
+      "action",
+      "internal",
+      { messageId: Id<"messages"> },
       null
     >;
   };
@@ -7309,6 +7399,7 @@ export declare const internal: {
 
 export declare const components: {
   actionRetrier: import("@convex-dev/action-retrier/_generated/component.js").ComponentApi<"actionRetrier">;
+  agent: import("@convex-dev/agent/_generated/component.js").ComponentApi<"agent">;
   auditLog: import("convex-audit-log/_generated/component.js").ComponentApi<"auditLog">;
   convexCascadingDelete: import("convex-cascading-delete/_generated/component.js").ComponentApi<"convexCascadingDelete">;
   migrations: import("@convex-dev/migrations/_generated/component.js").ComponentApi<"migrations">;
@@ -7321,6 +7412,7 @@ export declare const components: {
   taskReassignPool: import("@convex-dev/workpool/_generated/component.js").ComponentApi<"taskReassignPool">;
   taskImportPool: import("@convex-dev/workpool/_generated/component.js").ComponentApi<"taskImportPool">;
   transcriptPool: import("@convex-dev/workpool/_generated/component.js").ComponentApi<"transcriptPool">;
+  aiPool: import("@convex-dev/workpool/_generated/component.js").ComponentApi<"aiPool">;
   documentsByWorkspace: import("@convex-dev/aggregate/_generated/component.js").ComponentApi<"documentsByWorkspace">;
   diagramsByWorkspace: import("@convex-dev/aggregate/_generated/component.js").ComponentApi<"diagramsByWorkspace">;
   spreadsheetsByWorkspace: import("@convex-dev/aggregate/_generated/component.js").ComponentApi<"spreadsheetsByWorkspace">;

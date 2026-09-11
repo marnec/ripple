@@ -4,6 +4,8 @@ NEXT STEPS:
 
 - consider introducing document snapshots
 
+- mentions in docs comments and relative push notificaitons and notification subscription settings
+
 keyboard accessiblity
     - when pressing tab in a chat, it must focus the message composer
     - esc closes the comments sideba in docs

@@ -85,4 +85,18 @@ export const rateLimiter = new RateLimiter(components.rateLimiter, {
     rate: 20,
     period: HOUR,
   },
+
+  // ── Workspace assistant ─────────────────────────────────────────────
+  // Per-workspace: replies the AI assistant generates from chat mentions.
+  // Every reply is a paid model call, and the trigger is a message anyone in
+  // the workspace can send, so the ceiling is on the workspace rather than on
+  // the person. A burst of ten covers a lively thread; sixty an hour is more
+  // than a team asks in practice, and a mention past the limit is simply not
+  // answered (`chatAssistant.scheduleAssistantReply`).
+  assistantReply: {
+    kind: "token bucket",
+    rate: 60,
+    period: HOUR,
+    capacity: 10,
+  },
 });

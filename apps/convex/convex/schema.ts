@@ -152,6 +152,65 @@ export default defineSchema({
     .index("by_message", ["messageId"])
     .index("by_message_emoji_user", ["messageId", "emoji", "userId"]),
 
+  // The workspace's AI assistant: the bot user that answers when it is
+  // @-mentioned in chat (`chatAssistant.ts`). One per workspace, created when
+  // the `ai_assistant` feature is enabled and kept after it is disabled so the
+  // messages it authored keep their author — the gate on new replies is the
+  // entitlement, not the row.
+  workspaceAssistants: defineTable({
+    workspaceId: v.id("workspaces"),
+    botUserId: v.id("users"),
+  })
+    .index("by_workspace", ["workspaceId"])
+    .index("by_bot_user", ["botUserId"]),
+
+  // What the model calls cost, one row per step (`aiUsage.ts`). Written by the
+  // usage handler on every agent, so it covers both the chat assistant and the
+  // in-editor document assistant.
+  aiUsage: defineTable({
+    workspaceId: v.id("workspaces"),
+    // Absent when a call was not made on a person's behalf. Every caller today
+    // has one, but the component's handler types it as optional and a usage row
+    // is worth keeping even when the attribution is missing.
+    userId: v.optional(v.id("users")),
+    // An `AiSurface` (`lib/aiAgents.ts`), kept as a string so a new surface is
+    // not a schema migration.
+    surface: v.string(),
+    provider: v.string(),
+    model: v.string(),
+    inputTokens: v.number(),
+    outputTokens: v.number(),
+    totalTokens: v.number(),
+    // Priced differently from plain input tokens, so they are stored apart.
+    cacheReadTokens: v.optional(v.number()),
+    cacheWriteTokens: v.optional(v.number()),
+    reasoningTokens: v.optional(v.number()),
+  })
+    // Ordered by `_creationTime` within a surface, which is what a "spend in
+    // this period" rollup walks. A workspace-only prefix scan uses it too.
+    .index("by_workspace_surface", ["workspaceId", "surface"]),
+
+  // The assistant's memory of one channel: the `@convex-dev/agent` thread that
+  // holds every exchange it has had there. Created on the first mention in a
+  // channel, in the same transaction that queues the reply, so two mentions
+  // racing cannot open two threads.
+  assistantChannelThreads: defineTable({
+    channelId: v.id("channels"),
+    threadId: v.string(),
+  }).index("by_channel", ["channelId"]),
+
+  // A reply the assistant owes: one row per mention it has been queued to
+  // answer. Written in the sender's transaction beside the mention itself, so
+  // the chat can show the assistant as writing the moment the message lands,
+  // and removed when the answer is posted (`chatAssistant.postReply`) or the
+  // job ends without one (`chatAssistant.replyFinished`).
+  assistantPendingReplies: defineTable({
+    channelId: v.id("channels"),
+    messageId: v.id("messages"),
+  })
+    .index("by_channel", ["channelId"])
+    .index("by_message", ["messageId"]),
+
   workspaces: defineTable({
     name: v.string(),
     description: v.optional(v.string()),

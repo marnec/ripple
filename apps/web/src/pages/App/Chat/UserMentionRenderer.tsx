@@ -19,14 +19,31 @@ export const UserMentionRenderer = ({ userId }: { userId: string }) => {
   // the workspace member list — see `useUserDisplayName`.
   const displayName = useUserDisplayName(userId, cached ?? user);
 
-  // Use cached data from server context if available
+  // Use cached data from server context if available. The assistant's chip is
+  // inert: there is no conversation to open with it, you summon it where you are.
   if (cached) {
-    return <UserMentionChip userId={userId} name={displayName} image={cached.image} />;
+    return (
+      <UserMentionChip
+        userId={userId}
+        name={displayName}
+        image={cached.image}
+        interactive={!cached.isBot}
+        isBot={cached.isBot}
+      />
+    );
   }
 
   // Fallback: fetch via query (used outside message context, e.g., editor preview)
   if (user === undefined) return <UserMentionPlaceholder />;
   if (user === null) return <UnknownUserMention />;
 
-  return <UserMentionChip userId={userId} name={displayName} image={user.image} />;
+  return (
+    <UserMentionChip
+      userId={userId}
+      name={displayName}
+      image={user.image}
+      interactive={!user.isBot}
+      isBot={user.isBot}
+    />
+  );
 };

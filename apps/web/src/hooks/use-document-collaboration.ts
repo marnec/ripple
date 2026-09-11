@@ -1,4 +1,4 @@
-import type { BlockNoteEditor, BlockNoteSchema, BlockSchema, InlineContentSchema, StyleSchema, User } from "@blocknote/core";
+import type { BlockNoteEditor, BlockNoteEditorOptions, BlockNoteSchema, BlockSchema, InlineContentSchema, StyleSchema, User } from "@blocknote/core";
 import { CommentsExtension, DefaultThreadStoreAuth } from "@blocknote/core/comments";
 import { en } from "@blocknote/core/locales";
 import { withCollaboration, YjsThreadStore } from "@blocknote/core/yjs";
@@ -57,6 +57,12 @@ export interface UseDocumentCollaborationOptions<
    * "anonymous" fallback), so callers should gate on a loaded viewer.
    */
   enableComments?: boolean;
+  /**
+   * Extensions a surface adds on top of collaboration and comments — the
+   * document editor's AI assistant. Identity matters: the editor is recreated
+   * whenever this array changes, so callers hold one instance per document.
+   */
+  extensions?: NonNullable<BlockNoteEditorOptions<any, any, any>["extensions"]>;
 }
 
 export interface UseDocumentCollaborationResult<
@@ -100,6 +106,7 @@ export function useDocumentCollaboration<
   dictionary,
   seed,
   enableComments = false,
+  extensions,
 }: UseDocumentCollaborationOptions<BSchema, ISchema, SSchema>): UseDocumentCollaborationResult<BSchema, ISchema, SSchema> {
   const { yDoc, provider, awareness, isOffline, isCacheLoaded, isHydrated } = doc;
 
@@ -167,7 +174,10 @@ export function useDocumentCollaboration<
       schema,
       uploadFile,
       dictionary,
-      extensions: commentsExtension ? [commentsExtension] : undefined,
+      extensions: [
+        ...(extensions ?? []),
+        ...(commentsExtension ? [commentsExtension] : []),
+      ],
       collaboration: {
         // `awareness` is the provider's once connected, and a local one before
         // that — so the editor binds to the fragment at mount and cached
@@ -180,7 +190,7 @@ export function useDocumentCollaboration<
         },
       },
     }),
-    [provider, awareness, userName, userColor, schema, uploadFile, dictionary, commentsExtension]
+    [provider, awareness, userName, userColor, schema, uploadFile, dictionary, commentsExtension, extensions]
   );
 
   // Workaround for BlockNote #2244 / y-prosemirror #102: when ProseMirror

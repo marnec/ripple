@@ -41,6 +41,7 @@
   --animate-slide-up: slide-up 0.3s cubic-bezier(0.16, 1, 0.3, 1);
   --animate-scale-in: scale-in 0.2s ease-out;
   --animate-slide-down: slide-down 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  --animate-typing-dot: typing-dot 1.2s ease-in-out infinite;
 
   @keyframes slide-down {
     from {
@@ -93,6 +94,19 @@
     }
   }
 
+  /* One dot of the "assistant is writing" bubble: a rise and a brightening
+     that the three dots run out of phase. Resting opacity is the value the
+     dots hold under reduced motion, so the still and moving forms match. */
+  @keyframes typing-dot {
+    0%, 60%, 100% {
+      opacity: 0.35;
+      transform: translateY(0);
+    }
+    30% {
+      opacity: 1;
+      transform: translateY(-3px);
+    }
+  }
 }
 
 /* To change the theme colors, change the values below

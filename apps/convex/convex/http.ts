@@ -3,6 +3,7 @@ import { httpAction } from "./_generated/server";
 import { internal, components } from "./_generated/api";
 import { auth } from "./auth";
 import { handleResendWebhook } from "./emailDelivery";
+import { documentAssistant, documentAssistantPreflight } from "./aiDocumentAssistant";
 import { parseTranscriptWebhook } from "./transcriptWebhook";
 import { hintFromUrl } from "./transcriptFormat";
 import { COLLAB_RESOURCES, COLLAB_ROOMS } from "./authHelpers";
@@ -946,6 +947,24 @@ http.route({
   handler: httpAction(async (ctx, request) => {
     return await handleResendWebhook(ctx, request);
   }),
+});
+
+/**
+ * POST /ai/document — the in-editor document assistant (see
+ * `aiDocumentAssistant.ts`). Called by the browser, so it authenticates the
+ * signed-in user from the bearer token rather than a shared secret, and it
+ * answers the CORS preflight the cross-origin call triggers.
+ */
+http.route({
+  path: "/ai/document",
+  method: "POST",
+  handler: documentAssistant,
+});
+
+http.route({
+  path: "/ai/document",
+  method: "OPTIONS",
+  handler: documentAssistantPreflight,
 });
 
 export default http;

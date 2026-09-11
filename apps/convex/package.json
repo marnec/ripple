@@ -25,9 +25,11 @@
     "lint": "tsc -p tsconfig.json --noEmit && eslint ."
   },
   "dependencies": {
+    "@ai-sdk/azure": "3.0.119",
     "@auth/core": "0.41.3",
     "@blocknote/core": "0.54.0",
     "@convex-dev/action-retrier": "^0.3.1",
+    "@convex-dev/agent": "0.6.4",
     "@convex-dev/aggregate": "0.3.0",
     "@convex-dev/auth": "0.0.95",
     "@convex-dev/migrations": "0.3.6",
@@ -35,6 +37,7 @@
     "@convex-dev/resend": "0.2.7",
     "@convex-dev/workpool": "0.4.10",
     "@ripple/shared": "workspace:*",
+    "ai": "6.0.280",
     "convex": "1.45.0",
     "convex-audit-log": "workspace:*",
     "convex-cascading-delete": "workspace:*",

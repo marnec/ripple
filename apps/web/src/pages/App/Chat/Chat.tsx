@@ -26,6 +26,7 @@ import { ChatContext, type EditingMessage, type ReplyingToMessage } from "./Chat
 import { ChatDropOverlay } from "./ChatDropOverlay";
 import { useFileDrop } from "@/hooks/use-file-drop";
 import { computeGroupPositions } from "./messageGrouping";
+import { AssistantTypingIndicator } from "./AssistantTypingIndicator";
 import { UserContext } from "@/pages/App/UserContext";
 import { useRecordVisit } from "@/hooks/use-record-visit";
 
@@ -69,6 +70,20 @@ export function Chat({ channelId, variant = "full" }: { channelId: Id<"channels"
   // Reactions arrive on each message out of `messages.list`; there is no second
   // query to wait on, so nothing here has to gate the list to avoid a shift.
   const groupInfos = computeGroupPositions(messages ?? [], user?._id);
+
+  // The assistant, mid-reply. `pendingReplies` is one row per mention it has
+  // been queued to answer; the newest one drives the indicator's staleness
+  // guard. The name comes from the same query the composer's `@` menu keeps
+  // subscribed, so this costs no extra read.
+  const pendingReplies = useQuery(api.chatAssistant.pendingReplies, { channelId });
+  const assistant = useQuery(
+    api.chatAssistant.get,
+    workspaceId ? { workspaceId: workspaceId as Id<"workspaces"> } : "skip",
+  );
+  const assistantWritingSince =
+    pendingReplies && pendingReplies.length > 0
+      ? Math.max(...pendingReplies.map((r) => r.since))
+      : null;
 
   const sendMessage = useMutation(api.messages.send);
   const editMessage = useMutation(api.messages.update);
@@ -229,6 +244,14 @@ export function Chat({ channelId, variant = "full" }: { channelId: Id<"channels"
           <div className="min-h-0 flex-1">
             <MessageList messages={messages} onLoadMore={handleLoadMore} isLoading={isLoading} userSentMessageRef={userSentMessageRef} messagesReady={(messages ?? []).length > 0}>
               {/* {!messages && <LoadingSpinner className="h-12 w-12 self-center" />} */}
+
+              {/* First child of a column-reverse list: the visual bottom. */}
+              {assistantWritingSince !== null && (
+                <AssistantTypingIndicator
+                  name={assistant?.name ?? "Assistant"}
+                  since={assistantWritingSince}
+                />
+              )}
 
               {(messages || []).map((message, index) => (
                 <Fragment key={message.isomorphicId}>

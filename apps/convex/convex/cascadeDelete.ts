@@ -31,6 +31,8 @@ export const cascadeRules = defineCascadeRules({
   // are safe to also list for sweeping any workspace-level stragglers.
   workspaces: [
     { to: "channels", via: "by_workspace", field: "workspaceId" },
+    { to: "workspaceAssistants", via: "by_workspace", field: "workspaceId" },
+    { to: "aiUsage", via: "by_workspace_surface", field: "workspaceId" },
     { to: "projects", via: "by_workspace", field: "workspaceId" },
     { to: "documents", via: "by_workspace", field: "workspaceId" },
     { to: "diagrams", via: "by_workspace", field: "workspaceId" },
@@ -204,6 +206,10 @@ export const cascadeRules = defineCascadeRules({
   // ── channels ────────────────────────────────────────────────────────
   channels: [
     { to: "messages", via: "by_channel", field: "channelId" },
+    // The agent-component thread behind this row is released by the
+    // `assistantChannelThreads` trigger in `dbTriggers.ts`.
+    { to: "assistantChannelThreads", via: "by_channel", field: "channelId" },
+    { to: "assistantPendingReplies", via: "by_channel", field: "channelId" },
     { to: "channelMembers", via: "by_channel", field: "channelId" },
     { to: "channelJoinRequests", via: "by_channel_status", field: "channelId" },
     { to: "channelNotificationPreferences", via: "by_channel", field: "channelId" },

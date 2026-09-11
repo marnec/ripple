@@ -26,9 +26,23 @@ import { hasImageBlocks } from "./messageUtils";
 import type { GroupPosition, MessageGroupInfo } from "./messageGrouping";
 import { MessageQuotePreview } from "./MessageQuotePreview";
 import { Avatar, AvatarFallback, AvatarImage } from "@ripple/ui/components/avatar";
+import { AssistantAvatar } from "@/components/AssistantAvatar";
 import { isMessageEditable } from "@shared/constants";
 
 const EmojiPicker = React.lazy(() => import("emoji-picker-react"));
+
+/**
+ * Marks a message the workspace assistant wrote. The author line already
+ * carries its name; this says the name is a model, not a colleague, which is
+ * the one thing a reader cannot tell from the bubble.
+ */
+function AssistantBadge() {
+  return (
+    <span className="rounded-sm bg-foreground/10 px-1 py-px text-[10px] font-medium uppercase tracking-wide text-foreground/70">
+      AI
+    </span>
+  );
+}
 
 const QUICK_EMOJIS = [
   { unified: "2764-fe0f", native: "\u2764\uFE0F" },
@@ -39,20 +53,57 @@ const QUICK_EMOJIS = [
   { unified: "1f389", native: "\uD83C\uDF89" },
 ];
 
-const BUBBLE_RADIUS: Record<"own" | "other", Record<GroupPosition, string>> = {
-  own: {
+/**
+ * Which edge of the row a bubble sits against. Two layouts share the file:
+ *
+ * - Desktop: people's messages, the viewer's included, all sit on the left,
+ *   and the workspace assistant takes the right — the far side of the
+ *   conversation, so an exchange with it reads as one.
+ * - Mobile: the viewer's own messages take the right, everyone else — the
+ *   assistant included — the left, the shape every phone messenger has.
+ *
+ * The bubble's radius and tail follow the edge, not the author, which is why
+ * they are keyed on this rather than on "own".
+ */
+type BubbleSide = "start" | "end";
+
+const BUBBLE_RADIUS: Record<BubbleSide, Record<GroupPosition, string>> = {
+  end: {
     solo:   "rounded-lg rounded-br-sm",
     first:  "rounded-lg rounded-br-sm",
     middle: "rounded-r-sm rounded-l-lg",
     last:   "rounded-lg rounded-tr-sm",
   },
-  other: {
+  start: {
     solo:   "rounded-lg rounded-bl-sm",
     first:  "rounded-lg rounded-bl-sm",
     middle: "rounded-l-sm rounded-r-lg",
     last:   "rounded-lg rounded-tl-sm",
   },
 };
+
+/**
+ * The row's direction and the avatar's gutter, per author kind, as responsive
+ * classes so a resize re-flows without a re-render: `sm:` is the desktop
+ * layout described on `BubbleSide`.
+ */
+const ROW_LAYOUT = {
+  own: {
+    row: "flex-row-reverse sm:flex-row",
+    gutter: "ml-1.5 sm:ml-0 sm:mr-1.5",
+    push: "ml-auto sm:ml-0",
+  },
+  assistant: {
+    row: "flex-row sm:flex-row-reverse",
+    gutter: "mr-1.5 sm:mr-0 sm:ml-1.5",
+    push: "sm:ml-auto",
+  },
+  other: {
+    row: "flex-row",
+    gutter: "mr-1.5",
+    push: "",
+  },
+} as const;
 
 const DEFAULT_GROUP_INFO: MessageGroupInfo = {
   position: "solo",
@@ -74,10 +125,14 @@ export function Message({ message, groupInfo = DEFAULT_GROUP_INFO, index = 0 }: 
 
   const isMobile = useIsMobile();
   const userIsAuthor = userId === user?._id;
+  const isAssistant = !!message.authorIsBot && !userIsAuthor;
   const { position, showAuthor } = groupInfo;
-  // On desktop all messages are left-aligned → use "other" (left-side) radius for all
-  // On mobile own messages are right-aligned → use "own" (right-side) radius
-  const radiusSide = (userIsAuthor && isMobile) ? "own" : "other";
+  const layout = ROW_LAYOUT[userIsAuthor ? "own" : isAssistant ? "assistant" : "other"];
+  // Which edge the bubble sits against — see `BubbleSide`. Needs the JS
+  // breakpoint because the radius classes are not responsive.
+  const side: BubbleSide = isMobile
+    ? (userIsAuthor ? "end" : "start")
+    : (isAssistant ? "end" : "start");
   const messageRef = useRef<HTMLLIElement>(null);
 
   const { setEditingMessage, setReplyingTo } = useChatContext()
@@ -173,26 +228,25 @@ export function Message({ message, groupInfo = DEFAULT_GROUP_INFO, index = 0 }: 
           }}
         >
           {/* Message row: avatar + bubble */}
-          <div className={cn(
-            "flex items-end",
-            userIsAuthor ? "flex-row-reverse sm:flex-row" : "flex-row",
-          )}>
+          <div className={cn("flex items-end", layout.row)}>
             {/* Avatar column */}
-            <div className={cn("w-9.5 shrink-0", userIsAuthor ? "ml-1.5 sm:ml-0 sm:mr-1.5" : "mr-1.5")}>
-              {showAvatar ? (
+            <div className={cn("w-9.5 shrink-0", layout.gutter)}>
+              {!showAvatar ? (
+                <div className="size-8" />
+              ) : isAssistant ? (
+                <AssistantAvatar name={author} className="size-8" />
+              ) : (
                 <Avatar className="size-8">
                   <AvatarImage src={avatarImage} alt={avatarName} />
                   <AvatarFallback className="text-xs">{avatarInitials}</AvatarFallback>
                 </Avatar>
-              ) : (
-                <div className="size-8" />
               )}
             </div>
 
             {/* Bubble */}
             <ContextMenuTrigger className={cn(
               "min-w-0 max-w-[85%] sm:max-w-[70%]",
-              userIsAuthor && "ml-auto sm:ml-0",
+              layout.push,
             )}>
               <MentionedUsersContext.Provider value={message.mentionedUsers ?? {}}>
               <MentionedTasksContext.Provider value={message.mentionedTasks ?? {}}>
@@ -201,17 +255,26 @@ export function Message({ message, groupInfo = DEFAULT_GROUP_INFO, index = 0 }: 
               <MentionedEventsContext.Provider value={message.mentionedEvents ?? {}}>
                 <div
                   className={cn(
-                    "w-fit transition-all",
-                    BUBBLE_RADIUS[radiusSide][position],
+                    // `max-w-full` is load-bearing: the quote preview's
+                    // `truncate` line is nowrap, which makes the fit-content
+                    // bubble's minimum width the whole line, wider than the
+                    // column on a phone. Clamping the bubble gives the
+                    // ellipsis a width to work with.
+                    "w-fit max-w-full transition-all",
+                    BUBBLE_RADIUS[side][position],
                     userIsAuthor
-                      ? "bg-message-own text-message-own-foreground ml-auto sm:ml-0"
+                      ? "bg-message-own text-message-own-foreground"
                       : "bg-muted",
+                    layout.push,
                     !messageHasImages && (hasReactions ? "px-3 pt-1.5" : "px-3 py-1.5"),
-                    showAvatar && (radiusSide === "own" ? "bubble-tail-right" : "bubble-tail-left"),
+                    showAvatar && (side === "end" ? "bubble-tail-right" : "bubble-tail-left"),
                   )}
                 >
                   {showAuthor && (
-                    <div className={cn("text-xs font-semibold text-primary mb-0.5", messageHasImages && "px-3 pt-1.5")}>{author}</div>
+                    <div className={cn("text-xs font-semibold text-primary mb-0.5 flex items-center gap-1.5", messageHasImages && "px-3 pt-1.5")}>
+                      {author}
+                      {message.authorIsBot && <AssistantBadge />}
+                    </div>
                   )}
                   {message.replyToId && (
                     <div className={messageHasImages ? "px-3 pt-1.5" : undefined}>

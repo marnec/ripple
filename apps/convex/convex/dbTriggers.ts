@@ -969,6 +969,17 @@ triggers.register("messages", async (ctx, change) => {
   }
 });
 
+// ── Workspace assistant ─────────────────────────────────────────────
+// A channel's assistant thread lives in the agent component, outside the
+// cascade's reach. Releasing the row (the channel cascade, or anything else)
+// releases the thread with it; the component deletes its messages in pages.
+triggers.register("assistantChannelThreads", async (ctx, change) => {
+  if (change.operation !== "delete") return;
+  await ctx.runMutation(components.agent.threads.deleteAllForThreadIdAsync, {
+    threadId: change.oldDoc.threadId,
+  });
+});
+
 // ── Tag uniqueness invariants ───────────────────────────────────────
 // Convex has no DB-level unique constraints, so we enforce them in-trigger:
 // throwing aborts the transaction and rolls back the offending write.

@@ -15,14 +15,21 @@ import {
   type DefaultReactSuggestionItem,
 } from "@blocknote/react";
 
+/**
+ * `extra` is for items one surface has and the other does not — the document
+ * editor's AI commands, which need an extension the task editor does not
+ * register. They join by group like the math items.
+ */
 export async function getRichSlashMenuItems(
   editor: BlockNoteEditor<any, any, any>,
   query: string,
+  extra: DefaultReactSuggestionItem[] = [],
 ): Promise<DefaultReactSuggestionItem[]> {
   return filterSuggestionItems(
     combineByGroup(
       getDefaultReactSlashMenuItems(editor),
       getMathSlashMenuItems(editor),
+      extra,
     ),
     query,
   );
