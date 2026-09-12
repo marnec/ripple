@@ -103,7 +103,7 @@ export class PresenceRegistry {
     if (!record) return null;
 
     const { userId } = record.identity;
-    const winnerBefore = this.winningConnectionId(userId);
+    const before = this.entryFor(userId);
 
     this.connections.delete(connectionId);
     const conns = this.byUser.get(userId);
@@ -114,13 +114,18 @@ export class PresenceRegistry {
       return { kind: "left", userId };
     }
 
-    // Some tab is still open, so the user has not left. Re-derive their entry:
-    // it only moves if the connection we just dropped was the one representing
-    // them.
-    if (winnerBefore !== connectionId) return null;
-
-    const entry = this.entryFor(userId);
-    return entry ? { kind: "changed", entry } : null;
+    // Some tab is still open, so the user has not left. Re-derive their entry
+    // and report it only if it actually moved. Comparing derived entries rather
+    // than asking "was the closed tab the winner?" matters because the entry
+    // is not the winner's alone: call membership is unioned across tabs in
+    // `callFor`, so closing the call tab while a browsing tab holds the
+    // location changes the entry without changing the winner. Answering null
+    // there left the user shown in a call they had closed, on every screen in
+    // the workspace, until their other tab happened to navigate.
+    const after = this.entryFor(userId);
+    if (!after) return null;
+    if (before && sameEntry(before, after)) return null;
+    return { kind: "changed", entry: after };
   }
 
   /** One entry per user that has reported a location. */
@@ -195,4 +200,14 @@ export class PresenceRegistry {
     }
     return winner;
   }
+}
+
+function sameEntry(a: PresenceEntry, b: PresenceEntry): boolean {
+  return (
+    a.currentPath === b.currentPath &&
+    a.resourceType === b.resourceType &&
+    a.resourceId === b.resourceId &&
+    a.callChannelId === b.callChannelId &&
+    a.callTranscribing === b.callTranscribing
+  );
 }

@@ -170,7 +170,13 @@ describe("PresenceRegistry", () => {
     });
     registry.update("browseTab", at("/workspaces/w1/projects/p1"));
 
-    registry.remove("callTab");
+    // The browse tab is the location winner, so the closed tab was not
+    // "representing" the user — but it was the one holding the call. Everyone
+    // has to be told, or the sidebar keeps Alice in a call she closed.
+    expect(registry.remove("callTab")).toEqual({
+      kind: "changed",
+      entry: { ...alice, currentPath: "/workspaces/w1/projects/p1" },
+    });
 
     expect(registry.snapshot()).toEqual([
       { ...alice, currentPath: "/workspaces/w1/projects/p1" },

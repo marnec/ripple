@@ -144,6 +144,43 @@ function fetchDenying(...deniedUsers: string[]) {
   });
 }
 
+describe("PresenceServer presence_update fan-out", () => {
+  it("echoes a connection's own update back to it", async () => {
+    // A reconnect's snapshot seeds a client with its own entry; without the
+    // echo, that entry never changes again and a left call stays lit on the
+    // leaver's own sidebar.
+    const { server, harness } = createServer();
+    const alice = await connect(server, harness, "alice");
+    const bob = await connect(server, harness, "bob");
+
+    server.onMessage(
+      alice as never,
+      JSON.stringify({
+        type: "presence_update",
+        currentPath: "/p/alice/call",
+        callChannelId: "ch1",
+        callTranscribing: true,
+      }),
+    );
+
+    const expected = expect.objectContaining({
+      type: "presence_changed",
+      userId: "alice",
+      callChannelId: "ch1",
+      callTranscribing: true,
+    });
+    expect(parsed(alice)).toEqual([expected]);
+    expect(parsed(bob)).toEqual([expected]);
+
+    server.onMessage(
+      alice as never,
+      JSON.stringify({ type: "presence_update", currentPath: "/p/alice" }),
+    );
+    const last = parsed(alice).at(-1) as Record<string, unknown>;
+    expect(last).not.toHaveProperty("callChannelId");
+  });
+});
+
 describe("PresenceServer permission re-validation", () => {
   beforeEach(() => {
     vi.unstubAllGlobals();

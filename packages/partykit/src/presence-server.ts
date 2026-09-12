@@ -134,10 +134,14 @@ export default class PresenceServer extends Server {
       });
       if (!entry) return;
 
-      // This connection just became the most recent writer, so the derived
-      // entry is its own — broadcast it to all OTHER connections.
+      // Broadcast to every connection, the sender included. The sender's own
+      // map is not exempt: `entry` is the user's *derived* entry (location from
+      // the winning tab, call membership unioned across tabs), which the sender
+      // cannot compute locally. And a reconnect's snapshot seeds the client with
+      // its own entry, so a sender that never hears its own updates keeps
+      // showing itself in a call it has left.
       const changed: PresenceChangedMessage = { type: "presence_changed", ...entry };
-      this.broadcast(JSON.stringify(changed), [conn.id]);
+      this.broadcast(JSON.stringify(changed));
     } catch {
       // Malformed message — ignore
     }

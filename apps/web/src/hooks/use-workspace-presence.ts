@@ -214,6 +214,7 @@ export function useWorkspacePresence() {
                   resourceType: changed.resourceType,
                   resourceId: changed.resourceId,
                   callChannelId: changed.callChannelId,
+                  callTranscribing: changed.callTranscribing,
                 });
                 return next;
               });
