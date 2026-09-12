@@ -19,6 +19,7 @@ keyboard accessiblity
 - add timezone setting to workspace, this should be inherited by all time-related values in the app. Find efficient way for this, evaluate join vs denormalization. Consider that most likely update is seldom.
 
 - [ ] AI integrations
+    - [x] videocall transcript
     - [x] AI bot in chat (called on mention)
     - [ ] AI dictate content
     - [ ] AI agent in videocall (unclear how to handle diarization)

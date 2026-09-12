@@ -12,9 +12,9 @@ import { useEffect, useRef, useState } from "react";
 import { api } from "@convex/_generated/api";
 import { Button } from "@ripple/ui/components/button";
 import { RippleSpinner } from "@/components/RippleSpinner";
+import { CallMeetingGrid } from "@/components/call/MeetingGrid";
 import { TranscriptionPill } from "@/components/call/GuestTranscriptionNotice";
 import { CameraToggle, MicToggle } from "@/pages/App/GroupVideoCall/MediaToggle";
-import { VideoTile } from "@/pages/App/GroupVideoCall/VideoTile";
 
 interface Props {
   shareId: string;
@@ -133,7 +133,7 @@ export function GuestEventCall({ shareId, guestSub, guestName, onLeave }: Props)
   );
 }
 
-// ── Same room/tile helpers as GuestCallView (intentionally duplicated; the
+// ── Same room/controls helpers as GuestCallView (intentionally duplicated; the
 //    two surfaces are likely to diverge as event-specific affordances land).
 
 function GuestMeetingRoom({
@@ -144,7 +144,6 @@ function GuestMeetingRoom({
   onLeave: () => void;
 }) {
   const { meeting } = useRealtimeKitMeeting();
-  const participants = useRealtimeKitSelector((m) => m.participants.joined.toArray());
 
   const handleLeave = async () => {
     await meeting.leave();
@@ -154,96 +153,13 @@ function GuestMeetingRoom({
   return (
     <div className="flex h-full flex-col">
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-4">
-        <div
-          className={`grid gap-3 ${
-            participants.length === 0
-              ? "grid-cols-1"
-              : participants.length <= 1
-                ? "grid-cols-1 sm:grid-cols-2"
-                : participants.length <= 3
-                  ? "grid-cols-2"
-                  : "grid-cols-2 lg:grid-cols-3"
-          }`}
-        >
-          <GuestSelfTile />
-          {participants.map((p) => (
-            <GuestParticipantTile key={p.id} participant={p} />
-          ))}
-        </div>
+        <CallMeetingGrid />
       </div>
       <GuestControlsBar
         transcribe={transcribe}
         onLeave={() => void handleLeave()}
       />
     </div>
-  );
-}
-
-function GuestSelfTile() {
-  const { meeting } = useRealtimeKitMeeting();
-  const videoEnabled = useRealtimeKitSelector((m) => m.self.videoEnabled);
-  const videoTrack = useRealtimeKitSelector((m) => m.self.videoTrack);
-  const audioEnabled = useRealtimeKitSelector((m) => m.self.audioEnabled);
-  const name = useRealtimeKitSelector((m) => m.self.name);
-  const videoRef = useRef<HTMLVideoElement>(null);
-
-  useEffect(() => {
-    const el = videoRef.current;
-    if (!el) return;
-    meeting.self.registerVideoElement(el, true);
-    return () => {
-      meeting.self.deregisterVideoElement(el, true);
-    };
-  }, [meeting.self, videoTrack]);
-
-  return (
-    <VideoTile.Root>
-      {videoEnabled ? (
-        <VideoTile.Video videoRef={videoRef} mirrored />
-      ) : (
-        <VideoTile.AvatarFallback name={name || "You"} />
-      )}
-      <VideoTile.NameBadge name={`${name || "You"} (You)`} muted={!audioEnabled} />
-    </VideoTile.Root>
-  );
-}
-
-function GuestParticipantTile({
-  participant,
-}: {
-  participant: {
-    id: string;
-    name: string;
-    videoEnabled: boolean;
-    audioEnabled: boolean;
-    videoTrack: MediaStreamTrack;
-    registerVideoElement: (el: HTMLVideoElement) => void;
-    deregisterVideoElement: (el?: HTMLVideoElement) => void;
-  };
-}) {
-  const videoRef = useRef<HTMLVideoElement>(null);
-
-  useEffect(() => {
-    const el = videoRef.current;
-    if (!el) return;
-    participant.registerVideoElement(el);
-    return () => {
-      participant.deregisterVideoElement(el);
-    };
-  }, [participant, participant.videoTrack]);
-
-  return (
-    <VideoTile.Root>
-      {participant.videoEnabled ? (
-        <VideoTile.Video videoRef={videoRef} />
-      ) : (
-        <VideoTile.AvatarFallback name={participant.name} />
-      )}
-      <VideoTile.NameBadge
-        name={participant.name || "Participant"}
-        muted={!participant.audioEnabled}
-      />
-    </VideoTile.Root>
   );
 }
 
