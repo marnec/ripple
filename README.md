@@ -25,6 +25,10 @@ keyboard accessiblity
     - [ ] AI agent in videocall (unclear how to handle diarization)
     - [x] AI document agent
     - [ ] AI tasks agent
+    - [ ] agent is able to read docs
+    - [ ] agent is able to read spreadhseets
+    - [ ] agent is able to read diagrams
+    - [ ] agent is able to read tasks
 
 - avatars:
     - [ ] user custom avatars: look at dicebear

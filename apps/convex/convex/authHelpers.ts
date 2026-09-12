@@ -252,12 +252,26 @@ export async function requireResourceMember<T extends WorkspaceResource>(
  */
 export async function checkResourceMember<T extends WorkspaceResource>(
   ctx: Ctx,
-  _table: T,
+  table: T,
   resourceId: Id<T>,
 ): Promise<{ userId: Id<"users">; resource: Doc<T>; membership: Doc<"workspaceMembers"> } | null> {
   const userId = await getUser(ctx);
   if (!userId) return null;
+  return checkResourceMemberAs(ctx, table, resourceId, userId);
+}
 
+/**
+ * `checkResourceMember` for a caller whose identity arrives as data rather
+ * than from auth — the **summoner** of an assistant reply, carried into a
+ * scheduled action that has no identity of its own (`assistantReads.ts`).
+ * Same rule, same projection; only where the user id comes from differs.
+ */
+export async function checkResourceMemberAs<T extends WorkspaceResource>(
+  ctx: { db: QueryCtx["db"] },
+  _table: T,
+  resourceId: Id<T>,
+  userId: Id<"users">,
+): Promise<{ userId: Id<"users">; resource: Doc<T>; membership: Doc<"workspaceMembers"> } | null> {
   const access = await resourceAccess<T>(ctx, resourceId, userId);
   if (!access.ok) return null;
 
@@ -331,7 +345,18 @@ export async function checkChannelAccess(
 ): Promise<ChannelAccess | null> {
   const userId = await getUser(ctx);
   if (!userId) return null;
+  return checkChannelAccessAs(ctx, channelId, userId);
+}
 
+/**
+ * `checkChannelAccess` with the identity supplied as data — see
+ * `checkResourceMemberAs`. The channel rule, unchanged.
+ */
+export async function checkChannelAccessAs(
+  ctx: { db: QueryCtx["db"] },
+  channelId: Id<"channels">,
+  userId: Id<"users">,
+): Promise<ChannelAccess | null> {
   const channel = await ctx.db.get(channelId);
   if (!channel) return null;
 

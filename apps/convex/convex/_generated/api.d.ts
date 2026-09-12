@@ -4210,6 +4210,178 @@ export declare const internal: {
       null
     >;
   };
+  assistantReads: {
+    getDocument: FunctionReference<
+      "query",
+      "internal",
+      { documentId: string; userId: Id<"users"> },
+      {
+        _creationTime: number;
+        _id: Id<"documents">;
+        name: string;
+        tags?: Array<string>;
+        workspaceId: Id<"workspaces">;
+        yjsSnapshotId?: Id<"_storage">;
+      } | null
+    >;
+    getProject: FunctionReference<
+      "query",
+      "internal",
+      { projectId: string; userId: Id<"users"> },
+      null | {
+        omitted: number;
+        project: {
+          _creationTime: number;
+          _id: Id<"projects">;
+          color: string;
+          creatorId: Id<"users">;
+          description?: string;
+          key?: string;
+          name: string;
+          taskCounter?: number;
+          workspaceId: Id<"workspaces">;
+        };
+        tasks: Array<{
+          completed: boolean;
+          number: number | null;
+          status: string | null;
+          title: string;
+        }>;
+      }
+    >;
+    getSnapshot: FunctionReference<
+      "query",
+      "internal",
+      {
+        resourceId: string;
+        resourceType: "doc" | "diagram" | "task" | "spreadsheet";
+        userId: Id<"users">;
+      },
+      | { status: "stored"; storageId: Id<"_storage"> }
+      | { status: "empty" }
+      | { status: "unavailable" }
+    >;
+    getSpreadsheet: FunctionReference<
+      "query",
+      "internal",
+      { spreadsheetId: string; userId: Id<"users"> },
+      {
+        _creationTime: number;
+        _id: Id<"spreadsheets">;
+        name: string;
+        tags?: Array<string>;
+        workspaceId: Id<"workspaces">;
+        yjsSnapshotId?: Id<"_storage">;
+      } | null
+    >;
+    getTask: FunctionReference<
+      "query",
+      "internal",
+      { taskId: string; userId: Id<"users"> },
+      {
+        _creationTime: number;
+        _id: Id<"tasks">;
+        assignee: {
+          _creationTime: number;
+          _id: Id<"users">;
+          disabled?: boolean;
+          email?: string;
+          emailVerificationTime?: number;
+          githubLogin?: string;
+          gitlabLogin?: string;
+          gitlabUserId?: string;
+          image?: string;
+          isAnonymous?: boolean;
+          isBot?: boolean;
+          isPlatformAdmin?: boolean;
+          name?: string;
+          nameChangedAt?: number;
+        } | null;
+        assigneeId?: Id<"users">;
+        completed: boolean;
+        creatorId: Id<"users">;
+        dueDate?: string;
+        estimate?: number;
+        externalAssignees?: Array<{
+          avatarUrl: string;
+          login: string;
+          url: string;
+        }>;
+        externalRefFrozen?: {
+          disconnectedAt: number;
+          externalAuthor?: { avatarUrl: string; login: string; url: string };
+          externalIssueId: string;
+          externalRepoId: string;
+          issueNumber: number;
+          provider: string;
+          repoFullName: string;
+          url: string;
+        };
+        externalRefs?: Array<{
+          deleted?: boolean;
+          issueNumber: number;
+          provider: string;
+          repoFullName: string;
+          url: string;
+        }>;
+        hasBlockers: boolean;
+        importJobId?: Id<"taskImportJobs">;
+        number?: number;
+        plannedStartDate?: string;
+        position?: string;
+        priority: "urgent" | "high" | "medium" | "low";
+        projectId: Id<"projects">;
+        projectKey?: string;
+        pullRequestState?: "draft" | "open" | "merged" | "closed";
+        status: {
+          _creationTime: number;
+          _id: Id<"taskStatuses">;
+          color: string;
+          externalCloseReason?: "completed" | "not_planned";
+          isCompleted: boolean;
+          isDefault: boolean;
+          isTriage?: boolean;
+          name: string;
+          order: number;
+          pendingDeletion?: boolean;
+          projectId: Id<"projects">;
+          setsStartDate?: boolean;
+        } | null;
+        statusId: Id<"taskStatuses">;
+        tags?: Array<string>;
+        title: string;
+        workPeriods?: Array<{ completedAt?: number; startedAt: number }>;
+        workspaceId: Id<"workspaces">;
+        yjsSnapshotId?: Id<"_storage">;
+      } | null
+    >;
+    listChannelMessages: FunctionReference<
+      "query",
+      "internal",
+      { channelId: string; limit: number; userId: Id<"users"> },
+      null | {
+        channel: string;
+        messages: Array<{ at: number; author: string; text: string }>;
+      }
+    >;
+    search: FunctionReference<
+      "query",
+      "internal",
+      {
+        resourceType?:
+          | "document"
+          | "diagram"
+          | "spreadsheet"
+          | "project"
+          | "channel"
+          | "task";
+        searchText: string;
+        userId: Id<"users">;
+        workspaceId: Id<"workspaces">;
+      },
+      Array<{ name: string; resourceId: string; resourceType: string }>
+    >;
+  };
   auth: {
     store: FunctionReference<
       "mutation",
@@ -4515,6 +4687,18 @@ export declare const internal: {
         botUserId: Id<"users">;
         channelId: Id<"channels">;
         channelName: string;
+        references: Array<{
+          id: string;
+          name?: string;
+          type:
+            | "document"
+            | "diagram"
+            | "spreadsheet"
+            | "task"
+            | "project"
+            | "event"
+            | "series";
+        }>;
         senderUserId: Id<"users">;
         threadId: string;
         transcript: Array<{

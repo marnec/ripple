@@ -192,6 +192,38 @@ export const getSnapshotUrl = query({
   },
 });
 
+/** What `storedSnapshotAs` answers: the blob to read, nothing, or no. */
+export type StoredSnapshot =
+  | { status: "stored"; storageId: Id<"_storage"> }
+  | { status: "empty" }
+  | { status: "unavailable" };
+
+/**
+ * The stored snapshot of a resource, for a caller whose identity arrives as
+ * data — the **summoner** of an assistant reply (`assistantReads.ts`). The
+ * core of both public queries below: the collaboration rule
+ * (`hasResourceAccess`), then the row, then the blob id. Returns the storage
+ * id rather than a URL because an action can read the blob directly, and a
+ * signed URL is one more door to the same bytes.
+ */
+export async function storedSnapshotAs(
+  ctx: { db: QueryCtx["db"] },
+  userId: Id<"users">,
+  resourceType: CollabResource,
+  resourceId: string,
+): Promise<StoredSnapshot> {
+  const allowed = await hasResourceAccess(ctx, userId, resourceType, resourceId);
+  if (!allowed) return { status: "unavailable" };
+
+  const resource = await ctx.db.get(snapshotId(resourceId));
+  // A resource that is gone is not an empty one: the caller must not conclude
+  // anything about its contents.
+  if (!resource) return { status: "unavailable" };
+
+  if (!resource.yjsSnapshotId) return { status: "empty" };
+  return { status: "stored", storageId: resource.yjsSnapshotId };
+}
+
 /**
  * The same question as `getSnapshotUrl`, asked so that the answer distinguishes
  * "there is nothing stored" from "you may not ask".
@@ -242,17 +274,10 @@ async function resolveStoredState(
   const userId = await getUser(ctx);
   if (!userId) return { status: "unavailable" };
 
-  const allowed = await hasResourceAccess(ctx, userId, resourceType, resourceId);
-  if (!allowed) return { status: "unavailable" };
+  const stored = await storedSnapshotAs(ctx, userId, resourceType, resourceId);
+  if (stored.status !== "stored") return stored;
 
-  const resource = await ctx.db.get(snapshotId(resourceId));
-  // A resource that is gone is not an empty one: the caller must not conclude
-  // anything about its contents.
-  if (!resource) return { status: "unavailable" };
-
-  if (!resource.yjsSnapshotId) return { status: "empty" };
-
-  const url = await ctx.storage.getUrl(resource.yjsSnapshotId);
+  const url = await ctx.storage.getUrl(stored.storageId);
   // A snapshot id pointing at a blob that is not there is a broken snapshot,
   // not an empty document.
   if (!url) return { status: "unavailable" };

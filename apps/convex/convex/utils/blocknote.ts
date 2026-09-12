@@ -20,6 +20,19 @@ type InlineContent =
   | { type: string; [key: string]: unknown };
 
 /**
+ * How a chip is spelled in the flattened text.
+ *
+ * `withIds` is the model's view: a **reference chip** reads as its name
+ * followed by its type and id in parentheses — `#Roadmap (document <id>)` —
+ * so the assistant can hand the id to a read tool. Every other reader (a
+ * lock screen, a reply preview, the search index) wants the name alone.
+ * User mentions are never suffixed: a person is not a resource to read.
+ */
+export interface PlainTextOptions {
+  withIds?: boolean;
+}
+
+/**
  * Extract plain text from BlockNote JSON body, including mention text.
  * @param bodyJson - BlockNote JSON string
  * @param userNames - Map of userId → display name (for @mentions)
@@ -30,13 +43,19 @@ export function extractPlainTextFromBody(
   userNames?: Map<string, string>,
   projectNames?: Map<string, string>,
   eventTitles?: Map<string, string>,
+  options: PlainTextOptions = {},
 ): string {
   try {
     const blocks: BlockNoteBlock[] = JSON.parse(bodyJson);
-    return blocksToPlainText(blocks, userNames, projectNames, eventTitles);
+    return blocksToPlainText(blocks, userNames, projectNames, eventTitles, options);
   } catch {
     return "";
   }
+}
+
+/** The `(type id)` suffix of a chip in the model's view; empty otherwise. */
+function idSuffix(options: PlainTextOptions, type: string, id: string | undefined): string {
+  return options.withIds && id ? ` (${type} ${id})` : "";
 }
 
 /**
@@ -54,16 +73,17 @@ function blocksToPlainText(
   userNames?: Map<string, string>,
   projectNames?: Map<string, string>,
   eventTitles?: Map<string, string>,
+  options: PlainTextOptions = {},
 ): string {
   const lines: string[] = [];
   for (const block of blocks) {
     let line = "";
     if (Array.isArray(block.content)) {
-      line = inlineContentToPlainText(block.content, userNames, projectNames, eventTitles);
+      line = inlineContentToPlainText(block.content, userNames, projectNames, eventTitles, options);
     }
     lines.push(line);
     if (block.children?.length) {
-      lines.push(blocksToPlainText(block.children, userNames, projectNames, eventTitles));
+      lines.push(blocksToPlainText(block.children, userNames, projectNames, eventTitles, options));
     }
   }
   return lines.join("\n").trim();
@@ -74,6 +94,7 @@ function inlineContentToPlainText(
   userNames?: Map<string, string>,
   projectNames?: Map<string, string>,
   eventTitles?: Map<string, string>,
+  options: PlainTextOptions = {},
 ): string {
   let text = "";
   for (const item of content) {
@@ -84,13 +105,14 @@ function inlineContentToPlainText(
       case "link": {
         const link = item as { type: "link"; content: InlineContent[] };
         if (Array.isArray(link.content)) {
-          text += inlineContentToPlainText(link.content, userNames, projectNames, eventTitles);
+          text += inlineContentToPlainText(link.content, userNames, projectNames, eventTitles, options);
         }
         break;
       }
       case "taskMention": {
-        const mention = item as { type: "taskMention"; props: { taskTitle?: string } };
+        const mention = item as { type: "taskMention"; props: { taskId?: string; taskTitle?: string } };
         text += `#${mention.props.taskTitle || "task"}`;
+        text += idSuffix(options, "task", mention.props.taskId);
         break;
       }
       case "userMention": {
@@ -103,15 +125,17 @@ function inlineContentToPlainText(
         const mention = item as { type: "projectReference"; props: { projectId: string } };
         const name = projectNames?.get(mention.props.projectId);
         text += `#${name || "project"}`;
+        text += idSuffix(options, "project", mention.props.projectId);
         break;
       }
       case "resourceReference": {
         const ref = item as {
           type: "resourceReference";
-          props: { resourceName?: string; cellRef?: string };
+          props: { resourceId?: string; resourceType?: string; resourceName?: string; cellRef?: string };
         };
         text += `#${ref.props.resourceName || "resource"}`;
         if (ref.props.cellRef) text += ` \u203A ${ref.props.cellRef}`;
+        text += idSuffix(options, ref.props.resourceType || "resource", ref.props.resourceId);
         break;
       }
       case "eventMention": {
@@ -125,6 +149,7 @@ function inlineContentToPlainText(
         const id = mention.props.eventId || mention.props.seriesId;
         const title = id ? eventTitles?.get(id) : undefined;
         text += `@${title || "event"}`;
+        text += idSuffix(options, mention.props.eventId ? "event" : "series", id);
         break;
       }
     }
@@ -411,4 +436,78 @@ export function extractMessageTargets(body: string): Array<{ targetType: Message
   }
 
   return targets;
+}
+
+/** One **reference chip** as a message carries it: what it points at, and the name the chip itself knows. */
+export interface ReferenceChip {
+  type: "document" | "diagram" | "spreadsheet" | "task" | "project" | "event" | "series";
+  id: string;
+  /** The name written on the chip, when the chip carries one. */
+  name?: string;
+}
+
+/**
+ * The reference chips of a body, in order of appearance, one per target.
+ * User mentions are not references — a person is not something to read —
+ * so they are left out. Names come from the chip where it carries one
+ * (`resourceReference`, `taskMention`); the rest resolve on read.
+ */
+export function extractReferenceChips(bodyJson: string): ReferenceChip[] {
+  try {
+    const blocks: BlockNoteBlock[] = JSON.parse(bodyJson);
+    const chips: ReferenceChip[] = [];
+    const seen = new Set<string>();
+    const add = (chip: ReferenceChip | null) => {
+      if (chip && chip.id && !seen.has(chip.id)) {
+        seen.add(chip.id);
+        chips.push(chip);
+      }
+    };
+    const fromItem = (item: InlineContent): ReferenceChip | null => {
+      switch (item.type) {
+        case "resourceReference": {
+          const ref = item as {
+            props: { resourceId?: string; resourceType?: string; resourceName?: string };
+          };
+          const type = ref.props.resourceType;
+          if (type !== "document" && type !== "diagram" && type !== "spreadsheet") return null;
+          return ref.props.resourceId
+            ? { type, id: ref.props.resourceId, name: ref.props.resourceName }
+            : null;
+        }
+        case "taskMention": {
+          const m = item as { props: { taskId?: string; taskTitle?: string } };
+          return m.props.taskId ? { type: "task", id: m.props.taskId, name: m.props.taskTitle } : null;
+        }
+        case "projectReference": {
+          const m = item as { props: { projectId?: string } };
+          return m.props.projectId ? { type: "project", id: m.props.projectId } : null;
+        }
+        case "eventMention": {
+          const m = item as { props: { eventId?: string; seriesId?: string } };
+          if (m.props.eventId) return { type: "event", id: m.props.eventId };
+          if (m.props.seriesId) return { type: "series", id: m.props.seriesId };
+          return null;
+        }
+        default:
+          return null;
+      }
+    };
+    const traverse = (list: BlockNoteBlock[]): void => {
+      for (const block of list) {
+        for (const item of block.content ?? []) {
+          add(fromItem(item));
+          if (item.type === "link") {
+            const link = item as { content?: InlineContent[] };
+            for (const inner of link.content ?? []) add(fromItem(inner));
+          }
+        }
+        if (block.children) traverse(block.children);
+      }
+    };
+    traverse(blocks);
+    return chips;
+  } catch {
+    return [];
+  }
 }

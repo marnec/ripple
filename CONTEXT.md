@@ -256,6 +256,38 @@ channels are left, never dismissed. Per-user and cross-device — the opposite o
 **visibility** on both counts, which is why it does not live in device storage.
 _Avoid_: hiding, visibility, archiving, muting, closing
 
+**Workspace assistant**:
+The AI bot each workspace gets when the `ai_assistant` feature is on: a bot
+user that answers when mentioned in a **channel**, and the same model behind
+the in-editor writing assistant. Two surfaces, one assistant, one set of
+**assistant tools**.
+_Avoid_: AI, the bot, chatbot, copilot, agent
+
+**Summoner**:
+The person whose mention triggered a **workspace assistant** reply. Every read
+the assistant makes while answering is made with the summoner's access, never
+with an access of its own: it can reach exactly what the summoner could have
+pasted. A reply goes to the whole channel, so this is the boundary that keeps a
+private channel's content from crossing into a public one through the bot.
+_Avoid_: sender, requester, caller, author, user
+
+**Assistant tools**:
+The one read-only tool set both assistant surfaces share, always bound to a
+**summoner**: find resources by name, read a document, a task, a project, a
+spreadsheet, a channel's recent messages. There is no second list — a tool the chat assistant
+has, the writing assistant has, and each applies the same access rule as the
+query a person would call for the same bytes.
+_Avoid_: agent tools, workspace tools, function calling, plugins, skills
+
+**Referenced context** / **Fetched context**:
+The two ways resource content reaches the model for a chat reply. *Referenced*
+context is the content of the **reference chips** in the summoning message,
+loaded before the model runs — the summoner said "this one". *Fetched* context
+is what the model pulled through an **assistant tool** because it decided it
+needed it. Only fetched context is cited in the reply: a referenced source is
+already visible in the question.
+_Avoid_: RAG, retrieval, injected context, grounding, attachments
+
 **Series**:
 The resource behind a repeating meeting: one title, one roster, one venue, one
 recurrence rule, and one local anchor (start date, wall-clock time, IANA

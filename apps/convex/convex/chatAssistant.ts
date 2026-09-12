@@ -18,6 +18,7 @@ import {
   type TranscriptEntry,
 } from "./lib/chatAssistant";
 import { insertMessage, messageTextFromBody } from "./lib/messageInsert";
+import { extractReferenceChips } from "./utils/blocknote";
 import { rateLimiter } from "./rateLimits";
 
 /**
@@ -244,6 +245,22 @@ export const replyContextValidator = v.object({
   senderUserId: v.id("users"),
   threadId: v.string(),
   transcript: v.array(transcriptEntryValidator),
+  /** The reference chips of the summoning message, in order, uncapped. */
+  references: v.array(
+    v.object({
+      type: v.union(
+        v.literal("document"),
+        v.literal("diagram"),
+        v.literal("spreadsheet"),
+        v.literal("task"),
+        v.literal("project"),
+        v.literal("event"),
+        v.literal("series"),
+      ),
+      id: v.string(),
+      name: v.optional(v.string()),
+    }),
+  ),
 });
 
 /**
@@ -306,7 +323,11 @@ export const loadReplyContext = internalQuery({
     for (const message of window) {
       transcript.push({
         author: authorNames.get(message.userId) ?? "Former member",
-        text: await messageTextFromBody(ctx, message.body, channel.workspaceId),
+        // The model's view: chips carry their type and id so a read tool
+        // can reach what the channel referenced.
+        text: await messageTextFromBody(ctx, message.body, channel.workspaceId, {
+          withIds: true,
+        }),
         isAssistant: message.userId === assistant.botUserId,
         isTrigger: message._id === trigger._id,
       });
@@ -322,6 +343,7 @@ export const loadReplyContext = internalQuery({
       senderUserId: trigger.userId,
       threadId: thread.threadId,
       transcript,
+      references: extractReferenceChips(trigger.body),
     };
   },
 });

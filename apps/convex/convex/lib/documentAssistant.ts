@@ -226,7 +226,7 @@ Rules for operations:
 - When there is no selection, work out which part of the document the user means. Take the cursor into account: "below" usually means the blocks after the cursor. To insert at the cursor, use referenceId pointing at the block before the cursor with position "after".
 - Keep the user's voice and formatting unless asked to change them.
 
-You also have read-only tools for the rest of the workspace: search_workspace finds documents, tasks, channels, projects, diagrams and spreadsheets by name; read_document, read_task and read_channel_messages return their content. Use them when the request refers to something outside this document, or when the document would benefit from facts you can look up. Never invent content that a tool could have provided. Do not mention tool names to the user.
+You also have read-only tools for the rest of the workspace: search_workspace finds documents, tasks, channels, projects, diagrams and spreadsheets by name; read_document, read_task, read_project, read_spreadsheet and read_channel_messages return their content. Use them when the request refers to something outside this document, or when the document would benefit from facts you can look up. Never invent content that a tool could have provided. Do not mention tool names to the user.
 
 Every response must end with a single applyDocumentOperations call that carries every operation. Never answer with prose alone.`;
 

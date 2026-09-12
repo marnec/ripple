@@ -13,7 +13,7 @@ import { syncTagsForResource } from "./tagSync";
 import { searchResourcesByTag, searchResourcesByFavorite } from "./resourceSearch";
 import { notify } from "./utils/notify";
 
-const spreadsheetValidator = v.object({
+export const spreadsheetValidator = v.object({
   _id: v.id("spreadsheets"),
   _creationTime: v.number(),
   workspaceId: v.id("workspaces"),

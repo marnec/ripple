@@ -1,5 +1,6 @@
-import { v } from "convex/values";
-import { query } from "./_generated/server";
+import { v, type Infer } from "convex/values";
+import type { Id } from "./_generated/dataModel";
+import { query, type QueryCtx } from "./_generated/server";
 import { checkWorkspaceMember } from "./authHelpers";
 
 // ── Public queries ────────────────────────────────────────────────────────────
@@ -7,11 +8,55 @@ import { checkWorkspaceMember } from "./authHelpers";
 /** Suggestions shown per resource group when the caller doesn't say. */
 const SUGGEST_DEFAULT_PER_TYPE = 5;
 
-const nodeResultValidator = v.object({
+export const nodeResultValidator = v.object({
   resourceId: v.string(),
   resourceType: v.string(),
   name: v.string(),
 });
+
+/** The resource kinds Ctrl+K and the assistant's search can be narrowed to. */
+export const searchableTypeValidator = v.union(
+  v.literal("document"),
+  v.literal("diagram"),
+  v.literal("spreadsheet"),
+  v.literal("project"),
+  v.literal("channel"),
+  v.literal("task"),
+);
+
+/**
+ * The name search over `nodes.by_name`, once. `search` (Ctrl+K) and
+ * `assistantReads.search` both call it after applying the workspace rule
+ * their own way — from auth, or from the summoner's id.
+ *
+ * `searchable: false` is the calendar-event opt-out; everything else is
+ * `true` (enforced by the dbTriggers.ts inserts and the
+ * backfillNodeSearchable migration). Filtering at the index level means the
+ * search engine never has to materialise the events.
+ */
+export async function searchNodes(
+  ctx: QueryCtx,
+  workspaceId: Id<"workspaces">,
+  searchText: string,
+  resourceType?: Infer<typeof searchableTypeValidator>,
+): Promise<Infer<typeof nodeResultValidator>[]> {
+  const results = await ctx.db
+    .query("nodes")
+    .withSearchIndex("by_name", (q) => {
+      const base = q
+        .search("name", searchText)
+        .eq("workspaceId", workspaceId)
+        .eq("searchable", true);
+      return resourceType ? base.eq("resourceType", resourceType) : base;
+    })
+    .take(20);
+
+  return results.map((r) => ({
+    resourceId: r.resourceId,
+    resourceType: r.resourceType,
+    name: r.name,
+  }));
+}
 
 /**
  * Cross-resource search for Ctrl+K. Replaces 5 parallel per-type search queries.
@@ -21,42 +66,13 @@ export const search = query({
   args: {
     workspaceId: v.id("workspaces"),
     searchText: v.string(),
-    resourceType: v.optional(
-      v.union(
-        v.literal("document"),
-        v.literal("diagram"),
-        v.literal("spreadsheet"),
-        v.literal("project"),
-        v.literal("channel"),
-        v.literal("task"),
-      ),
-    ),
+    resourceType: v.optional(searchableTypeValidator),
   },
   returns: v.array(nodeResultValidator),
   handler: async (ctx, { workspaceId, searchText, resourceType }) => {
     const auth = await checkWorkspaceMember(ctx, workspaceId);
     if (!auth) return [];
-
-    // `searchable: false` is the calendar-event opt-out; everything
-    // else is `true` (enforced by the dbTriggers.ts inserts and the
-    // backfillNodeSearchable migration). Filtering at the index level
-    // means the search engine never has to materialise the events.
-    const results = await ctx.db
-      .query("nodes")
-      .withSearchIndex("by_name", (q) => {
-        const base = q
-          .search("name", searchText)
-          .eq("workspaceId", workspaceId)
-          .eq("searchable", true);
-        return resourceType ? base.eq("resourceType", resourceType) : base;
-      })
-      .take(20);
-
-    return results.map((r) => ({
-      resourceId: r.resourceId,
-      resourceType: r.resourceType,
-      name: r.name,
-    }));
+    return searchNodes(ctx, workspaceId, searchText, resourceType);
   },
 });
 

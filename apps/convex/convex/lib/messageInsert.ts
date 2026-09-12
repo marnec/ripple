@@ -8,6 +8,7 @@ import {
   extractEventSeriesMentionIds,
   extractMentionedUserIds,
   extractPlainTextFromBody,
+  type PlainTextOptions,
   extractProjectIds,
 } from "../utils/blocknote";
 import { normalizeIds } from "../utils/ids";
@@ -126,6 +127,7 @@ export async function messageTextFromBody(
   ctx: { db: DatabaseReader },
   body: string,
   workspaceId: Id<"workspaces">,
+  options: PlainTextOptions = {},
 ): Promise<string> {
   const userIds = normalizeIds(ctx.db, "users", extractMentionedUserIds(body));
   const projectIds = normalizeIds(ctx.db, "projects", extractProjectIds(body));
@@ -169,7 +171,7 @@ export async function messageTextFromBody(
     });
   }
 
-  const text = extractPlainTextFromBody(body, userNames, projectNames, eventTitles);
+  const text = extractPlainTextFromBody(body, userNames, projectNames, eventTitles, options);
   return text || attachmentLabelFromBody(body);
 }
 

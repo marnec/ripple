@@ -166,7 +166,7 @@ export const rename = mutation({
   },
 });
 
-const documentValidator = v.object({
+export const documentValidator = v.object({
   _id: v.id("documents"),
   _creationTime: v.number(),
   workspaceId: v.id("workspaces"),

@@ -1,13 +1,19 @@
 "use node";
 
 import { NonRetryableError } from "@convex-dev/workpool";
+import { stepCountIs } from "ai";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import { internalAction } from "./_generated/server";
 import { AiSurface, createAgent, readAiConfig } from "./lib/aiAgents";
+import { assistantTools, preloadReferences } from "./lib/assistantTools";
 import {
   ASSISTANT_MAX_OUTPUT_TOKENS,
+  ASSISTANT_MAX_READ_CHARS,
+  ASSISTANT_MAX_STEPS,
   assistantInstructions,
+  REFERENCED_CONTEXT_MAX,
+  renderReferencedContext,
   renderTranscript,
 } from "./lib/chatAssistant";
 import { markdownToBlocks } from "./lib/headlessEditor";
@@ -54,18 +60,49 @@ export const reply = internalAction({
         workspaceName: context.workspaceName,
         channelName: context.channelName,
       }),
-      // No tools yet, so a single step is the whole answer.
-      maxSteps: 1,
+      maxSteps: ASSISTANT_MAX_STEPS,
       maxOutputTokens: ASSISTANT_MAX_OUTPUT_TOKENS,
     });
+
+    // Bound to the summoner: every read — preloaded or by tool — is made
+    // with the access of whoever mentioned the assistant.
+    const toolOptions = {
+      workspaceId: context.workspaceId,
+      userId: context.senderUserId,
+      maxReadChars: ASSISTANT_MAX_READ_CHARS,
+    };
+
+    // Referenced context: the chips of the summoning message, loaded before
+    // the model runs. Capped; the rest stay reachable by id through a tool.
+    const referenced = renderReferencedContext(
+      await preloadReferences(ctx, toolOptions, context.references.slice(0, REFERENCED_CONTEXT_MAX)),
+    );
+    const prompt = [renderTranscript(context.transcript), referenced].filter(Boolean).join("\n\n");
 
     const result = await agent.generateText(
       ctx,
       { threadId: context.threadId, userId: context.senderUserId },
-      { prompt: renderTranscript(context.transcript) },
+      { prompt, tools: assistantTools(ctx, toolOptions) },
     );
 
-    const text = result.text.trim();
+    let text = result.text.trim();
+
+    // The step limit fired while the model was still reading: the last step
+    // is a tool call, so there is no answer yet. One more call, with tools
+    // withheld, gets an answer from what it has read instead of silence.
+    // The thread holds those reads, so nothing is re-sent here.
+    if (text.length === 0 && result.finishReason === "tool-calls") {
+      const forced = await agent.generateText(
+        ctx,
+        { threadId: context.threadId, userId: context.senderUserId },
+        {
+          prompt: "You may not read anything else. Answer now with what you have read.",
+          toolChoice: "none",
+          stopWhen: stepCountIs(1),
+        },
+      );
+      text = forced.text.trim();
+    }
     if (text.length === 0) return null;
 
     const blocks = await markdownToBlocks(text);

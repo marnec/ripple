@@ -1,4 +1,4 @@
-import { ConvexError, v } from "convex/values";
+import { ConvexError, v, type Infer } from "convex/values";
 import { paginationOptsValidator } from "convex/server";
 import { internalQuery, query } from "./_generated/server";
 import { mutation } from "./functions";
@@ -373,24 +373,32 @@ export const get = query({
   handler: async (ctx, { taskId }) => {
     const result = await checkResourceMember(ctx, "tasks", taskId);
     if (!result) return null;
-    const task = result.resource;
-
-    // Enrich with status, assignee, project key, and blocker status
-    const status = await ctx.db.get(task.statusId);
-    const assignee = task.assigneeId ? await ctx.db.get(task.assigneeId) : null;
-    const project = await ctx.db.get(task.projectId);
-
-    const hasBlockers = await hasBlockingEdge(ctx, taskId);
-
-    return {
-      ...pickTaskFields(task),
-      status,
-      assignee,
-      projectKey: project?.key,
-      hasBlockers,
-    };
+    return enrichTask(ctx, result.resource);
   },
 });
+
+/**
+ * A task row with its status, assignee, project key and blocker flag — the
+ * shape `get` returns. Shared with `assistantReads.getTask`, which applies
+ * the workspace rule from the summoner's id and then wants the same view.
+ */
+export async function enrichTask(
+  ctx: QueryCtx,
+  task: Doc<"tasks">,
+): Promise<Infer<typeof enrichedTaskValidator>> {
+  const status = await ctx.db.get(task.statusId);
+  const assignee = task.assigneeId ? await ctx.db.get(task.assigneeId) : null;
+  const project = await ctx.db.get(task.projectId);
+  const hasBlockers = await hasBlockingEdge(ctx, task._id);
+
+  return {
+    ...pickTaskFields(task),
+    status,
+    assignee,
+    projectKey: project?.key,
+    hasBlockers,
+  };
+}
 
 export const getInternal = internalQuery({
   args: { taskId: v.id("tasks") },
