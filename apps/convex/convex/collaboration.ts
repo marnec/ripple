@@ -103,8 +103,8 @@ export const getUserInfo = internalQuery({
 /**
  * Internal query: Check if user still has access to a resource.
  *
- * Used by PartyKit server for periodic permission re-validation.
- * Consolidates the resource-specific checks into one function.
+ * Used when minting a collaboration token. Consolidates the resource-specific
+ * checks into one function.
  */
 export const checkAccess = internalQuery({
   args: {
@@ -115,5 +115,29 @@ export const checkAccess = internalQuery({
   returns: v.boolean(),
   handler: async (ctx, { userId, resourceType, resourceId }) => {
     return hasResourceAccess(ctx, userId, resourceType, resourceId);
+  },
+});
+
+/**
+ * Internal query: Check whether each of a room's users still has access.
+ *
+ * Used by PartyKit server for periodic permission re-validation — one query
+ * per room per tick rather than one per connection, so the cost of the loop
+ * stays flat as rooms grow. Answers in the order asked, one entry per user.
+ */
+export const checkAccessBatch = internalQuery({
+  args: {
+    userIds: v.array(v.id("users")),
+    resourceType: collabRoomValidator,
+    resourceId: v.string(),
+  },
+  returns: v.array(v.object({ userId: v.id("users"), hasAccess: v.boolean() })),
+  handler: async (ctx, { userIds, resourceType, resourceId }) => {
+    return Promise.all(
+      userIds.map(async (userId) => ({
+        userId,
+        hasAccess: await hasResourceAccess(ctx, userId, resourceType, resourceId),
+      })),
+    );
   },
 });

@@ -10,6 +10,7 @@ import { gridOrders, gridSource, gridTypes } from "@ripple/shared/spreadsheetDoc
 import { parseStableRef, resolveStableRef } from "@ripple/shared/stableRef";
 import { extractBlocksFromFragment } from "@ripple/shared/blockRef";
 import type { ShareAccessLevel } from "@ripple/shared/shareTypes";
+import { checkRoomAccess, collectSubjects } from "./access-check";
 
 /**
  * The connection id behind an awareness update's origin, or null when the
@@ -463,43 +464,27 @@ export default class CollaborationServer extends YServer {
   // ---------------------------------------------------------------------------
 
   private async checkPermissions(roomId: string): Promise<void> {
-    const env = this.env as Env;
-    const convexSiteUrl = env.CONVEX_SITE_URL;
-    const secret = env.PARTYKIT_SECRET;
-    if (!convexSiteUrl || !secret) return;
+    const connections = [...this.getConnections()];
+    const subjects = collectSubjects(
+      connections.map((conn) => conn.state as ConnectionState | undefined),
+    );
 
-    for (const conn of this.getConnections()) {
+    // A failed check is not a revocation — leave the room alone and retry on
+    // the next tick rather than evicting everyone on a blip.
+    const access = await checkRoomAccess(this.env as Env, roomId, subjects);
+    if (!access) return;
+
+    for (const conn of connections) {
       const state = conn.state as ConnectionState | undefined;
-      if (!state?.userId) continue;
+      if (!state?.userId || access.get(state.userId) !== false) continue;
 
-      try {
-        const url = new URL(`${convexSiteUrl}/collaboration/check-access`);
-        url.searchParams.set("roomId", roomId);
-        url.searchParams.set("userId", state.userId);
-        if (state.isGuest && state.shareId) {
-          url.searchParams.set("shareId", state.shareId);
-        }
-
-        const response = await fetch(url.toString(), {
-          method: "GET",
-          headers: { "Authorization": `Bearer ${secret}` },
-        });
-
-        if (response.ok) {
-          const data: { hasAccess: boolean } = await response.json();
-          if (!data.hasAccess) {
-            console.log(`Permission revoked for user ${state.userId} in room ${roomId}`);
-            const msg: ServerMessage = {
-              type: "permission_revoked",
-              reason: "Your access to this resource has been revoked",
-            };
-            conn.send(JSON.stringify(msg));
-            conn.close(1008, "AUTH_FORBIDDEN");
-          }
-        }
-      } catch (error) {
-        console.error(`Permission check failed for user ${state.userId}:`, error);
-      }
+      console.log(`Permission revoked for user ${state.userId} in room ${roomId}`);
+      const msg: ServerMessage = {
+        type: "permission_revoked",
+        reason: "Your access to this resource has been revoked",
+      };
+      conn.send(JSON.stringify(msg));
+      conn.close(1008, "AUTH_FORBIDDEN");
     }
   }
 

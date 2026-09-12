@@ -9,6 +9,7 @@ import type {
 } from "@ripple/shared/protocol";
 import { verifyToken } from "./token-utils";
 import { PresenceRegistry } from "./presence-registry";
+import { checkRoomAccess, collectSubjects } from "./access-check";
 
 interface ConnectionState {
   userId: string;
@@ -216,50 +217,31 @@ export default class PresenceServer extends Server {
    * needs no backend change.
    */
   private async checkPermissions(): Promise<void> {
-    const env = this.env as Env;
-    const convexSiteUrl = env.CONVEX_SITE_URL;
-    const secret = env.PARTYKIT_SECRET;
-    if (!convexSiteUrl || !secret) return;
-
     const roomId = `presence-${this.name}`;
+    const connections = [...this.getConnections()];
+    const subjects = collectSubjects(
+      connections.map((conn) => conn.state as ConnectionState | undefined),
+    );
 
-    for (const conn of this.getConnections()) {
+    // A failed check is not a revocation — leave the room alone and retry on
+    // the next tick rather than evicting everyone on a blip.
+    const access = await checkRoomAccess(this.env as Env, roomId, subjects);
+    if (!access) return;
+
+    for (const conn of connections) {
       const state = conn.state as ConnectionState | undefined;
-      if (!state?.userId) continue;
+      if (!state?.userId || access.get(state.userId) !== false) continue;
 
-      try {
-        const url = new URL(`${convexSiteUrl}/collaboration/check-access`);
-        url.searchParams.set("roomId", roomId);
-        url.searchParams.set("userId", state.userId);
-
-        const response = await fetch(url.toString(), {
-          method: "GET",
-          headers: { "Authorization": `Bearer ${secret}` },
-        });
-
-        // A failed check is not a revocation — leave the connection alone and
-        // retry on the next tick rather than evicting the room on a blip.
-        if (!response.ok) continue;
-
-        const data: { hasAccess: boolean } = await response.json();
-        if (data.hasAccess) continue;
-
-        console.log(
-          `Presence access revoked for user ${state.userId} in workspace ${this.name}`,
-        );
-        const msg: ServerMessage = {
-          type: "permission_revoked",
-          reason: "Your access to this workspace has been revoked",
-        };
-        conn.send(JSON.stringify(msg));
-        conn.close(1008, "AUTH_FORBIDDEN");
-        this.releaseConnection(conn.id);
-      } catch (error) {
-        console.error(
-          `Presence permission check failed for user ${state.userId}:`,
-          error,
-        );
-      }
+      console.log(
+        `Presence access revoked for user ${state.userId} in workspace ${this.name}`,
+      );
+      const msg: ServerMessage = {
+        type: "permission_revoked",
+        reason: "Your access to this workspace has been revoked",
+      };
+      conn.send(JSON.stringify(msg));
+      conn.close(1008, "AUTH_FORBIDDEN");
+      this.releaseConnection(conn.id);
     }
   }
 }

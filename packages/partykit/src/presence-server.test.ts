@@ -101,8 +101,9 @@ async function connect(
   server: InstanceType<typeof PresenceServer>,
   harness: Harness,
   userId: string,
+  connectionId = `conn-${userId}`,
 ): Promise<FakeConnection> {
-  const conn = new FakeConnection(`conn-${userId}`);
+  const conn = new FakeConnection(connectionId);
   harness.connections.set(conn.id, conn);
 
   const token = await signToken({
@@ -133,15 +134,22 @@ function parsed(conn: FakeConnection): Array<{ type: string; userId?: string }> 
 
 /** hasAccess for every user except those named. */
 function fetchDenying(...deniedUsers: string[]) {
-  return vi.fn((input: string) => {
-    const url = new URL(input);
-    const userId = url.searchParams.get("userId") ?? "";
+  return vi.fn((_input: string, init?: RequestInit) => {
+    const { subjects } = JSON.parse(String(init?.body)) as {
+      subjects: Array<{ userId: string }>;
+    };
+    const access = Object.fromEntries(
+      subjects.map((s) => [s.userId, !deniedUsers.includes(s.userId)]),
+    );
     return Promise.resolve(
-      new Response(JSON.stringify({ hasAccess: !deniedUsers.includes(userId) }), {
-        status: 200,
-      }),
+      new Response(JSON.stringify({ access }), { status: 200 }),
     );
   });
+}
+
+function requestBody(fetchMock: ReturnType<typeof vi.fn>, call = 0) {
+  const [, init] = fetchMock.mock.calls[call] as [string, RequestInit];
+  return JSON.parse(String(init.body));
 }
 
 describe("PresenceServer presence_update fan-out", () => {
@@ -208,16 +216,13 @@ describe("PresenceServer permission re-validation", () => {
 
     await server.onAlarm();
 
-    // The check addresses the presence room, not a bare workspace id.
-    const checked = fetchMock.mock.calls.map(([input]) => new URL(input as string));
-    expect(checked.map((u) => u.searchParams.get("roomId"))).toEqual([
-      `presence-${WORKSPACE}`,
-      `presence-${WORKSPACE}`,
-    ]);
-    expect(checked.map((u) => u.searchParams.get("userId"))).toEqual([
-      "user-a",
-      "user-b",
-    ]);
+    // One request for the whole room, addressed to the presence room rather
+    // than a bare workspace id.
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(requestBody(fetchMock)).toEqual({
+      roomId: `presence-${WORKSPACE}`,
+      subjects: [{ userId: "user-a" }, { userId: "user-b" }],
+    });
 
     expect(connB.closed).toEqual({ code: 1008, reason: "AUTH_FORBIDDEN" });
     expect(parsed(connB).map((m) => m.type)).toEqual(["permission_revoked"]);
@@ -229,6 +234,28 @@ describe("PresenceServer permission re-validation", () => {
 
     // The still-authorized member is untouched.
     expect(connA.closed).toBeNull();
+  });
+
+  it("asks about each user once however many tabs they hold", async () => {
+    const fetchMock = fetchDenying("user-b");
+    vi.stubGlobal("fetch", fetchMock);
+    const { server, harness } = createServer();
+
+    await connect(server, harness, "user-a");
+    const tab1 = await connect(server, harness, "user-b");
+    const tab2 = await connect(server, harness, "user-b", "conn-user-b-tab2");
+
+    await server.onAlarm();
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(requestBody(fetchMock).subjects).toEqual([
+      { userId: "user-a" },
+      { userId: "user-b" },
+    ]);
+
+    // …and a revocation still reaches every tab.
+    expect(tab1.closed).toEqual({ code: 1008, reason: "AUTH_FORBIDDEN" });
+    expect(tab2.closed).toEqual({ code: 1008, reason: "AUTH_FORBIDDEN" });
   });
 
   it("leaves connections alone when the access check itself fails", async () => {

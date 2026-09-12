@@ -648,61 +648,84 @@ http.route({
 });
 
 /**
- * GET /collaboration/check-access
+ * POST /collaboration/check-access
  *
- * Verify if a user still has access to a collaboration room.
- * Called by PartyKit server for periodic permission re-validation.
+ * Re-validate every subject still connected to a collaboration room. Called
+ * by PartyKit on a timer — once per room per tick, not once per connection,
+ * so the cost of the loop does not grow with the number of open tabs.
  *
  * Authentication: Shared secret via Authorization: Bearer <PARTYKIT_SECRET>
- * Query params:
+ * Body:
  *   - roomId (format: "{resourceType}-{resourceId}")
- *   - userId (Convex user document ID)
+ *   - subjects: Array<{ userId: string, shareId?: string }>
  *
  * Response:
- * - 200: { hasAccess: true } or { hasAccess: false }
- * - 400: Missing parameters
+ * - 200: { access: { [userId]: boolean } } — one entry per subject
+ * - 400: Invalid body or roomId
  * - 401: Unauthorized (missing/invalid secret)
  * - 500: Internal server error
  */
 http.route({
   path: "/collaboration/check-access",
-  method: "GET",
+  method: "POST",
   handler: httpAction(
     guarded("Permission check", async (ctx, request) => {
       const denied = partykitSecret(request);
       if (denied) return denied;
 
-      const url = new URL(request.url);
-      const userId = url.searchParams.get("userId");
-      const shareId = url.searchParams.get("shareId");
-      if (!userId) return json({ error: "Missing userId" }, 400);
-
-      const room = parseRoomId(url.searchParams.get("roomId"), COLLAB_ROOMS);
-      if (room.kind !== "ok") return roomIdError(room);
-
-      // Guest connections carry a shareId and a `guest:<nanoid>` userId —
-      // re-validate against the share row rather than workspace membership.
-      if (userId.startsWith("guest:")) {
-        const shareable = (YJS_SHARE_ROOMS as string[]).includes(
-          room.resourceType,
-        );
-        if (!shareable || !shareId) return json({ hasAccess: false });
-
-        const hasAccess = await ctx.runQuery(internal.shares.checkGuestAccess, {
-          shareId,
-          resourceType: room.resourceType as YjsShareRoom,
-          resourceId: room.resourceId,
-        });
-        return json({ hasAccess });
+      const body = (await request.json()) as {
+        roomId?: string;
+        subjects?: Array<{ userId?: unknown; shareId?: unknown }>;
+      };
+      if (!Array.isArray(body.subjects)) {
+        return json({ error: "Invalid request body" }, 400);
       }
 
-      const hasAccess = await ctx.runQuery(internal.collaboration.checkAccess, {
-        userId: userId as Id<"users">,
-        resourceType: room.resourceType,
-        resourceId: room.resourceId,
-      });
+      const room = parseRoomId(body.roomId ?? null, COLLAB_ROOMS);
+      if (room.kind !== "ok") return roomIdError(room);
 
-      return json({ hasAccess });
+      const access: Record<string, boolean> = {};
+      const memberIds: Id<"users">[] = [];
+
+      for (const subject of body.subjects) {
+        if (typeof subject?.userId !== "string") continue;
+        const { userId } = subject;
+
+        // Guest connections carry a shareId and a `guest:<nanoid>` userId —
+        // re-validate against the share row rather than workspace membership.
+        if (userId.startsWith("guest:")) {
+          const shareId =
+            typeof subject.shareId === "string" ? subject.shareId : null;
+          const shareable = (YJS_SHARE_ROOMS as string[]).includes(
+            room.resourceType,
+          );
+          access[userId] =
+            shareable && shareId !== null
+              ? await ctx.runQuery(internal.shares.checkGuestAccess, {
+                  shareId,
+                  resourceType: room.resourceType as YjsShareRoom,
+                  resourceId: room.resourceId,
+                })
+              : false;
+          continue;
+        }
+
+        memberIds.push(userId as Id<"users">);
+      }
+
+      if (memberIds.length > 0) {
+        const results = await ctx.runQuery(
+          internal.collaboration.checkAccessBatch,
+          {
+            userIds: memberIds,
+            resourceType: room.resourceType,
+            resourceId: room.resourceId,
+          },
+        );
+        for (const { userId, hasAccess } of results) access[userId] = hasAccess;
+      }
+
+      return json({ access });
     }),
   ),
 });

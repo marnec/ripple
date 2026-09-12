@@ -4566,6 +4566,16 @@ export declare const internal: {
       },
       boolean
     >;
+    checkAccessBatch: FunctionReference<
+      "query",
+      "internal",
+      {
+        resourceId: string;
+        resourceType: "doc" | "diagram" | "task" | "spreadsheet" | "presence";
+        userIds: Array<Id<"users">>;
+      },
+      Array<{ hasAccess: boolean; userId: Id<"users"> }>
+    >;
     getUserInfo: FunctionReference<
       "query",
       "internal",
