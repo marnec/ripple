@@ -1,8 +1,11 @@
 import { cn } from "@/lib/utils";
-import { SuggestionMenuController } from "@blocknote/react";
+import { FormattingToolbarController, SuggestionMenuController } from "@blocknote/react";
 import { BlockNoteView } from "@blocknote/shadcn";
+import { AIMenuController, getAISlashMenuItems } from "@blocknote/xl-ai";
 import "@blocknote/core/fonts/inter.css";
 import "@blocknote/shadcn/style.css";
+import "@blocknote/xl-ai/style.css";
+import { AIFormattingToolbar } from "@/components/AIFormattingToolbar";
 import { FileText, PenTool, Table } from "lucide-react";
 import { NotAvailableOffline } from "@/components/NotAvailableOffline";
 import { RippleSpinner } from "@/components/RippleSpinner";
@@ -239,12 +242,24 @@ export function TaskDescriptionEditor({
           theme={resolvedTheme === "dark" ? "dark" : "light"}
           sideMenu={false}
           portalElements={BODY_PORTAL_ELEMENTS}
-          /* Replaced below so the math items can join the defaults. */
+          /* Replaced below so the math and AI items can join the defaults. */
           slashMenu={false}
+          /* Replaced below so the AI button can join the defaults. */
+          formattingToolbar={false}
         >
+          {/*
+            The writing assistant, same as the document editor's: the menu a
+            selection or `/ai` opens, the toolbar button, the slash item. All
+            three read the AI extension off the editor, which `useTaskDetail`
+            registers per task; `getAISlashMenuItems` is empty without it.
+          */}
+          <AIMenuController />
+          <FormattingToolbarController formattingToolbar={AIFormattingToolbar} />
           <SuggestionMenuController
             triggerCharacter={"/"}
-            getItems={(query) => getRichSlashMenuItems(editor, query)}
+            getItems={(query) =>
+              getRichSlashMenuItems(editor, query, getAISlashMenuItems(editor))
+            }
             floatingUIOptions={SUGGESTION_MENU_FLOATING_OPTIONS}
           />
           <SuggestionMenuController

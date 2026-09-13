@@ -2,20 +2,23 @@ import { getAuthUserId } from "@convex-dev/auth/server";
 import { convertToModelMessages, type StepResult, type ToolSet } from "ai";
 import { api } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
-import { httpAction } from "./_generated/server";
+import { httpAction, type ActionCtx } from "./_generated/server";
 import { AiSurface, createAgent, readAiConfig } from "./lib/aiAgents";
 import { assistantTools } from "./lib/assistantTools";
 import {
+  assistantSystemPrompt,
   corsHeaders,
   describeOperations,
-  DOCUMENT_ASSISTANT_SYSTEM_PROMPT,
   injectDocumentState,
   parseAssistantRequest,
   toolDefinitionsToToolSet,
+  type AssistantSurface,
+  type AssistantTarget,
 } from "./lib/documentAssistant";
 
 /**
- * POST /ai/document — the backend of the in-editor document assistant.
+ * POST /ai/document — the backend of the in-editor writing assistant, for a
+ * document and for a task's description alike.
  *
  * The editor (`@blocknote/xl-ai`) sends the chat so far, the document snapshot
  * and the tool definitions for its own operations; this route runs the model
@@ -24,12 +27,13 @@ import {
  * executed here: the tool has no `execute`, so the call ends the model's turn
  * and the editor applies it as a reviewable suggestion.
  *
- * `documents.get`, the public query the editor itself reads through, decides
- * whether the caller may work on this document. The reading tools are the
- * shared **assistant tools** (`lib/assistantTools`), bound to the caller as
- * **summoner**: the identity is resolved once here and handed to the factory
- * as data, and every read applies its rule through `assistantReads.ts`.
- * Nothing here decides access on its own.
+ * The body names what is being edited (`documentId` or `taskId`), and the
+ * public query the editor itself reads through — `documents.get` or
+ * `tasks.get`, both the workspace rule — decides whether the caller may work
+ * on it. The reading tools are the shared **assistant tools**
+ * (`lib/assistantTools`), bound to the caller as **summoner**: the identity is
+ * resolved once here and handed to the factory as data, and every read applies
+ * its rule through `assistantReads.ts`. Nothing here decides access on its own.
  *
  * The model runs through an `@convex-dev/agent` Agent (`lib/aiAgents`) rather
  * than a bare `streamText`, for the token accounting its usage handler writes.
@@ -40,8 +44,11 @@ import {
  * the response the editor gets is byte-for-byte what it got before.
  */
 
-/** What the assistant is called on the usage rows it produces. */
-const AGENT_NAME = "Document assistant";
+/** What the assistant is called on the usage rows it produces, per surface. */
+const AGENT_NAMES: Record<AssistantTarget["type"], string> = {
+  document: "Document assistant",
+  task: "Task assistant",
+};
 /** Reads are cheap; edits are one call. This bounds a model that keeps looking. */
 const MAX_STEPS = 8;
 /** Enough for a long document rewrite; the stream keeps the request alive. */
@@ -104,6 +111,54 @@ async function orNull<T>(run: () => Promise<T>): Promise<T | null> {
   }
 }
 
+/** What the route learns about its target once access is granted. */
+interface ResolvedTarget {
+  workspaceId: Id<"workspaces">;
+  aiSurface: AiSurface;
+  surface: AssistantSurface;
+}
+
+/**
+ * The workspace rule, applied by the query the editor itself reads through —
+ * the same gate a person passes to open the thing. Null is "no access", and
+ * a malformed id (which fails validation inside `runQuery`) is the same
+ * answer.
+ */
+async function resolveTarget(
+  ctx: ActionCtx,
+  target: AssistantTarget,
+): Promise<ResolvedTarget | null> {
+  switch (target.type) {
+    case "document": {
+      const document = await orNull(() =>
+        ctx.runQuery(api.documents.get, { id: target.id as Id<"documents"> }),
+      );
+      if (!document) return null;
+      return {
+        workspaceId: document.workspaceId,
+        aiSurface: AiSurface.DOCUMENT_ASSISTANT,
+        surface: { type: "document" },
+      };
+    }
+    case "task": {
+      const task = await orNull(() =>
+        ctx.runQuery(api.tasks.get, { taskId: target.id as Id<"tasks"> }),
+      );
+      if (!task) return null;
+      return {
+        workspaceId: task.workspaceId,
+        aiSurface: AiSurface.TASK_ASSISTANT,
+        surface: {
+          type: "task",
+          title: task.title,
+          number: task.number,
+          projectKey: task.projectKey,
+        },
+      };
+    }
+  }
+}
+
 export const documentAssistantPreflight = httpAction(async (_ctx, request) => {
   return new Response(null, {
     status: 204,
@@ -129,15 +184,11 @@ export const documentAssistant = httpAction(async (ctx, request) => {
   if (!parsed.ok) {
     return jsonResponse({ error: parsed.error }, 400, cors);
   }
-  const { documentId, messages, toolDefinitions } = parsed.value;
+  const { target, messages, toolDefinitions } = parsed.value;
 
-  // The workspace rule, applied by the query the editor itself reads through.
-  // A malformed id fails validation inside runQuery; treat that as no access.
-  const document = await orNull(() =>
-    ctx.runQuery(api.documents.get, { id: documentId as Id<"documents"> }),
-  );
-  if (!document) {
-    return jsonResponse({ error: "You do not have access to this document" }, 403, cors);
+  const resolved = await resolveTarget(ctx, target);
+  if (!resolved) {
+    return jsonResponse({ error: `You do not have access to this ${target.type}` }, 403, cors);
   }
 
   const config = readAiConfig();
@@ -146,11 +197,11 @@ export const documentAssistant = httpAction(async (ctx, request) => {
   }
 
   const agent = createAgent({
-    surface: AiSurface.DOCUMENT_ASSISTANT,
-    workspaceId: document.workspaceId,
+    surface: resolved.aiSurface,
+    workspaceId: resolved.workspaceId,
     config,
-    name: AGENT_NAME,
-    instructions: DOCUMENT_ASSISTANT_SYSTEM_PROMPT,
+    name: AGENT_NAMES[target.type],
+    instructions: assistantSystemPrompt(resolved.surface),
     maxSteps: MAX_STEPS,
     maxOutputTokens: MAX_OUTPUT_TOKENS,
   });
@@ -165,7 +216,7 @@ export const documentAssistant = httpAction(async (ctx, request) => {
       tools: {
         ...toolDefinitionsToToolSet(toolDefinitions),
         ...assistantTools(ctx, {
-          workspaceId: document.workspaceId,
+          workspaceId: resolved.workspaceId,
           userId,
           maxReadChars: MAX_READ_CHARS,
         }),

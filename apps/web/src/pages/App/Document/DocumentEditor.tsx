@@ -7,16 +7,11 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { useAutoHideScrollbar } from "@/hooks/use-autohide-scrollbar";
 import {
   BlockNoteViewEditor,
-  FormattingToolbar,
   FormattingToolbarController,
-  getFormattingToolbarItems,
   SuggestionMenuController,
 } from "@blocknote/react";
-import {
-  AIMenuController,
-  AIToolbarButton,
-  getAISlashMenuItems,
-} from "@blocknote/xl-ai";
+import { AIMenuController, getAISlashMenuItems } from "@blocknote/xl-ai";
+import { AIFormattingToolbar } from "@/components/AIFormattingToolbar";
 import { en as aiEn } from "@blocknote/xl-ai/locales";
 import { useAuthToken } from "@convex-dev/auth/react";
 import { BlockNoteView } from "@blocknote/shadcn";
@@ -81,7 +76,7 @@ import {
 } from "./CommentsRail";
 import { richTextDictionary } from "@/lib/blocknote/rich-text-schema";
 import { getRichSlashMenuItems } from "@/lib/blocknote/slash-menu";
-import { createDocumentAI } from "@/lib/blocknote/ai";
+import { createEditorAI } from "@/lib/blocknote/ai";
 import { SUGGESTION_MENU_FLOATING_OPTIONS } from "@/lib/blocknote/floating";
 import { useMediaDropGuard } from "@/hooks/use-media-drop-guard";
 import { documentSchema as schema } from "./schema";
@@ -104,16 +99,6 @@ interface DocumentMeta {
 }
 
 type DocumentEditorInstance = BlockNoteEditor<any, any, any> | null;
-
-/** The default toolbar plus the AI entry point for the current selection. */
-function DocumentFormattingToolbar() {
-  return (
-    <FormattingToolbar>
-      {...getFormattingToolbarItems()}
-      <AIToolbarButton />
-    </FormattingToolbar>
-  );
-}
 
 export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) {
   const { workspaceId } = useParams<QueryParams>();
@@ -223,7 +208,7 @@ function DocumentBody({
   // `documentId`, so lazy state is the right lifetime. The signed-in user's
   // token is pushed in as it rotates, so the next request carries it without
   // the extension — and with it the editor — being recreated.
-  const [ai] = useState(() => createDocumentAI({ documentId }));
+  const [ai] = useState(() => createEditorAI({ type: "document", id: documentId }));
   const authToken = useAuthToken();
   useEffect(() => {
     ai.setToken(authToken);
@@ -562,7 +547,7 @@ function DocumentBody({
       </div>
       {commentsEnabled && !isMobile && <CommentsDockedRail editor={editor} />}
       <AIMenuController />
-      <FormattingToolbarController formattingToolbar={DocumentFormattingToolbar} />
+      <FormattingToolbarController formattingToolbar={AIFormattingToolbar} />
       <SuggestionMenuController
         triggerCharacter={"/"}
         getItems={(query) =>

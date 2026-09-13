@@ -973,8 +973,8 @@ http.route({
 });
 
 /**
- * POST /ai/document — the in-editor document assistant (see
- * `aiDocumentAssistant.ts`). Called by the browser, so it authenticates the
+ * POST /ai/document — the in-editor writing assistant for documents and task
+ * descriptions (see `aiDocumentAssistant.ts`). Called by the browser, so it authenticates the
  * signed-in user from the bearer token rather than a shared secret, and it
  * answers the CORS preflight the cross-origin call triggers.
  */

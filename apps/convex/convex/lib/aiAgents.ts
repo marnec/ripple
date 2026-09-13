@@ -32,8 +32,10 @@ import type { Id } from "../_generated/dataModel";
 
 /** Which feature made the call. Recorded on every usage row. */
 export const AiSurface = {
-  /** The in-editor writing assistant (`aiDocumentAssistant.ts`). */
+  /** The in-editor writing assistant in a document (`aiDocumentAssistant.ts`). */
   DOCUMENT_ASSISTANT: "document_assistant",
+  /** The same assistant in a task's description editor (same route). */
+  TASK_ASSISTANT: "task_assistant",
   /** The workspace bot that answers an @-mention in chat (`chatAssistant.ts`). */
   CHAT_ASSISTANT: "chat_assistant",
 } as const;

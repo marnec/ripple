@@ -3,7 +3,10 @@ import { useQuery } from "convex-helpers/react/cache";;
 import { useWorkspaceMembers } from "@/contexts/WorkspaceMembersContext";
 import { taskTagsOptimisticUpdate } from "@/lib/tag-optimistic";
 import { useViewer } from "../UserContext";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useAuthToken } from "@convex-dev/auth/react";
+import { en as aiEn } from "@blocknote/xl-ai/locales";
+import { createEditorAI, type EditorAI } from "@/lib/blocknote/ai";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 import { taskDescriptionSchema } from "./taskDescriptionSchema";
@@ -17,6 +20,7 @@ import { useTaskEditTracking } from "./useTaskEditTracking";
 
 const taskDescriptionDictionary = {
   ...richTextDictionary,
+  ai: aiEn,
   placeholders: {
     ...richTextDictionary.placeholders,
     default: "Write a description… # refs, @ mentions, / commands",
@@ -80,6 +84,23 @@ export function useTaskDetail({
   });
   const { isOffline, isHydrated, provider, yDoc } = doc;
 
+  // One writing assistant per task. The document editor gets this for free
+  // from a remount per `documentId`; the task shells keep this hook mounted
+  // and swap `taskId` underneath it, so the instance is re-derived here when
+  // the task changes. Recreating it recreates the editor, which is what a
+  // task switch does anyway. The signed-in user's token is pushed in as it
+  // rotates so the next request carries it without the editor being rebuilt.
+  const [assistant, setAssistant] = useState<{ taskId: Id<"tasks">; ai: EditorAI } | null>(
+    () => (taskId ? { taskId, ai: createEditorAI({ type: "task", id: taskId }) } : null),
+  );
+  if ((assistant?.taskId ?? null) !== taskId) {
+    setAssistant(taskId ? { taskId, ai: createEditorAI({ type: "task", id: taskId }) } : null);
+  }
+  const authToken = useAuthToken();
+  useEffect(() => {
+    assistant?.ai.setToken(authToken);
+  }, [assistant, authToken]);
+
   // Collaborative editor - Yjs handles sync automatically
   const { editor, descriptionReady, awaitingSeed } = useDocumentCollaboration({
     doc,
@@ -90,6 +111,7 @@ export function useTaskDetail({
     resourceType: "task",
     uploadFile: fileUpload?.uploadFile,
     dictionary: taskDescriptionDictionary,
+    extensions: assistant?.ai.extensions,
     seed: {
       expected: github.seed.expected,
       snapshotId: github.seed.snapshotId,

@@ -34,14 +34,23 @@ describe("parseAssistantRequest", () => {
     const parsed = parseAssistantRequest(validBody);
     expect(parsed.ok).toBe(true);
     if (!parsed.ok) return;
-    expect(parsed.value.documentId).toBe("doc123");
+    expect(parsed.value.target).toEqual({ type: "document", id: "doc123" });
     expect(parsed.value.messages).toHaveLength(1);
     expect(Object.keys(parsed.value.toolDefinitions)).toEqual(["applyDocumentOperations"]);
+  });
+
+  it("accepts a task description as the target", () => {
+    const parsed = parseAssistantRequest({ ...validBody, documentId: undefined, taskId: "task9" });
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    expect(parsed.value.target).toEqual({ type: "task", id: "task9" });
   });
 
   it.each([
     ["not an object", "nope"],
     ["missing documentId", { ...validBody, documentId: undefined }],
+    ["empty taskId", { ...validBody, documentId: undefined, taskId: "" }],
+    ["both a documentId and a taskId", { ...validBody, taskId: "task9" }],
     ["empty messages", { ...validBody, messages: [] }],
     ["message without parts", { ...validBody, messages: [{ id: "m", role: "user" }] }],
     ["toolDefinitions not an object", { ...validBody, toolDefinitions: [] }],

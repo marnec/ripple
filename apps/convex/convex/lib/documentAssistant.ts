@@ -31,8 +31,18 @@ export interface ToolDefinition {
   outputSchema?: JSONSchema7;
 }
 
+/**
+ * What the editor is working on. A document and a task description are the
+ * same kind of surface to BlockNote — one Y.Doc, the same operations — and
+ * differ only in which query decides access and what the model is told it is
+ * editing. The body names exactly one of `documentId` / `taskId`.
+ */
+export type AssistantTarget =
+  | { type: "document"; id: string }
+  | { type: "task"; id: string };
+
 export interface AssistantRequest {
-  documentId: string;
+  target: AssistantTarget;
   messages: UIMessage[];
   toolDefinitions: Record<string, ToolDefinition>;
 }
@@ -53,10 +63,9 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 export function parseAssistantRequest(body: unknown): ParsedAssistantRequest {
   if (!isRecord(body)) return { ok: false, error: "Body must be a JSON object" };
 
-  const { documentId, messages, toolDefinitions } = body;
-  if (typeof documentId !== "string" || documentId.length === 0) {
-    return { ok: false, error: "documentId must be a non-empty string" };
-  }
+  const { documentId, taskId, messages, toolDefinitions } = body;
+  const target = parseTarget(documentId, taskId);
+  if (!target.ok) return target;
   if (!Array.isArray(messages) || messages.length === 0) {
     return { ok: false, error: "messages must be a non-empty array" };
   }
@@ -82,11 +91,32 @@ export function parseAssistantRequest(body: unknown): ParsedAssistantRequest {
   return {
     ok: true,
     value: {
-      documentId,
+      target: target.value,
       messages: messages as UIMessage[],
       toolDefinitions: toolDefinitions as Record<string, ToolDefinition>,
     },
   };
+}
+
+function parseTarget(
+  documentId: unknown,
+  taskId: unknown,
+): { ok: true; value: AssistantTarget } | { ok: false; error: string } {
+  const hasDocument = documentId !== undefined;
+  const hasTask = taskId !== undefined;
+  if (hasDocument === hasTask) {
+    return { ok: false, error: "Exactly one of documentId or taskId is required" };
+  }
+  if (hasDocument) {
+    if (typeof documentId !== "string" || documentId.length === 0) {
+      return { ok: false, error: "documentId must be a non-empty string" };
+    }
+    return { ok: true, value: { type: "document", id: documentId } };
+  }
+  if (typeof taskId !== "string" || taskId.length === 0) {
+    return { ok: false, error: "taskId must be a non-empty string" };
+  }
+  return { ok: true, value: { type: "task", id: taskId } };
 }
 
 // ── Tools ────────────────────────────────────────────────────────────────────
@@ -212,12 +242,44 @@ export function injectDocumentState(messages: UIMessage[]): UIMessage[] {
 // ── System prompt ────────────────────────────────────────────────────────────
 
 /**
+ * What the model is told it is editing. A document needs no more than that;
+ * a task description is one field of a task, so the task's identity comes
+ * along — the model should not have to call `read_task` to learn the title
+ * of the task whose description it is writing.
+ */
+export type AssistantSurface =
+  | { type: "document" }
+  | {
+      type: "task";
+      title: string;
+      /** The task's number in its project, if it has one. */
+      number?: number | null;
+      /** The project's key, so `KEY-12` can be spelled out. */
+      projectKey?: string | null;
+    };
+
+function surfaceIntro(surface: AssistantSurface): string {
+  if (surface.type === "document") {
+    return "You are the writing assistant inside a collaborative document editor. You change the document by calling the applyDocumentOperations tool with add, update and delete operations on HTML blocks.";
+  }
+  const code =
+    surface.projectKey && surface.number != null ? `${surface.projectKey}-${surface.number}` : null;
+  const identity = code ? `${code} "${surface.title}"` : `"${surface.title}"`;
+  return (
+    `You are the writing assistant inside the description editor of a task in a project tracker. The task is ${identity}; the document you are editing is its description. ` +
+    "A good description states the goal, the context a person needs to pick the task up, acceptance criteria and open questions — concise, scannable, no filler. " +
+    "You change the description by calling the applyDocumentOperations tool with add, update and delete operations on HTML blocks."
+  );
+}
+
+/**
  * What the editor's operations expect, plus how to use the workspace tools.
  * The block rules are the contract of BlockNote's HTML operations: ids are
  * echoed back verbatim (they carry a trailing `$`), list items are one block
  * each, and code blocks name their language on the `<code>` tag.
  */
-export const DOCUMENT_ASSISTANT_SYSTEM_PROMPT = `You are the writing assistant inside a collaborative document editor. You change the document by calling the applyDocumentOperations tool with add, update and delete operations on HTML blocks.
+export function assistantSystemPrompt(surface: AssistantSurface): string {
+  return `${surfaceIntro(surface)}
 
 Rules for operations:
 - Block ids MUST be repeated exactly as given, including the trailing $.
@@ -226,9 +288,13 @@ Rules for operations:
 - When there is no selection, work out which part of the document the user means. Take the cursor into account: "below" usually means the blocks after the cursor. To insert at the cursor, use referenceId pointing at the block before the cursor with position "after".
 - Keep the user's voice and formatting unless asked to change them.
 
-You also have read-only tools for the rest of the workspace: search_workspace finds documents, tasks, channels, projects, diagrams and spreadsheets by name; read_document, read_task, read_project, read_spreadsheet and read_channel_messages return their content. Use them when the request refers to something outside this document, or when the document would benefit from facts you can look up. Never invent content that a tool could have provided. Do not mention tool names to the user.
+You also have read-only tools for the rest of the workspace: search_workspace finds documents, tasks, channels, projects, diagrams and spreadsheets by name; read_document, read_task, read_project, read_spreadsheet and read_channel_messages return their content. Use them when the request refers to something outside this ${surface.type === "task" ? "task" : "document"}, or when the ${surface.type === "task" ? "description" : "document"} would benefit from facts you can look up. Never invent content that a tool could have provided. Do not mention tool names to the user.
 
 Every response must end with a single applyDocumentOperations call that carries every operation. Never answer with prose alone.`;
+}
+
+/** The document surface's prompt, for callers and tests that want the constant. */
+export const DOCUMENT_ASSISTANT_SYSTEM_PROMPT = assistantSystemPrompt({ type: "document" });
 
 // ── CORS ─────────────────────────────────────────────────────────────────────
 

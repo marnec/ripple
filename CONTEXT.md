@@ -259,8 +259,9 @@ _Avoid_: hiding, visibility, archiving, muting, closing
 **Workspace assistant**:
 The AI bot each workspace gets when the `ai_assistant` feature is on: a bot
 user that answers when mentioned in a **channel**, and the same model behind
-the in-editor writing assistant. Two surfaces, one assistant, one set of
-**assistant tools**.
+the in-editor writing assistant — in a document and in a task's description,
+which share one route and one editor extension. Two surfaces, one assistant,
+one set of **assistant tools**.
 _Avoid_: AI, the bot, chatbot, copilot, agent
 
 **Summoner**:

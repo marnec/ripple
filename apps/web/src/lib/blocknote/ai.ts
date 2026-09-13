@@ -1,5 +1,7 @@
-// The document assistant's client half: BlockNote's AI extension pointed at
-// Ripple's own route.
+// The writing assistant's client half: BlockNote's AI extension pointed at
+// Ripple's own route. One factory serves both surfaces that have it — a
+// document and a task's description — because to the editor they are the
+// same thing: a Y.Doc of blocks. Only the body's target differs.
 //
 // `@blocknote/xl-ai` owns everything the user sees — the AI menu, the streamed
 // suggestions, accept / reject — and speaks the AI SDK chat protocol to a
@@ -29,7 +31,12 @@ export function convexSiteUrl(): string {
 /** The cursor other people would see if the AI were a person. */
 const AGENT_CURSOR = { name: "Ripple AI", color: "#8bc6ff" };
 
-export interface DocumentAI {
+/** What the assistant is editing — the route gates each through its own query. */
+export type EditorAITarget =
+  | { type: "document"; id: string }
+  | { type: "task"; id: string };
+
+export interface EditorAI {
   /** Hand to the editor's `extensions`. One array, so its identity is stable. */
   extensions: [ReturnType<typeof AIExtension>];
   /**
@@ -40,9 +47,11 @@ export interface DocumentAI {
   setToken: (token: string | null) => void;
 }
 
-/** Build the AI extension for one document. */
-export function createDocumentAI({ documentId }: { documentId: string }): DocumentAI {
+/** Build the AI extension for one document or one task description. */
+export function createEditorAI(target: EditorAITarget): EditorAI {
   let token: string | null = null;
+  const targetField =
+    target.type === "document" ? { documentId: target.id } : { taskId: target.id };
   const transport = new DefaultChatTransport({
     api: `${convexSiteUrl()}/ai/document`,
     // `body` here is what the extension attaches (the tool definitions); the
@@ -53,7 +62,7 @@ export function createDocumentAI({ documentId }: { documentId: string }): Docume
         ...(headers as Record<string, string> | undefined),
         Authorization: `Bearer ${token ?? ""}`,
       },
-      body: { ...body, id, messages, trigger, messageId, documentId },
+      body: { ...body, id, messages, trigger, messageId, ...targetField },
     }),
   });
 
