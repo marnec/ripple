@@ -753,6 +753,17 @@ function MyCalendarTabContent({ workspaceId }: { workspaceId: Id<"workspaces"> }
     );
   }
 
+  // A task takes the board's route: the sheet is desktop-only, so on mobile a
+  // task click lands on the task page. Pushed rather than replaced so Back
+  // returns to the calendar, as it does from the board.
+  if (isMobile && selectedTaskId && selectedTaskProjectId) {
+    return (
+      <Navigate
+        to={`/workspaces/${workspaceId}/projects/${selectedTaskProjectId}/tasks/${selectedTaskId}`}
+      />
+    );
+  }
+
   return (
     <div className="flex-1 flex flex-col min-h-0 px-4 pb-4 gap-3">
       {/* Mobile-only "New event" trigger — promoted to the global app

@@ -4,7 +4,7 @@ import { AnimatePresence } from "framer-motion";
 import { useQuery } from "convex-helpers/react/cache";
 import { createCalendarControlsPlugin } from "@schedule-x/calendar-controls";
 import { useTheme } from "next-themes";
-import { useParams, useSearchParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
@@ -125,6 +125,7 @@ function ProjectCalendarContent({
     useQuery(api.edges.listTaskDependenciesByProject, { projectId }) ?? [];
   const { resolvedTheme } = useTheme();
   const isMobile = useIsMobile();
+  const navigate = useNavigate();
   const isDark = resolvedTheme === "dark";
 
   const cycles = calendarData?.cycles as CycleWithProgress[] | undefined;
@@ -284,8 +285,15 @@ function ProjectCalendarContent({
   const bgEvents = buildCycleBackgroundEvents(cycles ?? []);
   const hasScheduledTasks = allTasks.some((t) => !!t.plannedStartDate);
 
-  // Full-page navigation now lives inside TaskDetailSheet's expand button.
-  const openTask = (taskId: string) => setSelectedTaskId(taskId as Id<"tasks">);
+  // The sheet is desktop-only: on mobile a task opens its page, as from the
+  // board. On desktop, full-page navigation lives in the sheet's expand button.
+  const openTask = (taskId: string) => {
+    if (isMobile) {
+      void navigate(`/workspaces/${workspaceId}/projects/${projectId}/tasks/${taskId}`);
+    } else {
+      setSelectedTaskId(taskId as Id<"tasks">);
+    }
+  };
   const taskMenuCallbacks: CalendarTaskMenuContextValue = {
     onNavigate: openTask,
     onUnschedule: (taskId) => ix.unscheduleTask(taskId as Id<"tasks">),
