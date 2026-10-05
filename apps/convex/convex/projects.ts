@@ -11,6 +11,7 @@ import { pickProjectFields, projectValidator } from "./validators";
 import { requireWorkspaceMember, requireCreatorOrWorkspaceAdmin, requireResourceMember, checkWorkspaceMember, checkResourceMember } from "./authHelpers";
 import { searchResourcesByFavorite } from "./resourceSearch";
 import { notify } from "./utils/notify";
+import { insertCycle } from "./cycles";
 
 export const create = mutation({
   args: {
@@ -103,6 +104,12 @@ export const create = mutation({
       userId, resourceType: "projects", resourceId: projectId,
       action: "created", newValue: name, resourceName: name, scope: workspaceId,
     });
+
+    // Every project starts with an open "Cycle 1" as its current cycle, so the
+    // board has somewhere to put tasks from the first click.
+    const project = await ctx.db.get(projectId);
+    const cycleId = await insertCycle(ctx, { project: project!, userId });
+    await ctx.db.patch(projectId, { currentCycleId: cycleId });
 
     const user = await ctx.db.get(userId);
     await notify(ctx, {

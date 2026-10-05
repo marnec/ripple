@@ -26,6 +26,9 @@ import {
 } from "@/lib/task-utils";
 import { computeHofstadterLabels } from "@/lib/calendar-utils";
 import { useQuery } from "convex-helpers/react/cache";
+import { useMutation } from "convex/react";
+import { toast } from "sonner";
+import { getErrorMessage } from "@/lib/errors";
 import { Clock, X } from "lucide-react";
 import { useState } from "react";
 import { api } from "@convex/_generated/api";
@@ -35,6 +38,9 @@ import { PropertyRow } from "./PropertyRow";
 
 type TaskPropertiesProps = {
   task: {
+    _id: Id<"tasks">;
+    projectId: Id<"projects">;
+    cycleId?: Id<"cycles">;
     workspaceId: Id<"workspaces">;
     statusId: Id<"taskStatuses">;
     status: { name: string; color: string } | null;
@@ -196,6 +202,9 @@ export function TaskProperties({
           </SelectContent>
         </Select>
       </PropertyRow>
+
+      {/* Cycle */}
+      <TaskCycleRow taskId={task._id} projectId={task.projectId} cycleId={task.cycleId} />
 
       {/* Assignee */}
       <PropertyRow label="Assignee">
@@ -396,5 +405,66 @@ export function TaskProperties({
         </div>
       </PropertyRow>
     </div>
+  );
+}
+
+/** Sentinel `Select` value for "no cycle" — Select values are strings. */
+const BACKLOG_VALUE = "backlog";
+
+/**
+ * The task's cycle. Offers the open cycles plus the backlog; a task sitting
+ * in a closed cycle shows it, and can still be moved out.
+ */
+function TaskCycleRow({
+  taskId,
+  projectId,
+  cycleId,
+}: {
+  taskId: Id<"tasks">;
+  projectId: Id<"projects">;
+  cycleId?: Id<"cycles">;
+}) {
+  const cycles = useQuery(api.cycles.listByProject, { projectId });
+  const moveTasks = useMutation(api.cycles.moveTasks);
+  const current = cycles?.find((c) => c._id === cycleId);
+  const options = (cycles ?? []).filter((c) => c.status === "open" || c._id === cycleId);
+
+  const move = (value: string) => {
+    void moveTasks({
+      projectId,
+      taskIds: [taskId],
+      cycleId: value === BACKLOG_VALUE ? null : (value as Id<"cycles">),
+    }).catch((error: unknown) =>
+      toast.error(getErrorMessage(error, "Could not move the task")),
+    );
+  };
+
+  return (
+    <PropertyRow label="Cycle">
+      <Select
+        value={cycleId ?? BACKLOG_VALUE}
+        onValueChange={(v) => { if (v !== null && v !== (cycleId ?? BACKLOG_VALUE)) move(v); }}
+      >
+        <SelectTrigger>
+          <SelectValue>
+            <span className={cn(!cycleId && "text-muted-foreground")}>
+              {cycleId ? (current?.name ?? "…") : "Backlog"}
+              {current?.status === "closed" && (
+                <span className="ml-1.5 text-xs text-muted-foreground">closed</span>
+              )}
+            </span>
+          </SelectValue>
+        </SelectTrigger>
+        <SelectContent>
+          {options.map((c) => (
+            <SelectItem key={c._id} value={c._id}>
+              {c.name}
+              {c.isCurrent && <span className="ml-1.5 text-xs text-muted-foreground">current</span>}
+            </SelectItem>
+          ))}
+          <SelectItem value={BACKLOG_VALUE}>Backlog</SelectItem>
+        </SelectContent>
+      </Select>
+    </PropertyRow>
   );
 }

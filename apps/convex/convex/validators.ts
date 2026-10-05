@@ -8,10 +8,8 @@ import { v } from "convex/values";
 import type { Doc } from "./_generated/dataModel";
 
 export const cycleStatusValidator = v.union(
-  v.literal("draft"),
-  v.literal("upcoming"),
-  v.literal("active"),
-  v.literal("completed"),
+  v.literal("open"),
+  v.literal("closed"),
 );
 
 export const priorityValidator = v.union(
@@ -129,6 +127,7 @@ export const projectValidator = v.object({
   creatorId: v.id("users"),
   key: v.optional(v.string()),
   taskCounter: v.optional(v.number()),
+  currentCycleId: v.optional(v.id("cycles")),
 });
 
 /**
@@ -149,5 +148,6 @@ export function pickProjectFields(project: Doc<"projects">) {
     creatorId: project.creatorId,
     key: project.key,
     taskCounter: project.taskCounter,
+    currentCycleId: project.currentCycleId,
   };
 }

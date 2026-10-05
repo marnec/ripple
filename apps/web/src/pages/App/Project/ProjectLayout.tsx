@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { MobileHeaderTitle } from "@/contexts/HeaderSlotContext";
 import { useQuery } from "convex-helpers/react/cache";
-import { CalendarDays, LayoutDashboard, ListTodo, RefreshCw, Settings } from "lucide-react";
+import { CalendarDays, Inbox, ListTodo, RefreshCw, Settings } from "lucide-react";
 import { useParams, NavLink, Outlet } from "react-router-dom";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
@@ -30,8 +30,8 @@ export function ProjectLayout() {
 }
 
 const tabs = [
-  { label: "Overview", icon: LayoutDashboard, to: ".", end: true },
   { label: "Tasks", icon: ListTodo, to: "tasks", end: false },
+  { label: "Backlog", icon: Inbox, to: "backlog", end: false },
   { label: "Cycles", icon: RefreshCw, to: "cycles", end: false },
   { label: "Schedule", icon: CalendarDays, to: "calendar", end: false },
   { label: "Settings", icon: Settings, to: "settings", end: false },
@@ -53,10 +53,6 @@ function ProjectLayoutContent({
   }
 
   const isLoading = project === undefined;
-  // On mobile the project name + color move to the app header (via the
-  // breadcrumb slot) and the Overview tab is dropped, so the sub-header
-  // only carries the favorite button + the remaining nav tabs.
-  const visibleTabs = isMobile ? tabs.filter((t) => t.to !== ".") : tabs;
 
   return (
     <div className="flex h-full w-full flex-col">
@@ -77,7 +73,7 @@ function ProjectLayoutContent({
         </div>
 
         <div className="inline-flex h-8 items-center justify-center rounded-lg bg-muted p-1 shrink-0">
-          {visibleTabs.map((tab) => (
+          {tabs.map((tab) => (
             <NavLink
               key={tab.to}
               to={tab.to}

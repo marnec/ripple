@@ -27,6 +27,8 @@ type CreateTaskDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   plannedStartDate?: string;
+  /** The cycle the caller is showing; omitted → the backlog. */
+  cycleId?: Id<"cycles">;
 };
 
 export function CreateTaskDialog({
@@ -35,6 +37,7 @@ export function CreateTaskDialog({
   open,
   onOpenChange,
   plannedStartDate,
+  cycleId,
 }: CreateTaskDialogProps) {
   const [title, setTitle] = useState("");
   const [tags, setTags] = useState<string[]>([]);
@@ -80,6 +83,7 @@ export function CreateTaskDialog({
       workspaceId,
       title: trimmedTitle,
       plannedStartDate,
+      cycleId,
       ...(tags.length > 0 ? { tags: tags } : {}),
     })
       .then(async (taskId) => {

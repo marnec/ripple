@@ -122,11 +122,11 @@ describe("hasBlockers", () => {
         projectId,
         workspaceId,
         name: "Cycle 1",
-        status: "active",
+        status: "open",
         creatorId: userId,
       });
       for (const taskId of [blocked, mentioned]) {
-        await ctx.db.insert("cycleTasks", { cycleId, taskId, projectId, addedBy: userId });
+        await ctx.db.patch(taskId, { cycleId });
       }
       return cycleId;
     });

@@ -597,13 +597,15 @@ export type DataModel = {
   };
   cycles: {
     document: {
+      closedAt?: number;
+      closedBy?: Id<"users">;
       creatorId: Id<"users">;
       description?: string;
       dueDate?: string;
       name: string;
       projectId: Id<"projects">;
       startDate?: string;
-      status: "draft" | "upcoming" | "active" | "completed";
+      status: "open" | "closed" | "draft" | "upcoming" | "active" | "completed";
       workspaceId: Id<"workspaces">;
       _id: Id<"cycles">;
       _creationTime: number;
@@ -611,6 +613,8 @@ export type DataModel = {
     fieldPaths:
       | "_creationTime"
       | "_id"
+      | "closedAt"
+      | "closedBy"
       | "creatorId"
       | "description"
       | "dueDate"
@@ -650,7 +654,6 @@ export type DataModel = {
     indexes: {
       by_id: ["_id"];
       by_creation_time: ["_creationTime"];
-      by_cycle: ["cycleId", "_creationTime"];
       by_cycle_task: ["cycleId", "taskId", "_creationTime"];
       by_task: ["taskId", "_creationTime"];
     };
@@ -1460,6 +1463,7 @@ export type DataModel = {
     document: {
       color: string;
       creatorId: Id<"users">;
+      currentCycleId?: Id<"cycles">;
       description?: string;
       key?: string;
       name: string;
@@ -1473,6 +1477,7 @@ export type DataModel = {
       | "_id"
       | "color"
       | "creatorId"
+      | "currentCycleId"
       | "description"
       | "key"
       | "name"
@@ -2001,6 +2006,7 @@ export type DataModel = {
       assigneeId?: Id<"users">;
       completed: boolean;
       creatorId: Id<"users">;
+      cycleId?: Id<"cycles">;
       dueDate?: string;
       estimate?: number;
       externalAssignees?: Array<{
@@ -2047,6 +2053,7 @@ export type DataModel = {
       | "assigneeId"
       | "completed"
       | "creatorId"
+      | "cycleId"
       | "dueDate"
       | "estimate"
       | "externalAssignees"
@@ -2133,6 +2140,12 @@ export type DataModel = {
         "completed",
         "priority",
         "plannedStartDate",
+        "_creationTime",
+      ];
+      by_project_cycle_completed: [
+        "projectId",
+        "cycleId",
+        "completed",
         "_creationTime",
       ];
       by_project_number: ["projectId", "number", "_creationTime"];
@@ -2232,6 +2245,7 @@ export type DataModel = {
     document: {
       assigneeId?: Id<"users">;
       completed: boolean;
+      cycleId?: Id<"cycles">;
       dueDate?: string;
       plannedStartDate?: string;
       projectId: Id<"projects">;
@@ -2247,6 +2261,7 @@ export type DataModel = {
       | "_id"
       | "assigneeId"
       | "completed"
+      | "cycleId"
       | "dueDate"
       | "plannedStartDate"
       | "projectId"
@@ -2257,6 +2272,13 @@ export type DataModel = {
     indexes: {
       by_id: ["_id"];
       by_creation_time: ["_creationTime"];
+      by_project_cycle_tag_completed: [
+        "projectId",
+        "cycleId",
+        "tagId",
+        "completed",
+        "_creationTime",
+      ];
       by_project_tag_completed: [
         "projectId",
         "tagId",

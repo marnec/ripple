@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { daysRemaining, formatDateRange, CYCLE_STATUS_STYLES } from "./cycleUtils";
+import { daysRemaining, formatDateRange, CYCLE_STATUS_STYLES, cycleBadge } from "./cycleUtils";
 
 describe("daysRemaining", () => {
   afterEach(() => {
@@ -51,12 +51,15 @@ describe("formatDateRange", () => {
 });
 
 describe("CYCLE_STATUS_STYLES", () => {
-  it("has styles for all four statuses", () => {
-    expect(Object.keys(CYCLE_STATUS_STYLES)).toEqual([
-      "draft",
-      "upcoming",
-      "active",
-      "completed",
-    ]);
+  it("has styles for both statuses", () => {
+    expect(Object.keys(CYCLE_STATUS_STYLES)).toEqual(["open", "closed"]);
+  });
+});
+
+describe("cycleBadge", () => {
+  it("labels the current cycle as current, whatever its status", () => {
+    expect(cycleBadge({ status: "open", isCurrent: true }).label).toBe("current");
+    expect(cycleBadge({ status: "open", isCurrent: false }).label).toBe("open");
+    expect(cycleBadge({ status: "closed", isCurrent: false }).label).toBe("closed");
   });
 });

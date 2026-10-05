@@ -881,17 +881,23 @@ export declare const api: {
     >;
   };
   cycles: {
-    addTask: FunctionReference<
-      "mutation",
-      "public",
-      { cycleId: Id<"cycles">; taskId: Id<"tasks"> },
-      null
-    >;
     addTasks: FunctionReference<
       "mutation",
       "public",
       { cycleId: Id<"cycles">; taskIds: Array<Id<"tasks">> },
       number
+    >;
+    close: FunctionReference<
+      "mutation",
+      "public",
+      {
+        cycleId: Id<"cycles">;
+        unfinishedTo:
+          | { kind: "backlog" }
+          | { cycleId: Id<"cycles">; kind: "cycle" }
+          | { kind: "newCycle"; name?: string };
+      },
+      { destinationCycleId: Id<"cycles"> | null; moved: number }
     >;
     create: FunctionReference<
       "mutation",
@@ -899,7 +905,7 @@ export declare const api: {
       {
         description?: string;
         dueDate?: string;
-        name: string;
+        name?: string;
         projectId: Id<"projects">;
         startDate?: string;
         workspaceId: Id<"workspaces">;
@@ -913,15 +919,18 @@ export declare const api: {
       {
         _creationTime: number;
         _id: Id<"cycles">;
+        closedAt?: number;
+        closedBy?: Id<"users">;
         completedTasks: number;
         creatorId: Id<"users">;
         description?: string;
         dueDate?: string;
+        isCurrent: boolean;
         name: string;
         progressPercent: number;
         projectId: Id<"projects">;
         startDate?: string;
-        status: "draft" | "upcoming" | "active" | "completed";
+        status: "open" | "closed";
         totalTasks: number;
         workspaceId: Id<"workspaces">;
       } | null
@@ -933,15 +942,18 @@ export declare const api: {
       Array<{
         _creationTime: number;
         _id: Id<"cycles">;
+        closedAt?: number;
+        closedBy?: Id<"users">;
         completedTasks: number;
         creatorId: Id<"users">;
         description?: string;
         dueDate?: string;
+        isCurrent: boolean;
         name: string;
         progressPercent: number;
         projectId: Id<"projects">;
         startDate?: string;
-        status: "draft" | "upcoming" | "active" | "completed";
+        status: "open" | "closed";
         totalTasks: number;
         workspaceId: Id<"workspaces">;
       }>
@@ -972,6 +984,7 @@ export declare const api: {
         assigneeId?: Id<"users">;
         completed: boolean;
         creatorId: Id<"users">;
+        cycleId?: Id<"cycles">;
         dueDate?: string;
         estimate?: number;
         externalAssignees?: Array<{
@@ -1035,23 +1048,32 @@ export declare const api: {
         cycles: Array<{
           _creationTime: number;
           _id: Id<"cycles">;
+          closedAt?: number;
+          closedBy?: Id<"users">;
           completedTasks: number;
           creatorId: Id<"users">;
           description?: string;
           dueDate?: string;
+          isCurrent: boolean;
           name: string;
           progressPercent: number;
           projectId: Id<"projects">;
           startDate?: string;
-          status: "draft" | "upcoming" | "active" | "completed";
+          status: "open" | "closed";
           totalTasks: number;
           workspaceId: Id<"workspaces">;
         }>;
-        taskCycleDueDatePairs: Array<{
-          cycleDueDate: string;
-          taskId: Id<"tasks">;
-        }>;
       }
+    >;
+    moveTasks: FunctionReference<
+      "mutation",
+      "public",
+      {
+        cycleId: Id<"cycles"> | null;
+        projectId: Id<"projects">;
+        taskIds: Array<Id<"tasks">>;
+      },
+      number
     >;
     remove: FunctionReference<
       "mutation",
@@ -1063,6 +1085,18 @@ export declare const api: {
       "mutation",
       "public",
       { cycleId: Id<"cycles">; taskId: Id<"tasks"> },
+      null
+    >;
+    reopen: FunctionReference<
+      "mutation",
+      "public",
+      { cycleId: Id<"cycles"> },
+      null
+    >;
+    setCurrent: FunctionReference<
+      "mutation",
+      "public",
+      { cycleId: Id<"cycles"> },
       null
     >;
     suggestAddableTasks: FunctionReference<
@@ -1087,7 +1121,6 @@ export declare const api: {
         dueDate?: string | null;
         name?: string;
         startDate?: string | null;
-        status?: "draft" | "upcoming" | "active" | "completed";
       },
       null
     >;
@@ -2686,6 +2719,7 @@ export declare const api: {
         _id: Id<"projects">;
         color: string;
         creatorId: Id<"users">;
+        currentCycleId?: Id<"cycles">;
         description?: string;
         key?: string;
         name: string;
@@ -2702,6 +2736,7 @@ export declare const api: {
         _id: Id<"projects">;
         color: string;
         creatorId: Id<"users">;
+        currentCycleId?: Id<"cycles">;
         description?: string;
         key?: string;
         name: string;
@@ -2739,6 +2774,7 @@ export declare const api: {
           _id: Id<"projects">;
           color: string;
           creatorId: Id<"users">;
+          currentCycleId?: Id<"cycles">;
           description?: string;
           key?: string;
           name: string;
@@ -3138,7 +3174,8 @@ export declare const api: {
           | { kind: "priority"; priority: "urgent" | "high" | "medium" | "low" }
           | { assigneeId: Id<"users"> | null; kind: "assignee" }
           | { kind: "addTag"; tag: string }
-          | { kind: "removeTag"; tag: string };
+          | { kind: "removeTag"; tag: string }
+          | { cycleId: Id<"cycles"> | null; kind: "moveToCycle" };
         projectId: Id<"projects">;
         taskIds: Array<Id<"tasks">>;
       },
@@ -3276,6 +3313,7 @@ export declare const api: {
         assigneeId?: Id<"users">;
         completed: boolean;
         creatorId: Id<"users">;
+        cycleId?: Id<"cycles">;
         dueDate?: string;
         estimate?: number;
         externalAssignees?: Array<{
@@ -3338,6 +3376,7 @@ export declare const api: {
       "public",
       {
         assigneeId?: Id<"users">;
+        cycleId?: Id<"cycles">;
         dueDate?: string;
         estimate?: number;
         plannedStartDate?: string;
@@ -3388,6 +3427,7 @@ export declare const api: {
         assigneeId?: Id<"users">;
         completed: boolean;
         creatorId: Id<"users">;
+        cycleId?: Id<"cycles">;
         dueDate?: string;
         estimate?: number;
         externalAssignees?: Array<{
@@ -3480,6 +3520,7 @@ export declare const api: {
         assigneeId?: Id<"users">;
         completed: boolean;
         creatorId: Id<"users">;
+        cycleId?: Id<"cycles">;
         dueDate?: string;
         estimate?: number;
         externalAssignees?: Array<{
@@ -3514,6 +3555,7 @@ export declare const api: {
           _id: Id<"projects">;
           color: string;
           creatorId: Id<"users">;
+          currentCycleId?: Id<"cycles">;
           description?: string;
           key?: string;
           name: string;
@@ -3550,6 +3592,7 @@ export declare const api: {
       "public",
       {
         completed: boolean;
+        cycleId?: Id<"cycles"> | null;
         limit?: number;
         projectId: Id<"projects">;
         tagNames?: Array<string>;
@@ -3576,6 +3619,7 @@ export declare const api: {
         assigneeId?: Id<"users">;
         completed: boolean;
         creatorId: Id<"users">;
+        cycleId?: Id<"cycles">;
         dueDate?: string;
         estimate?: number;
         externalAssignees?: Array<{
@@ -3678,6 +3722,7 @@ export declare const api: {
           assigneeId?: Id<"users">;
           completed: boolean;
           creatorId: Id<"users">;
+          cycleId?: Id<"cycles">;
           dueDate?: string;
           estimate?: number;
           externalAssignees?: Array<{
@@ -4253,6 +4298,7 @@ export declare const internal: {
           _id: Id<"projects">;
           color: string;
           creatorId: Id<"users">;
+          currentCycleId?: Id<"cycles">;
           description?: string;
           key?: string;
           name: string;
@@ -4318,6 +4364,7 @@ export declare const internal: {
         assigneeId?: Id<"users">;
         completed: boolean;
         creatorId: Id<"users">;
+        cycleId?: Id<"cycles">;
         dueDate?: string;
         estimate?: number;
         externalAssignees?: Array<{
@@ -6315,20 +6362,6 @@ export declare const internal: {
       },
       any
     >;
-    backfillCycleTaskCompleted: FunctionReference<
-      "mutation",
-      "internal",
-      {
-        batchSize?: number;
-        cursor?: string | null;
-        dryRun?: boolean;
-        fn?: string;
-        next?: Array<string>;
-        oneBatchOnly?: boolean;
-        reset?: boolean;
-      },
-      any
-    >;
     backfillDiagramAggregates: FunctionReference<
       "mutation",
       "internal",
@@ -6721,6 +6754,20 @@ export declare const internal: {
       },
       any
     >;
+    drainCycleTasks: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        batchSize?: number;
+        cursor?: string | null;
+        dryRun?: boolean;
+        fn?: string;
+        next?: Array<string>;
+        oneBatchOnly?: boolean;
+        reset?: boolean;
+      },
+      any
+    >;
     migrateAuditActionPrefix: FunctionReference<
       "mutation",
       "internal",
@@ -6753,6 +6800,20 @@ export declare const internal: {
       any
     >;
     migrateChannelLastReadAtToUserChannelState: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        batchSize?: number;
+        cursor?: string | null;
+        dryRun?: boolean;
+        fn?: string;
+        next?: Array<string>;
+        oneBatchOnly?: boolean;
+        reset?: boolean;
+      },
+      any
+    >;
+    migrateCyclesToBacklogModel: FunctionReference<
       "mutation",
       "internal",
       {
@@ -7468,7 +7529,8 @@ export declare const internal: {
           | { kind: "priority"; priority: "urgent" | "high" | "medium" | "low" }
           | { assigneeId: Id<"users"> | null; kind: "assignee" }
           | { kind: "addTag"; tag: string }
-          | { kind: "removeTag"; tag: string };
+          | { kind: "removeTag"; tag: string }
+          | { cycleId: Id<"cycles"> | null; kind: "moveToCycle" };
         projectId: Id<"projects">;
         taskIds: Array<Id<"tasks">>;
         userId: Id<"users">;
@@ -7485,7 +7547,8 @@ export declare const internal: {
           | { kind: "priority"; priority: "urgent" | "high" | "medium" | "low" }
           | { assigneeId: Id<"users"> | null; kind: "assignee" }
           | { kind: "addTag"; tag: string }
-          | { kind: "removeTag"; tag: string };
+          | { kind: "removeTag"; tag: string }
+          | { cycleId: Id<"cycles"> | null; kind: "moveToCycle" };
         projectId: Id<"projects">;
         taskIds: Array<Id<"tasks">>;
         userId: Id<"users">;
@@ -7668,6 +7731,7 @@ export declare const components: {
   channelsByWorkspace: import("@convex-dev/aggregate/_generated/component.js").ComponentApi<"channelsByWorkspace">;
   membersByWorkspace: import("@convex-dev/aggregate/_generated/component.js").ComponentApi<"membersByWorkspace">;
   tasksByWorkspace: import("@convex-dev/aggregate/_generated/component.js").ComponentApi<"tasksByWorkspace">;
+  tasksByCycle: import("@convex-dev/aggregate/_generated/component.js").ComponentApi<"tasksByCycle">;
   eventsByWorkspace: import("@convex-dev/aggregate/_generated/component.js").ComponentApi<"eventsByWorkspace">;
   tagsByWorkspace: import("@convex-dev/aggregate/_generated/component.js").ComponentApi<"tagsByWorkspace">;
 };

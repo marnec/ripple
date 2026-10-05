@@ -30,6 +30,8 @@ import {
   UserMinus,
   UserRound,
   XCircle,
+  Flag,
+  RotateCcw,
 } from "lucide-react";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
@@ -104,6 +106,8 @@ function getActionIcon(action: string) {
     case "updated": return <Pencil className={iconClass} />;
     case "task_added": return <Plus className={iconClass} />;
     case "task_removed": return <Minus className={iconClass} />;
+    case "closed": return <Flag className={iconClass} />;
+    case "reopened": return <RotateCcw className={iconClass} />;
     case "share_created":
     case "share_renamed": return <Share2 className={iconClass} />;
     case "share_revoked": return <XCircle className={iconClass} />;
@@ -265,6 +269,12 @@ function formatAction(entry: TimelineEntry): React.ReactNode {
       return <>{actor} added a task to {label} {name}</>;
     case "task_removed":
       return <>{actor} removed a task from {label} {name}</>;
+    case "closed":
+      return newValue
+        ? <>{actor} closed {label} {name} <span className="text-muted-foreground">— {newValue}</span></>
+        : <>{actor} closed {label} {name}</>;
+    case "reopened":
+      return <>{actor} reopened {label} {name}</>;
     // Shares
     case "share_created":
       return <>{actor} created a share link{resourceName ? <> for {name}</> : null}</>;

@@ -48,7 +48,7 @@ function AddTasksList({
   return (
     <>
       <Input
-        placeholder="Search tasks…"
+        placeholder="Search all tasks…"
         value={search}
         onChange={(e) => onSearchChange(e.target.value)}
       />
@@ -58,7 +58,7 @@ function AddTasksList({
           <div className="py-4 text-center text-sm text-muted-foreground">Loading…</div>
         ) : suggestions.length === 0 ? (
           <div className="py-4 text-center text-sm text-muted-foreground">
-            {searching ? "No tasks match." : "No more tasks to add."}
+            {searching ? "No tasks match." : "The backlog is empty. Search to pull a task from another cycle."}
           </div>
         ) : (
           suggestions.map((task) => {
@@ -182,7 +182,7 @@ export function AddTasksToCycleDialog({
     <ResponsiveDialog open={open} onOpenChange={handleOpenChange} direction="top">
       <ResponsiveDialogContent className="sm:max-w-md">
         <ResponsiveDialogHeader>
-          <ResponsiveDialogTitle>Add tasks to cycle</ResponsiveDialogTitle>
+          <ResponsiveDialogTitle>Pull tasks into cycle</ResponsiveDialogTitle>
         </ResponsiveDialogHeader>
 
         <ResponsiveDialogBody className="my-2">

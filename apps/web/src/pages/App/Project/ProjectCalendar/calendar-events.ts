@@ -71,6 +71,7 @@ export type EnrichedTask = {
   statusId: string;
   priority: string;
   completed: boolean;
+  cycleId?: string;
   dueDate?: string;
   plannedStartDate?: string;
   estimate?: number;

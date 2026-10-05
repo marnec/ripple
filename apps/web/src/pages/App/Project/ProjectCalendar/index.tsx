@@ -198,8 +198,15 @@ function ProjectCalendarContent({
   // list — see `ganttScheduledTasks`.
   const [ganttPreview, setGanttPreview] = useState<{ taskId: string; date: string } | null>(null);
 
+  // A task without its own due date falls back to its cycle's.
+  const cycleDueDates = new Map(
+    (cycles ?? []).flatMap((c) => (c.dueDate ? [[c._id, c.dueDate] as const] : [])),
+  );
   const taskCycleDueDate = new Map<string, string>(
-    (calendarData?.taskCycleDueDatePairs ?? []).map(({ taskId, cycleDueDate }) => [taskId, cycleDueDate])
+    allTasks.flatMap((t) => {
+      const due = t.cycleId ? cycleDueDates.get(t.cycleId) : undefined;
+      return due ? [[t._id, due] as const] : [];
+    }),
   );
 
   const { draggedTaskId, hoveredDropDate, pendingSchedule, clearPendingSchedule } = ix.dragDrop;

@@ -30,14 +30,15 @@ type KanbanAssigneePickerProps = {
 };
 
 /**
- * Inline assignee control on a kanban card: assigning shouldn't cost a trip
- * through the task detail sheet. Unassigned renders as a dotted circle in the
+ * Inline assignee control on a kanban card and a desktop list row: assigning
+ * shouldn't cost a trip through the task detail sheet. Unassigned renders as a dotted circle in the
  * slot the avatar would occupy (so card height never shifts); assigned renders
  * the avatar itself. Either one opens the member combobox.
  *
- * The card is both a drag handle and a click target for the detail sheet, so
- * every pointer event the trigger sees is stopped here — otherwise a pick
- * would start a drag and land on the detail sheet on release.
+ * The card (and the list row) is a click target for the detail sheet, and the
+ * card is also a drag handle, so every pointer event the trigger sees is
+ * stopped here — otherwise a pick would start a drag and land on the detail
+ * sheet on release.
  */
 export function KanbanAssigneePicker({
   taskId,

@@ -531,6 +531,7 @@ async function createTaskFromEvent(
       projectId: link.projectId,
       taskId,
       completed: destinationStatus.isCompleted,
+      cycleId: undefined, // inbound issues land in the backlog
       nextTagNames: split.tags,
     });
     await ctx.db.patch(taskId, { tags });
@@ -666,6 +667,7 @@ async function applyLabelsChanged(
     projectId: link.projectId,
     taskId: task._id,
     completed: task.completed,
+    cycleId: task.cycleId,
     dueDate: task.dueDate,
     plannedStartDate: task.plannedStartDate,
     assigneeId: task.assigneeId,

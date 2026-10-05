@@ -36,6 +36,8 @@ app.use(aggregate, { name: "projectsByWorkspace" });
 app.use(aggregate, { name: "channelsByWorkspace" });
 app.use(aggregate, { name: "membersByWorkspace" });
 app.use(aggregate, { name: "tasksByWorkspace" });
+// Cycle progress (total + completed) per cycle, and per project backlog
+app.use(aggregate, { name: "tasksByCycle" });
 app.use(aggregate, { name: "eventsByWorkspace" });
 app.use(aggregate, { name: "tagsByWorkspace" });
 

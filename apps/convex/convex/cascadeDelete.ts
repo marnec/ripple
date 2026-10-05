@@ -144,9 +144,9 @@ export const cascadeRules = defineCascadeRules({
     },
   ],
 
-  cycles: [
-    { to: "cycleTasks", via: "by_cycle", field: "cycleId" },
-  ],
+  // `cycles` has no children: its tasks keep living (`cycles.remove` sends
+  // them to the backlog), and the legacy `cycleTasks` rows are drained by
+  // migrateCyclesToBacklogModel.
 
   // ── calendarEvents ──────────────────────────────────────────────────
   // When a calendar event is deleted, drop its invitee rows and any

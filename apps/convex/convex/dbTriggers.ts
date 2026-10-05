@@ -88,6 +88,31 @@ export const tasksByWorkspace = new TableAggregate<{
   sortKey: (doc) => doc._creationTime,
 });
 
+/**
+ * Cycle progress. `count` is the cycle's task total and `sum` its completed
+ * count, so a progress bar is two O(log n) reads instead of a subscription to
+ * every task in the cycle — which would re-run each progress query on any
+ * edit to any of those tasks (a rename, a reassignment), not just on a
+ * completion. Backlog tasks get their own per-project namespace.
+ */
+export const tasksByCycle = new TableAggregate<{
+  Namespace: string;
+  Key: number;
+  DataModel: DataModel;
+  TableName: "tasks";
+}>(components.tasksByCycle, {
+  namespace: (doc) => cycleNamespace(doc.projectId, doc.cycleId),
+  sortKey: (doc) => doc._creationTime,
+  sumValue: (doc) => (doc.completed ? 1 : 0),
+});
+
+export function cycleNamespace(
+  projectId: Id<"projects">,
+  cycleId: Id<"cycles"> | undefined,
+): string {
+  return cycleId ?? `backlog:${projectId}`;
+}
+
 export const eventsByWorkspace = new TableAggregate<{
   Namespace: string;
   Key: number;
@@ -145,6 +170,7 @@ triggers.register("projects", projectsByWorkspace.idempotentTrigger());
 triggers.register("channels", channelsByWorkspace.idempotentTrigger());
 triggers.register("workspaceMembers", membersByWorkspace.idempotentTrigger());
 triggers.register("tasks", tasksByWorkspace.idempotentTrigger());
+triggers.register("tasks", tasksByCycle.idempotentTrigger());
 triggers.register("calendarEvents", eventsByWorkspace.idempotentTrigger());
 triggers.register("tags", tagsByWorkspace.idempotentTrigger());
 
@@ -1023,18 +1049,22 @@ triggers.register("taskTags", async (ctx, change) => {
   }
 });
 
-// Keep denormalized columns on the task join tables in sync with the source
+// Keep denormalized columns on the `taskTags` join in sync with the source
 // task. Without this sync the indexed completed-tag-sorted `taskTags` queries
-// would return stale partitions or stale orderings, and cycle progress would
-// report a stale completed count.
+// would return stale partitions or stale orderings, and a tag-filtered board
+// scoped to a cycle would show tasks that have since moved out of it.
 triggers.register("tasks", async (ctx, change) => {
   if (change.operation !== "update") return;
   const completedChanged = change.oldDoc.completed !== change.newDoc.completed;
   const projectChanged = change.oldDoc.projectId !== change.newDoc.projectId;
+  const cycleChanged = change.oldDoc.cycleId !== change.newDoc.cycleId;
   const dueDateChanged = change.oldDoc.dueDate !== change.newDoc.dueDate;
   const startDateChanged = change.oldDoc.plannedStartDate !== change.newDoc.plannedStartDate;
   const assigneeChanged = change.oldDoc.assigneeId !== change.newDoc.assigneeId;
-  if (!completedChanged && !projectChanged && !dueDateChanged && !startDateChanged && !assigneeChanged) return;
+  if (
+    !completedChanged && !projectChanged && !cycleChanged &&
+    !dueDateChanged && !startDateChanged && !assigneeChanged
+  ) return;
   const joins = await ctx.db
     .query("taskTags")
     .withIndex("by_task", (q) => q.eq("taskId", change.id))
@@ -1043,30 +1073,18 @@ triggers.register("tasks", async (ctx, change) => {
     const patch: {
       completed?: boolean;
       projectId?: Id<"projects">;
+      cycleId?: Id<"cycles">;
       dueDate?: string;
       plannedStartDate?: string;
       assigneeId?: Id<"users">;
     } = {};
     if (completedChanged) patch.completed = change.newDoc.completed;
     if (projectChanged) patch.projectId = change.newDoc.projectId;
+    if (cycleChanged) patch.cycleId = change.newDoc.cycleId;
     if (dueDateChanged) patch.dueDate = change.newDoc.dueDate;
     if (startDateChanged) patch.plannedStartDate = change.newDoc.plannedStartDate;
     if (assigneeChanged) patch.assigneeId = change.newDoc.assigneeId;
     await ctx.db.patch(join._id, patch);
-  }
-
-  // `cycleTasks` mirrors only `completed`, so it costs one extra indexed scan
-  // per status flip and nothing at all on the far more frequent rename / date /
-  // assignee edits. A task in K cycles costs K writes here — the right trade,
-  // since the three progress queries are subscriptions read by every viewer of
-  // the project overview, cycles tab and calendar.
-  if (!completedChanged) return;
-  const cycleJoins = await ctx.db
-    .query("cycleTasks")
-    .withIndex("by_task", (q) => q.eq("taskId", change.id))
-    .collect();
-  for (const join of cycleJoins) {
-    await ctx.db.patch(join._id, { completed: change.newDoc.completed });
   }
 });
 

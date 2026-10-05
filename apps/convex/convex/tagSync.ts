@@ -130,6 +130,9 @@ export async function syncTaskTags(
     projectId: Id<"projects">;
     taskId: Id<"tasks">;
     completed: boolean;
+    // Required (but undefined-able) so every caller states it: a join row that
+    // drops it reads as "in the backlog" on a cycle-scoped tag filter.
+    cycleId: Id<"cycles"> | undefined;
     dueDate?: string;
     plannedStartDate?: string;
     assigneeId?: Id<"users">;
@@ -161,6 +164,7 @@ export async function syncTaskTags(
       tagId,
       tagName: name,
       completed: args.completed,
+      cycleId: args.cycleId,
       dueDate: args.dueDate,
       plannedStartDate: args.plannedStartDate,
       assigneeId: args.assigneeId,

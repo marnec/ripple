@@ -143,13 +143,14 @@ export const runAll = migrations.runner([
   internal.migrations.backfillSpreadsheetTags,
   internal.migrations.backfillTaskTagsSortFields,
   internal.migrations.backfillTaskTagsAssigneeId,
-  internal.migrations.backfillCycleTaskCompleted,
   internal.migrations.cleanupProjectTagsField,
   internal.migrations.cleanupProjectEntityTags,
   internal.migrations.backfillTaskExternalRefs,
   internal.migrations.backfillLinkWorkspaceIntegration,
   internal.migrations.unsubscribeNonMembersFromPrivateChannels,
   internal.migrations.migrateTaskLabelsToTags,
+  internal.migrations.migrateCyclesToBacklogModel,
+  internal.migrations.drainCycleTasks,
 ]);
 
 /**
@@ -669,6 +670,7 @@ import {
   channelsByWorkspace,
   membersByWorkspace,
   tasksByWorkspace,
+  tasksByCycle,
   eventsByWorkspace,
   tagsByWorkspace,
 } from "./dbTriggers.js";
@@ -1381,33 +1383,6 @@ export const backfillTaskTagsSortFields = migrations.define({
 });
 
 /**
- * Backfill `completed` on existing cycleTasks rows that predate the
- * denormalization. The trigger keeps the column fresh for new writes; this
- * migration covers rows from before the trigger existed.
- *
- * Until it runs, an un-backfilled row reads as incomplete, so a cycle's
- * progress bar reports low rather than wrong-in-both-directions. `deploy`
- * chains `migrations:runAll` immediately after `convex deploy`, so the window
- * is the length of that run.
- *
- * Idempotent — only patches rows whose denormalized flag differs from the
- * source task. Rows already in sync are skipped.
- */
-export const backfillCycleTaskCompleted = migrations.define({
-  table: "cycleTasks",
-  migrateOne: async (ctx, row) => {
-    const task = await ctx.db.get(row.taskId);
-    if (!task) {
-      // Orphaned join — cleanup is the cascade's job, not this migration's.
-      return;
-    }
-    if (row.completed !== task.completed) {
-      await ctx.db.patch(row._id, { completed: task.completed });
-    }
-  },
-});
-
-/**
  * Backfill `assigneeId` on existing taskTags rows that predate the
  * denormalization. The trigger keeps the column fresh for new writes; this
  * migration covers rows from before the trigger existed.
@@ -1563,5 +1538,128 @@ export const unsubscribeNonMembersFromPrivateChannels = migrations.define({
     if (membership) return;
 
     await ctx.db.delete(sub._id);
+  },
+});
+
+/**
+ * Move every project onto the backlog + manually-closed-cycle model.
+ *
+ * Per project, in one transaction (hence `batchSize: 1`):
+ * 1. Cycle statuses: `completed` → `closed`; `draft` / `upcoming` / `active`
+ *    → `open`.
+ * 2. Current cycle: the `active` cycle with the earliest start date, else the
+ *    oldest other open cycle, else a new "Cycle N".
+ * 3. Each task gets one `cycleId` from its `cycleTasks` rows: the current
+ *    cycle if it is in it, else the newest open cycle it is in; else, if
+ *    completed, the newest closed cycle it is in; else the current cycle. The last rule is what keeps every board looking
+ *    the same after the migration — tasks that were in no cycle (most of
+ *    them, in projects that never used cycles) land on the current cycle's
+ *    board, not in the backlog.
+ *
+ * This runs on the raw migration builder, so no trigger fires: the
+ * `taskTags.cycleId` copy and the `tasksByCycle` aggregate are written here
+ * by hand.
+ *
+ * Idempotent. A project counts as migrated once it has a current cycle or any
+ * cycle in the new statuses — and since `projects.create` makes "Cycle 1" and
+ * `cycles.remove` refuses to delete a project's last cycle, every project
+ * created or migrated after this landed has one, so a `reset` cannot re-run
+ * rule 3 over a real backlog.
+ */
+export const migrateCyclesToBacklogModel = migrations.define({
+  table: "projects",
+  batchSize: 1,
+  migrateOne: async (ctx, project) => {
+    const cycles = await ctx.db
+      .query("cycles")
+      .withIndex("by_project", (q) => q.eq("projectId", project._id))
+      .collect();
+    if (
+      project.currentCycleId !== undefined ||
+      cycles.some((c) => c.status === "open" || c.status === "closed")
+    ) {
+      return;
+    }
+
+    // 1. Statuses.
+    const statusById = new Map<Id<"cycles">, "open" | "closed">();
+    for (const cycle of cycles) {
+      const closed = cycle.status === "completed";
+      statusById.set(cycle._id, closed ? "closed" : "open");
+      await ctx.db.patch(cycle._id, closed
+        ? {
+            status: "closed",
+            // The date the old model considered it done, when there is one.
+            closedAt: (cycle.dueDate && Date.parse(cycle.dueDate)) || cycle._creationTime,
+          }
+        : { status: "open" });
+    }
+
+    // 2. Current cycle.
+    const byStart = (a: { startDate?: string }, b: { startDate?: string }) =>
+      (a.startDate ?? "").localeCompare(b.startDate ?? "");
+    let currentCycleId =
+      cycles.filter((c) => c.status === "active").sort(byStart)[0]?._id ??
+      cycles.find((c) => statusById.get(c._id) === "open")?._id;
+    if (!currentCycleId) {
+      currentCycleId = await ctx.db.insert("cycles", {
+        projectId: project._id,
+        workspaceId: project.workspaceId,
+        name: `Cycle ${cycles.length + 1}`,
+        status: "open",
+        creatorId: project.creatorId,
+      });
+      statusById.set(currentCycleId, "open");
+    }
+    await ctx.db.patch(project._id, { currentCycleId });
+
+    // 3. Tasks. Newest cycle first, so `find` below picks the newest match.
+    const newestFirst = [...cycles].sort((a, b) => b._creationTime - a._creationTime);
+    const tasks = await ctx.db
+      .query("tasks")
+      .withIndex("by_project", (q) => q.eq("projectId", project._id))
+      .collect();
+    for (const task of tasks) {
+      const joins = await ctx.db
+        .query("cycleTasks")
+        .withIndex("by_task", (q) => q.eq("taskId", task._id))
+        .collect();
+      const inCycle = new Set(joins.map((j) => j.cycleId));
+      const memberOf = newestFirst.filter((c) => inCycle.has(c._id));
+      const cycleId =
+        memberOf.find((c) => c._id === currentCycleId)?._id ??
+        memberOf.find((c) => statusById.get(c._id) === "open")?._id ??
+        (task.completed
+          ? memberOf.find((c) => statusById.get(c._id) === "closed")?._id
+          : undefined) ??
+        currentCycleId;
+
+      if (task.cycleId !== cycleId) {
+        await ctx.db.patch(task._id, { cycleId });
+      }
+      await tasksByCycle.replaceOrInsert(ctx, task, { ...task, cycleId });
+
+      const tagJoins = await ctx.db
+        .query("taskTags")
+        .withIndex("by_task", (q) => q.eq("taskId", task._id))
+        .collect();
+      for (const tt of tagJoins) {
+        if (tt.cycleId !== cycleId) await ctx.db.patch(tt._id, { cycleId });
+      }
+
+      for (const join of joins) await ctx.db.delete(join._id);
+    }
+  },
+});
+
+/**
+ * Delete whatever `cycleTasks` rows `migrateCyclesToBacklogModel` did not
+ * reach — join rows whose task was already gone. Once this has run everywhere
+ * the table is empty and can be dropped from the schema.
+ */
+export const drainCycleTasks = migrations.define({
+  table: "cycleTasks",
+  migrateOne: async (ctx, row) => {
+    await ctx.db.delete(row._id);
   },
 });

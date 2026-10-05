@@ -354,11 +354,11 @@ describe("cycles — foreign projectId and foreign taskId", () => {
         projectId: projectB,
         name: "Injected cycle",
       }),
-      // convex/cycles.ts:59 — mirror of the tasks.create defect
+      // mirror of the tasks.create defect
     ).rejects.toThrow();
   });
 
-  it("addTask refuses a task from another workspace", async () => {
+  it("addTasks refuses a task from another workspace", async () => {
     const t = createTestContext();
     const { alice, bob } = await setupTwoWorkspaces(t);
     const { projectId: projectA } = await setupProjectWithStatuses(t, {
@@ -392,12 +392,80 @@ describe("cycles — foreign projectId and foreign taskId", () => {
     );
 
     await expect(
-      alice.asUser.mutation(api.cycles.addTask, { cycleId, taskId: secretTaskId }),
-      // convex/cycles.ts:250 — the gate is on the cycle, never the task
+      alice.asUser.mutation(api.cycles.addTasks, { cycleId, taskIds: [secretTaskId] }),
+      // the gate is on the cycle, never the task
     ).rejects.toThrow();
   });
 
-  it("listCycleTasks never returns a foreign task even if the join row exists", async () => {
+  it("moveTasks refuses a task from another workspace", async () => {
+    const t = createTestContext();
+    const { alice, bob } = await setupTwoWorkspaces(t);
+    const { projectId: projectA } = await setupProjectWithStatuses(t, {
+      workspaceId: alice.workspaceId,
+      userId: alice.userId,
+      key: "AAA",
+    });
+    const { projectId: projectB, todoId: todoB } = await setupProjectWithStatuses(t, {
+      workspaceId: bob.workspaceId,
+      userId: bob.userId,
+      key: "BBB",
+    });
+    const cycleId = await alice.asUser.mutation(api.cycles.create, {
+      workspaceId: alice.workspaceId,
+      projectId: projectA,
+    });
+    const secretTaskId = await t.run(async (ctx) =>
+      ctx.db.insert("tasks", {
+        projectId: projectB,
+        workspaceId: bob.workspaceId,
+        title: "Acquisition of Initech",
+        statusId: todoB,
+        priority: "high" as const,
+        completed: false,
+        creatorId: bob.userId,
+        number: 1,
+      }),
+    );
+
+    await expect(
+      alice.asUser.mutation(api.cycles.moveTasks, {
+        projectId: projectA,
+        taskIds: [secretTaskId],
+        cycleId,
+      }),
+      // the gate is on the project, never the task
+    ).rejects.toThrow(/does not belong/);
+  });
+
+  it("tasks.create refuses a cycle from another workspace", async () => {
+    const t = createTestContext();
+    const { alice, bob } = await setupTwoWorkspaces(t);
+    const { projectId: projectA } = await setupProjectWithStatuses(t, {
+      workspaceId: alice.workspaceId,
+      userId: alice.userId,
+      key: "AAA",
+    });
+    const { projectId: projectB } = await setupProjectWithStatuses(t, {
+      workspaceId: bob.workspaceId,
+      userId: bob.userId,
+      key: "BBB",
+    });
+    const bobsCycle = await bob.asUser.mutation(api.cycles.create, {
+      workspaceId: bob.workspaceId,
+      projectId: projectB,
+    });
+
+    await expect(
+      alice.asUser.mutation(api.tasks.create, {
+        workspaceId: alice.workspaceId,
+        projectId: projectA,
+        title: "Counted in Bob's cycle",
+        cycleId: bobsCycle,
+      }),
+    ).rejects.toThrow(/does not belong/);
+  });
+
+  it("listCycleTasks never returns a foreign task even if it points at the cycle", async () => {
     const t = createTestContext();
     const { alice, bob } = await setupTwoWorkspaces(t);
     const { projectId: projectA } = await setupProjectWithStatuses(t, {
@@ -417,24 +485,19 @@ describe("cycles — foreign projectId and foreign taskId", () => {
       name: "Sprint 1",
     });
 
-    // Seed the join row directly: this asserts the *read* side is defended
-    // independently of the write side, so fixing only `addTask` is not enough.
+    // Seed the pointer directly: this asserts the *read* side is defended
+    // independently of the write side, so fixing only the writers is not enough.
     await t.run(async (ctx) => {
-      const taskId = await ctx.db.insert("tasks", {
+      await ctx.db.insert("tasks", {
         projectId: projectB,
         workspaceId: bob.workspaceId,
         title: "Acquisition of Initech",
         statusId: todoB,
         priority: "high" as const,
         completed: false,
+        cycleId,
         creatorId: bob.userId,
         number: 1,
-      });
-      await ctx.db.insert("cycleTasks", {
-        cycleId,
-        taskId,
-        projectId: projectA,
-        addedBy: alice.userId,
       });
     });
 
@@ -442,7 +505,7 @@ describe("cycles — foreign projectId and foreign taskId", () => {
 
     expect(
       listed.map((task) => task.title),
-      // convex/cycles.ts:385 — enrichedTaskValidator carries the assignee's email
+      // enrichedTaskValidator carries the assignee's email
     ).not.toContain("Acquisition of Initech");
   });
 });

@@ -37,10 +37,10 @@ function ProjectOverviewContent({
   const openTasks = tasks?.filter((t) => !t.completed).length ?? 0;
   const completedTasks = tasks?.filter((t) => t.completed).length ?? 0;
 
-  const activeCycle = cycles?.find((c) => c.status === "active") ?? null;
+  const activeCycle = cycles?.find((c) => c.isCurrent) ?? null;
   const upcomingCycles = cycles
-    ?.filter((c) => c.status === "upcoming")
-    .sort((a, b) => (a.startDate ?? "").localeCompare(b.startDate ?? ""))
+    ?.filter((c) => c.status === "open" && !c.isCurrent)
+    .sort((a, b) => a._creationTime - b._creationTime)
     .slice(0, 3) ?? [];
   const hasCycles = (cycles?.length ?? 0) > 0;
 
@@ -150,7 +150,7 @@ function ActiveCycleCard({
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
             <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400 uppercase tracking-wide">
-              Active cycle
+              Current cycle
             </span>
           </div>
           <p className="font-semibold truncate">{cycle.name}</p>

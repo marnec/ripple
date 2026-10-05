@@ -1,16 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { api, internal } from "../convex/_generated/api";
+import { api } from "../convex/_generated/api";
 import { createTestContext, setupWorkspaceWithAdmin } from "./helpers";
 import type { Id } from "../convex/_generated/dataModel";
 
 /**
- * Cycle progress is `completed / total` over `cycleTasks`, and `completed` is
- * denormalized onto the join row so the three subscribed queries that report it
- * (`get`, `listByProject`, `listForCalendar`) never dereference a `taskId`.
- * That makes the denormalization the load-bearing part: if the fan-out in the
- * tasks trigger stops firing, progress silently freezes at whatever it was when
- * the task joined the cycle, and no query throws. These tests drive the real
- * mutations and read the real queries, so they fail if the trigger is dropped.
+ * Cycle progress is `completed / total` read from the `tasksByCycle` aggregate,
+ * so the three subscribed queries that report it (`get`, `listByProject`,
+ * `listForCalendar`) never read the cycle's tasks. That makes the aggregate
+ * trigger the load-bearing part: if it stops firing, progress silently freezes
+ * and no query throws. These tests drive the real mutations and read the real
+ * queries, so they fail if the trigger is dropped.
  */
 
 type T = ReturnType<typeof createTestContext>;
@@ -72,7 +71,7 @@ describe("cycle progress", () => {
     const a = await f.createTask("A");
     const b = await f.createTask("B");
     for (const taskId of [a, b]) {
-      await f.asUser.mutation(api.cycles.addTask, { cycleId: f.cycleId, taskId });
+      await f.asUser.mutation(api.cycles.addTasks, { cycleId: f.cycleId, taskIds: [taskId] });
     }
 
     const readAll = async () => {
@@ -92,7 +91,7 @@ describe("cycle progress", () => {
       });
     }
 
-    // The whole point of the denormalization: this write must reach the join row.
+    // The whole point of the aggregate: this write must reach it.
     await f.asUser.mutation(api.tasks.update, { taskId: a, statusId: f.doneId });
 
     for (const cycle of await readAll()) {
@@ -114,13 +113,10 @@ describe("cycle progress", () => {
     const t = createTestContext();
     const f = await setupCycleFixture(t);
 
-    // Completed first, added second — the trigger fires on update only, so this
-    // row's flag can only come from the insert in `addTask`.
+    // Completed first, moved second — the move must carry the completed flag
+    // into the cycle's namespace, not just the count.
     const done = await f.createTask("Already done", f.doneId);
-    await f.asUser.mutation(api.cycles.addTask, {
-      cycleId: f.cycleId,
-      taskId: done,
-    });
+    await f.asUser.mutation(api.cycles.addTasks, { cycleId: f.cycleId, taskIds: [done] });
 
     const cycle = await f.asUser.query(api.cycles.get, { cycleId: f.cycleId });
     expect(cycle).toMatchObject({
@@ -137,7 +133,7 @@ describe("cycle progress", () => {
     const done = await f.createTask("Done", f.doneId);
     const open = await f.createTask("Open");
     for (const taskId of [done, open]) {
-      await f.asUser.mutation(api.cycles.addTask, { cycleId: f.cycleId, taskId });
+      await f.asUser.mutation(api.cycles.addTasks, { cycleId: f.cycleId, taskIds: [taskId] });
     }
     await f.asUser.mutation(api.cycles.removeTask, {
       cycleId: f.cycleId,
@@ -149,40 +145,6 @@ describe("cycle progress", () => {
     ).toMatchObject({ totalTasks: 1, completedTasks: 0, progressPercent: 0 });
   });
 
-  it("backfills join rows that predate the denormalization", async () => {
-    const t = createTestContext();
-    const f = await setupCycleFixture(t);
-
-    const done = await f.createTask("Legacy done", f.doneId);
-    const open = await f.createTask("Legacy open");
-
-    // Raw inserts with no `completed` — exactly the shape of a row written
-    // before the column existed.
-    await t.run(async (ctx) => {
-      for (const taskId of [done, open]) {
-        await ctx.db.insert("cycleTasks", {
-          cycleId: f.cycleId,
-          taskId,
-          projectId: f.projectId,
-          addedBy: f.userId,
-        });
-      }
-    });
-
-    expect(
-      await f.asUser.query(api.cycles.get, { cycleId: f.cycleId }),
-    ).toMatchObject({ totalTasks: 2, completedTasks: 0 });
-
-    await t.mutation(internal.migrations.backfillCycleTaskCompleted, {
-      fn: "migrations:backfillCycleTaskCompleted",
-    });
-    await t.finishAllScheduledFunctions(() => {});
-
-    expect(
-      await f.asUser.query(api.cycles.get, { cycleId: f.cycleId }),
-    ).toMatchObject({ totalTasks: 2, completedTasks: 1, progressPercent: 50 });
-  });
-
   it("still enriches cycle tasks with status, assignee and blockers", async () => {
     const t = createTestContext();
     const f = await setupCycleFixture(t);
@@ -190,7 +152,7 @@ describe("cycle progress", () => {
     const open = await f.createTask("Open");
     const done = await f.createTask("Done", f.doneId);
     for (const taskId of [open, done]) {
-      await f.asUser.mutation(api.cycles.addTask, { cycleId: f.cycleId, taskId });
+      await f.asUser.mutation(api.cycles.addTasks, { cycleId: f.cycleId, taskIds: [taskId] });
     }
     await f.asUser.mutation(api.tasks.update, {
       taskId: open,

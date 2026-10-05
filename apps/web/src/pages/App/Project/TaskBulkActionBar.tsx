@@ -3,7 +3,8 @@ import { useMutation } from "convex/react";
 import type { FunctionArgs } from "convex/server";
 import { useQuery } from "convex-helpers/react/cache";
 import { toast } from "sonner";
-import { CircleDot, Flag, Tag as TagIcon, Trash2, User, X, Minus, Plus } from "lucide-react";
+import { getErrorMessage } from "@/lib/errors";
+import { CircleDot, Flag, Inbox, RefreshCw, Tag as TagIcon, Trash2, User, X, Minus, Plus } from "lucide-react";
 import { Button } from "@ripple/ui/components/button";
 import { Input } from "@ripple/ui/components/input";
 import {
@@ -35,6 +36,8 @@ type TaskBulkActionBarProps = {
   projectId: Id<"projects">;
   workspaceId: Id<"workspaces">;
   selected: SelectedTask[];
+  /** The cycle the list is showing, or null for the backlog / all cycles. */
+  currentCycleId: Id<"cycles"> | null;
   visibleCount: number;
   onSelectAll: () => void;
   onClear: () => void;
@@ -50,6 +53,7 @@ const OP_VERB: Record<BulkOp["kind"], string> = {
   assignee: "Reassigning",
   addTag: "Tagging",
   removeTag: "Untagging",
+  moveToCycle: "Moving",
 };
 
 const triggerClass =
@@ -65,6 +69,7 @@ export function TaskBulkActionBar({
   projectId,
   workspaceId,
   selected,
+  currentCycleId,
   visibleCount,
   onSelectAll,
   onClear,
@@ -73,6 +78,10 @@ export function TaskBulkActionBar({
   const statuses = useQuery(api.taskStatuses.listByProject, { projectId });
   const members = useWorkspaceMembers() ?? [];
   const workspaceTags = useQuery(api.tags.listWorkspaceTags, { workspaceId }) ?? [];
+  const cycles = useQuery(api.cycles.listByProject, { projectId });
+  const cycleTargets = (cycles ?? []).filter(
+    (c) => c.status === "open" && c._id !== currentCycleId,
+  );
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [tagOpen, setTagOpen] = useState(false);
   const [tagQuery, setTagQuery] = useState("");
@@ -87,7 +96,7 @@ export function TaskBulkActionBar({
     void applyBulk({ projectId, taskIds, op }).then(
       () => toast(`${OP_VERB[op.kind]} ${taskIds.length} ${taskIds.length === 1 ? "task" : "tasks"}…`),
       (error: unknown) =>
-        toast.error(error instanceof Error ? error.message : "Bulk action failed"),
+        toast.error(getErrorMessage(error, "Bulk action failed")),
     );
   };
 
@@ -193,6 +202,34 @@ export function TaskBulkActionBar({
                     {m.name ?? "Unknown"}
                   </DropdownMenuItem>
                 ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            <DropdownMenu>
+              <DropdownMenuTrigger render={<button type="button" className={triggerClass} />}>
+                <RefreshCw className="size-3.5" />
+                Cycle
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="center" side="top" className="max-h-72 overflow-y-auto">
+                {cycleTargets.map((c) => (
+                  <DropdownMenuItem
+                    key={c._id}
+                    onClick={() => run({ kind: "moveToCycle", cycleId: c._id })}
+                    className="flex items-center gap-2"
+                  >
+                    <RefreshCw className="size-3.5 text-muted-foreground" />
+                    {c.name}
+                    {c.isCurrent && <span className="ml-auto text-[11px] text-muted-foreground">current</span>}
+                  </DropdownMenuItem>
+                ))}
+                {cycleTargets.length > 0 && <DropdownMenuSeparator />}
+                <DropdownMenuItem
+                  onClick={() => run({ kind: "moveToCycle", cycleId: null })}
+                  className="flex items-center gap-2"
+                >
+                  <Inbox className="size-3.5 text-muted-foreground" />
+                  Backlog
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
 

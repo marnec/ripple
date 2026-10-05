@@ -401,6 +401,10 @@ export default defineSchema({
     creatorId: v.id("users"), // the user who created the project (the admin)
     key: v.optional(v.string()), // 2-5 char uppercase identifier (e.g., "ENG")
     taskCounter: v.optional(v.number()), // auto-increment counter for task numbers
+    // The cycle the Tasks tab opens on. Set by hand (`cycles.setCurrent`), never
+    // derived: with several open cycles "the active one" has no answer from the
+    // data alone. Undefined only when every cycle of the project is closed.
+    currentCycleId: v.optional(v.id("cycles")),
     // `tags` was dropped here — cleanupProjectTagsField (runAll) clears it.
   })
     .index("by_workspace", ["workspaceId"])
@@ -443,6 +447,9 @@ export default defineSchema({
     tagId:       v.id("tags"),
     tagName:     v.string(),
     completed:   v.boolean(),
+    // Copied from tasks.cycleId (undefined = backlog) so a tag-filtered board
+    // stays one indexed range scan when it is scoped to a cycle.
+    cycleId:     v.optional(v.id("cycles")),
     // Denormalized sort/filter fields. Optional because the source `tasks`
     // columns are optional. Kept in sync by the tasks-table trigger in
     // dbTriggers.ts. Names match the source columns on `tasks` so the trigger
@@ -453,6 +460,7 @@ export default defineSchema({
     assigneeId:        v.optional(v.id("users")),
   })
     .index("by_project_tag_completed",                   ["projectId", "tagId", "completed"])
+    .index("by_project_cycle_tag_completed",             ["projectId", "cycleId", "tagId", "completed"])
     .index("by_project_tag_completed_dueDate",           ["projectId", "tagId", "completed", "dueDate"])
     .index("by_project_tag_completed_plannedStartDate",  ["projectId", "tagId", "completed", "plannedStartDate"])
     .index("by_workspace_tag",                           ["workspaceId", "tagId"])
@@ -558,6 +566,9 @@ export default defineSchema({
     // column ever needs to accept a push again — Convex validates existing
     // documents on schema push, so the narrow cannot land before the drain.
     completed: v.boolean(), // denormalized from status.isCompleted for efficient filtering
+    // The one cycle this task is planned into; undefined means the backlog.
+    // At most one cycle by construction — a task is never in two at once.
+    cycleId: v.optional(v.id("cycles")),
     creatorId: v.id("users"), // who created the task
     position: v.optional(v.string()), // fractional index for ordering within status column
     yjsSnapshotId: v.optional(v.id("_storage")),
@@ -657,7 +668,10 @@ export default defineSchema({
   })
     .index("by_project", ["projectId"])
     .index("by_project_completed", ["projectId", "completed"])
-    .index("by_project_completed_dueDate", ["projectId", "completed", "dueDate"])
+    // Board / backlog scope. `cycleId` undefined is a real index value, so the
+    // backlog is `.eq("cycleId", undefined)` on the same index.
+    .index("by_project_cycle_completed", ["projectId", "cycleId", "completed"])
+    .index("by_project_completed_dueDate",["projectId", "completed", "dueDate"])
     .index("by_project_completed_plannedStartDate", ["projectId", "completed", "plannedStartDate"])
     .index("by_project_completed_assignee", ["projectId", "completed", "assigneeId"])
     .index("by_project_completed_assignee_dueDate", ["projectId", "completed", "assigneeId", "dueDate"])
@@ -913,20 +927,31 @@ export default defineSchema({
     workspaceId: v.id("workspaces"),
     name: v.string(),
     description: v.optional(v.string()),
+    // Informational only — a cycle is opened and closed by hand, like a
+    // milestone. Neither date ever changes `status`.
     startDate: v.optional(v.string()), // ISO date "2026-03-01"
     dueDate: v.optional(v.string()),   // ISO date "2026-03-31"
+    // `open | closed`. The four date-derived literals are still accepted until
+    // migrateCyclesToBacklogModel has run everywhere; narrow afterwards.
     status: v.union(
+      v.literal("open"),
+      v.literal("closed"),
       v.literal("draft"),
       v.literal("upcoming"),
       v.literal("active"),
       v.literal("completed"),
     ),
+    closedAt: v.optional(v.number()),
+    closedBy: v.optional(v.id("users")),
     creatorId: v.id("users"),
   })
     .index("by_project", ["projectId"])
     .index("by_workspace", ["workspaceId"])
     .index("by_project_status", ["projectId", "status"]),
 
+  // DEPRECATED — superseded by `tasks.cycleId`. Nothing reads or writes it;
+  // migrateCyclesToBacklogModel drains it. Drop the table once that has run.
+  //
   // Denormalized fields:
   //   - `projectId` : for efficient filtering
   //   - `completed` : copied from tasks.completed, kept in sync by the tasks
@@ -946,7 +971,6 @@ export default defineSchema({
     completed: v.optional(v.boolean()),
     addedBy: v.id("users"),
   })
-    .index("by_cycle", ["cycleId"])
     .index("by_task", ["taskId"])
     .index("by_cycle_task", ["cycleId", "taskId"]),
 

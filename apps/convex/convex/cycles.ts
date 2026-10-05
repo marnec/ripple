@@ -1,13 +1,27 @@
 import { ConvexError, v } from "convex/values";
-import { query, type MutationCtx } from "./_generated/server";
+import { query, type MutationCtx, type QueryCtx } from "./_generated/server";
 import { mutation } from "./functions";
 import { Doc, Id } from "./_generated/dataModel";
 import { logActivity } from "./auditLog";
-import type { CycleStatus } from "@ripple/shared/types/cycles";
 import { cycleStatusValidator, taskStatusValidator, userValidator } from "./validators";
 import { baseTaskFields, enrichTasks, taskSuggestionValidator } from "./tasks";
 import { requireWorkspaceMember, requireResourceMember, checkResourceMember } from "./authHelpers";
 import { getAll } from "convex-helpers/server/relationships";
+import { tasksByCycle, cycleNamespace } from "./dbTriggers";
+import {
+  assertOpenCycleInProject,
+  cycleStatusOf,
+  moveTaskToCycle,
+  nextCycleName,
+} from "./lib/cycleRules";
+
+/**
+ * Cycles are milestones a project's tasks are planned into. A task is in at
+ * most one cycle (`tasks.cycleId`); no cycle is the backlog. A cycle is opened
+ * and closed by hand — its dates are informational. One open cycle is the
+ * project's *current* one (`projects.currentCycleId`), which is where the
+ * Tasks tab opens.
+ */
 
 const cycleWithProgressValidator = v.object({
   _id: v.id("cycles"),
@@ -19,7 +33,10 @@ const cycleWithProgressValidator = v.object({
   startDate: v.optional(v.string()),
   dueDate: v.optional(v.string()),
   status: cycleStatusValidator,
+  closedAt: v.optional(v.number()),
+  closedBy: v.optional(v.id("users")),
   creatorId: v.id("users"),
+  isCurrent: v.boolean(),
   totalTasks: v.number(),
   completedTasks: v.number(),
   progressPercent: v.number(),
@@ -34,17 +51,36 @@ const enrichedTaskValidator = v.object({
 });
 
 /**
- * Progress over a cycle's join rows. `completed` is denormalized onto
- * `cycleTasks` (schema.ts) and kept fresh by the tasks trigger, so this reads
- * nothing but the join rows the caller already holds — the three queries below
- * are subscriptions, and dereferencing each `taskId` put every task in every
- * cycle of the project into their read set, so any task write anywhere re-ran
- * all of them for every viewer.
+ * A cycle as the client sees it: status read through the two-state model,
+ * progress from the `tasksByCycle` aggregate. The aggregate is two O(log n)
+ * reads; counting the cycle's tasks directly would put every one of them in
+ * the read set of these subscriptions, re-running them on any edit to any task
+ * in the cycle.
  */
-function progressOf(cts: Doc<"cycleTasks">[]) {
-  const totalTasks = cts.length;
-  const completedTasks = cts.filter((ct) => ct.completed).length;
+async function withProgress(
+  ctx: QueryCtx,
+  cycle: Doc<"cycles">,
+  currentCycleId: Id<"cycles"> | undefined,
+) {
+  const namespace = cycleNamespace(cycle.projectId, cycle._id);
+  const [totalTasks, completedTasks] = await Promise.all([
+    tasksByCycle.count(ctx, { namespace, bounds: {} }),
+    tasksByCycle.sum(ctx, { namespace, bounds: {} }),
+  ]);
   return {
+    _id: cycle._id,
+    _creationTime: cycle._creationTime,
+    projectId: cycle.projectId,
+    workspaceId: cycle.workspaceId,
+    name: cycle.name,
+    description: cycle.description,
+    startDate: cycle.startDate,
+    dueDate: cycle.dueDate,
+    status: cycleStatusOf(cycle),
+    closedAt: cycle.closedAt,
+    closedBy: cycle.closedBy,
+    creatorId: cycle.creatorId,
+    isCurrent: cycle._id === currentCycleId,
     totalTasks,
     completedTasks,
     progressPercent:
@@ -52,23 +88,58 @@ function progressOf(cts: Doc<"cycleTasks">[]) {
   };
 }
 
-/** Compute cycle status from start/due dates relative to today. */
-function computeStatus(
-  startDate: string | undefined,
-  dueDate: string | undefined,
-): CycleStatus {
-  if (!startDate && !dueDate) return "draft";
-  const today = new Date().toISOString().slice(0, 10);
-  if (dueDate && dueDate < today) return "completed";
-  if (startDate && startDate > today) return "upcoming";
-  return "active";
+/** Insert an open cycle. The caller has authorized the project. */
+export async function insertCycle(
+  ctx: MutationCtx,
+  args: {
+    project: Doc<"projects">;
+    userId: Id<"users">;
+    name?: string;
+    description?: string;
+    startDate?: string;
+    dueDate?: string;
+  },
+): Promise<Id<"cycles">> {
+  const name = args.name?.trim() || (await nextCycleName(ctx, args.project._id));
+  const cycleId = await ctx.db.insert("cycles", {
+    projectId: args.project._id,
+    workspaceId: args.project.workspaceId,
+    name,
+    description: args.description,
+    startDate: args.startDate,
+    dueDate: args.dueDate,
+    status: "open",
+    creatorId: args.userId,
+  });
+  await logActivity(ctx, {
+    userId: args.userId, resourceType: "cycles", resourceId: cycleId,
+    action: "created", newValue: name, resourceName: name, scope: args.project.workspaceId,
+  });
+  return cycleId;
+}
+
+/**
+ * The open cycle that takes over when `excluding` stops being current: the
+ * oldest one still open, or none.
+ */
+async function successorCycle(
+  ctx: MutationCtx,
+  projectId: Id<"projects">,
+  excluding: Id<"cycles">,
+): Promise<Id<"cycles"> | undefined> {
+  const cycles = await ctx.db
+    .query("cycles")
+    .withIndex("by_project", (q) => q.eq("projectId", projectId))
+    .collect();
+  return cycles.find((c) => c._id !== excluding && cycleStatusOf(c) === "open")?._id;
 }
 
 export const create = mutation({
   args: {
     projectId: v.id("projects"),
     workspaceId: v.id("workspaces"),
-    name: v.string(),
+    // Omitted → "Cycle N".
+    name: v.optional(v.string()),
     description: v.optional(v.string()),
     startDate: v.optional(v.string()),
     dueDate: v.optional(v.string()),
@@ -85,23 +156,20 @@ export const create = mutation({
       throw new ConvexError("Project does not belong to this workspace");
     }
 
-    const status = computeStatus(args.startDate, args.dueDate);
-
-    const cycleId = await ctx.db.insert("cycles", {
-      projectId: args.projectId,
-      workspaceId: args.workspaceId,
+    const cycleId = await insertCycle(ctx, {
+      project,
+      userId,
       name: args.name,
       description: args.description,
       startDate: args.startDate,
       dueDate: args.dueDate,
-      status,
-      creatorId: userId,
     });
 
-    await logActivity(ctx, {
-      userId, resourceType: "cycles", resourceId: cycleId,
-      action: "created", newValue: args.name, resourceName: args.name, scope: args.workspaceId,
-    });
+    // A project whose cycles were all closed has no current one; the first
+    // cycle opened after that becomes it.
+    if (!project.currentCycleId) {
+      await ctx.db.patch(project._id, { currentCycleId: cycleId });
+    }
 
     return cycleId;
   },
@@ -114,20 +182,12 @@ export const update = mutation({
     description: v.optional(v.union(v.string(), v.null())),
     startDate: v.optional(v.union(v.string(), v.null())),
     dueDate: v.optional(v.union(v.string(), v.null())),
-    status: v.optional(
-      v.union(
-        v.literal("draft"),
-        v.literal("upcoming"),
-        v.literal("active"),
-        v.literal("completed"),
-      )
-    ),
   },
   returns: v.null(),
-  handler: async (ctx, { cycleId, name, description, startDate, dueDate, status }) => {
+  handler: async (ctx, { cycleId, name, description, startDate, dueDate }) => {
     const { userId, resource: cycle } = await requireResourceMember(ctx, "cycles", cycleId);
 
-    const patch: Record<string, unknown> = {};
+    const patch: Partial<Doc<"cycles">> = {};
     if (name !== undefined) patch.name = name;
     if (description === null) patch.description = undefined;
     else if (description !== undefined) patch.description = description;
@@ -143,13 +203,6 @@ export const update = mutation({
 
     if (dueDate === null) patch.dueDate = undefined;
     else if (dueDate !== undefined) patch.dueDate = dueDate;
-
-    // Recompute status when dates change, unless caller explicitly sets status
-    if (status !== undefined) {
-      patch.status = status;
-    } else if (datesChanged) {
-      patch.status = computeStatus(newStartDate, newDueDate);
-    }
 
     if (Object.keys(patch).length > 0) {
       await ctx.db.patch(cycleId, patch);
@@ -186,18 +239,181 @@ export const update = mutation({
   },
 });
 
+/**
+ * Upper bound on the unfinished tasks one `close` moves. Every move fans out
+ * through the task triggers (tag joins, both task aggregates), so this keeps
+ * the transaction well inside its write limit. A cycle with more unfinished
+ * work than this has stopped being a milestone; move some out first.
+ */
+const CLOSE_MAX_UNFINISHED = 500;
+
+const unfinishedDestinationValidator = v.union(
+  v.object({ kind: v.literal("backlog") }),
+  v.object({ kind: v.literal("cycle"), cycleId: v.id("cycles") }),
+  v.object({ kind: v.literal("newCycle"), name: v.optional(v.string()) }),
+);
+
+/**
+ * Close a cycle. Completed tasks stay in it as its record; unfinished ones go
+ * where the caller says. If it was the project's current cycle, the
+ * destination cycle takes over — or, when the work went to the backlog, the
+ * oldest other open cycle (none if there isn't one).
+ */
+export const close = mutation({
+  args: {
+    cycleId: v.id("cycles"),
+    unfinishedTo: unfinishedDestinationValidator,
+  },
+  returns: v.object({
+    moved: v.number(),
+    destinationCycleId: v.union(v.id("cycles"), v.null()),
+  }),
+  handler: async (ctx, { cycleId, unfinishedTo }) => {
+    const { userId, resource: cycle } = await requireResourceMember(ctx, "cycles", cycleId);
+    if (cycleStatusOf(cycle) === "closed") {
+      throw new ConvexError("Cycle is already closed");
+    }
+    const project = await ctx.db.get(cycle.projectId);
+    if (!project) throw new ConvexError("Project not found");
+
+    const unfinished = await ctx.db
+      .query("tasks")
+      .withIndex("by_project_cycle_completed", (q) =>
+        q.eq("projectId", cycle.projectId).eq("cycleId", cycleId).eq("completed", false),
+      )
+      .take(CLOSE_MAX_UNFINISHED + 1);
+    if (unfinished.length > CLOSE_MAX_UNFINISHED) {
+      throw new ConvexError(
+        `This cycle has more than ${CLOSE_MAX_UNFINISHED} unfinished tasks — move some out before closing it`,
+      );
+    }
+
+    let destination: Doc<"cycles"> | null = null;
+    if (unfinishedTo.kind === "cycle") {
+      if (unfinishedTo.cycleId === cycleId) {
+        throw new ConvexError("Pick a different cycle for the unfinished tasks");
+      }
+      destination = await assertOpenCycleInProject(ctx, unfinishedTo.cycleId, cycle.projectId);
+    } else if (unfinishedTo.kind === "newCycle") {
+      const newId = await insertCycle(ctx, { project, userId, name: unfinishedTo.name });
+      destination = await ctx.db.get(newId);
+    }
+
+    // Close first: `assertOpenCycleInProject` above already refused the cycle
+    // being closed as a destination, and closing before moving means no
+    // concurrent reader sees the moved tasks back in an open source cycle.
+    await ctx.db.patch(cycleId, { status: "closed", closedAt: Date.now(), closedBy: userId });
+
+    for (const task of unfinished) {
+      await ctx.db.patch(task._id, { cycleId: destination?._id });
+    }
+
+    if (project.currentCycleId === cycleId || !project.currentCycleId) {
+      const next = destination?._id ?? (await successorCycle(ctx, project._id, cycleId));
+      await ctx.db.patch(project._id, { currentCycleId: next });
+    }
+
+    // One entry for the whole close rather than one per moved task: a close is
+    // a single decision, and per-task entries would bury it.
+    await logActivity(ctx, {
+      userId, resourceType: "cycles", resourceId: cycleId,
+      action: "closed",
+      newValue: unfinished.length === 0
+        ? undefined
+        : `${unfinished.length} unfinished → ${destination?.name ?? "Backlog"}`,
+      resourceName: cycle.name, scope: cycle.workspaceId,
+    });
+
+    return { moved: unfinished.length, destinationCycleId: destination?._id ?? null };
+  },
+});
+
+export const reopen = mutation({
+  args: { cycleId: v.id("cycles") },
+  returns: v.null(),
+  handler: async (ctx, { cycleId }) => {
+    const { userId, resource: cycle } = await requireResourceMember(ctx, "cycles", cycleId);
+    if (cycleStatusOf(cycle) === "open") return null;
+
+    await ctx.db.patch(cycleId, { status: "open", closedAt: undefined, closedBy: undefined });
+
+    const project = await ctx.db.get(cycle.projectId);
+    if (project && !project.currentCycleId) {
+      await ctx.db.patch(project._id, { currentCycleId: cycleId });
+    }
+
+    await logActivity(ctx, {
+      userId, resourceType: "cycles", resourceId: cycleId,
+      action: "reopened", resourceName: cycle.name, scope: cycle.workspaceId,
+    });
+    return null;
+  },
+});
+
+/** Make an open cycle the one the project's Tasks tab opens on. */
+export const setCurrent = mutation({
+  args: { cycleId: v.id("cycles") },
+  returns: v.null(),
+  handler: async (ctx, { cycleId }) => {
+    const { resource: cycle } = await requireResourceMember(ctx, "cycles", cycleId);
+    if (cycleStatusOf(cycle) === "closed") {
+      throw new ConvexError("Only an open cycle can be the current one");
+    }
+    await ctx.db.patch(cycle.projectId, { currentCycleId: cycleId });
+    return null;
+  },
+});
+
+/**
+ * Upper bound on the tasks a cycle delete sends back to the backlog in one
+ * transaction — same reasoning as `CLOSE_MAX_UNFINISHED`.
+ */
+const REMOVE_MAX_TASKS = 500;
+
+/**
+ * Delete a cycle. Its tasks — finished or not — go back to the backlog; a
+ * cycle is a plan, and deleting the plan must not delete the work.
+ *
+ * A project's last cycle cannot be deleted: every project has at least one
+ * cycle (it is created with "Cycle 1"), which is also what lets
+ * `migrateCyclesToBacklogModel` tell a migrated project from one that never
+ * had cycles.
+ */
 export const remove = mutation({
   args: { cycleId: v.id("cycles") },
   returns: v.null(),
   handler: async (ctx, { cycleId }) => {
     const { userId, resource: cycle } = await requireResourceMember(ctx, "cycles", cycleId);
 
-    // Delete all cycleTasks for this cycle
-    const cycleTasks = await ctx.db
-      .query("cycleTasks")
-      .withIndex("by_cycle", (q) => q.eq("cycleId", cycleId))
-      .collect();
-    await Promise.all(cycleTasks.map((ct) => ctx.db.delete(ct._id)));
+    const siblings = await ctx.db
+      .query("cycles")
+      .withIndex("by_project", (q) => q.eq("projectId", cycle.projectId))
+      .take(2);
+    if (siblings.length < 2) {
+      throw new ConvexError("A project needs at least one cycle. Close this one instead of deleting it.");
+    }
+
+    const tasks = await ctx.db
+      .query("tasks")
+      .withIndex("by_project_cycle_completed", (q) =>
+        q.eq("projectId", cycle.projectId).eq("cycleId", cycleId),
+      )
+      .take(REMOVE_MAX_TASKS + 1);
+    if (tasks.length > REMOVE_MAX_TASKS) {
+      throw new ConvexError(
+        `This cycle has more than ${REMOVE_MAX_TASKS} tasks — move some out before deleting it`,
+      );
+    }
+    for (const task of tasks) {
+      await ctx.db.patch(task._id, { cycleId: undefined });
+    }
+
+    const project = await ctx.db.get(cycle.projectId);
+    if (project?.currentCycleId === cycleId) {
+      await ctx.db.patch(project._id, {
+        currentCycleId: await successorCycle(ctx, project._id, cycleId),
+      });
+    }
 
     await logActivity(ctx, {
       userId, resourceType: "cycles", resourceId: cycleId,
@@ -216,12 +432,8 @@ export const get = query({
     const result = await checkResourceMember(ctx, "cycles", cycleId);
     if (!result) return null;
     const cycle = result.resource;
-
-    const cts = await ctx.db
-      .query("cycleTasks")
-      .withIndex("by_cycle", (q) => q.eq("cycleId", cycleId))
-      .collect();
-    return { ...cycle, ...progressOf(cts) };
+    const project = await ctx.db.get(cycle.projectId);
+    return await withProgress(ctx, cycle, project?.currentCycleId);
   },
 });
 
@@ -238,85 +450,52 @@ export const listByProject = query({
       .collect();
 
     return await Promise.all(
-      cycles.map(async (cycle) => {
-        const cts = await ctx.db
-          .query("cycleTasks")
-          .withIndex("by_cycle", (q) => q.eq("cycleId", cycle._id))
-          .collect();
-        return { ...cycle, ...progressOf(cts) };
-      })
+      cycles.map((cycle) => withProgress(ctx, cycle, result.resource.currentCycleId)),
     );
   },
 });
 
+/** Upper bound on one `moveTasks` / `addTasks` call — the pickers offer at most 50. */
+const MOVE_TASKS_MAX_BATCH = 100;
+
 /**
- * File one task into an already-authorized cycle. Returns whether a join row
- * was written (false when the task was already in the cycle).
+ * Move a selection of tasks into a cycle (`cycleId`) or back to the backlog
+ * (`null`), in one transaction. Larger selections go through `taskBulk`'s
+ * `moveToCycle` op, which batches. Returns how many tasks actually moved
+ * (tasks already there are skipped, not errors).
  */
-async function addTaskToCycle(
-  ctx: MutationCtx,
-  cycle: Doc<"cycles">,
-  userId: Id<"users">,
-  taskId: Id<"tasks">,
-): Promise<boolean> {
-  // The caller authorized the CYCLE; `taskId` is unrelated to it. The join
-  // row's projectId is copied from the cycle, so without this check a foreign
-  // task is filed into a local cycle and `listCycleTasks` then returns it
-  // enriched — including the assignee's email.
-  const task = await ctx.db.get(taskId);
-  if (!task) throw new ConvexError("Task not found");
-  if (task.projectId !== cycle.projectId) {
-    throw new ConvexError("Task does not belong to this cycle's project");
-  }
-
-  // Idempotent: skip if already in cycle
-  const existing = await ctx.db
-    .query("cycleTasks")
-    .withIndex("by_cycle_task", (q) => q.eq("cycleId", cycle._id).eq("taskId", taskId))
-    .first();
-  if (existing) return false;
-
-  await ctx.db.insert("cycleTasks", {
-    cycleId: cycle._id,
-    taskId,
-    projectId: cycle.projectId,
-    // Seeded here, then maintained by the tasks trigger. The trigger only
-    // fires on update, so a join row created after the task was completed
-    // would otherwise read as incomplete until the task was next touched.
-    completed: task.completed,
-    addedBy: userId,
-  });
-
-  await logActivity(ctx, {
-    userId, resourceType: "cycles", resourceId: cycle._id,
-    action: "task_added", newValue: task.title,
-    resourceName: cycle.name, scope: cycle.workspaceId,
-  });
-
-  return true;
-}
-
-export const addTask = mutation({
+export const moveTasks = mutation({
   args: {
-    cycleId: v.id("cycles"),
-    taskId: v.id("tasks"),
+    projectId: v.id("projects"),
+    taskIds: v.array(v.id("tasks")),
+    cycleId: v.union(v.id("cycles"), v.null()),
   },
-  returns: v.null(),
-  handler: async (ctx, { cycleId, taskId }) => {
-    const { userId, resource: cycle } = await requireResourceMember(ctx, "cycles", cycleId);
-    await addTaskToCycle(ctx, cycle, userId, taskId);
-    return null;
+  returns: v.number(),
+  handler: async (ctx, { projectId, taskIds, cycleId }) => {
+    if (taskIds.length > MOVE_TASKS_MAX_BATCH) {
+      throw new ConvexError(`At most ${MOVE_TASKS_MAX_BATCH} tasks can be moved at once`);
+    }
+    const { userId } = await requireResourceMember(ctx, "projects", projectId);
+    const target = cycleId ? await assertOpenCycleInProject(ctx, cycleId, projectId) : null;
+
+    let moved = 0;
+    for (const taskId of new Set(taskIds)) {
+      const task = await ctx.db.get(taskId);
+      if (!task) throw new ConvexError("Task not found");
+      // The caller authorized the PROJECT; each task id is unrelated to it.
+      if (task.projectId !== projectId) {
+        throw new ConvexError("Task does not belong to this project");
+      }
+      if (await moveTaskToCycle(ctx, { task, target, userId })) moved++;
+    }
+    return moved;
   },
 });
 
-/** Upper bound on one `addTasks` call — the picker offers at most 50. */
-const ADD_TASKS_MAX_BATCH = 100;
-
 /**
- * One transaction for the whole selection. The add-to-cycle dialog used to
- * fire one `addTask` per selected task in parallel: N mutations, each
- * re-reading the cycle, all contending on it under OCC. Returns how many
- * join rows were written (already-present tasks are skipped, not errors).
+ * Pull tasks into a cycle — the cycle page's "Add tasks" picker. Same as
+ * `moveTasks` with the cycle as the gate: a task in another open cycle moves
+ * here, since a task is in one cycle at a time.
  */
 export const addTasks = mutation({
   args: {
@@ -325,16 +504,39 @@ export const addTasks = mutation({
   },
   returns: v.number(),
   handler: async (ctx, { cycleId, taskIds }) => {
-    if (taskIds.length > ADD_TASKS_MAX_BATCH) {
-      throw new ConvexError(`At most ${ADD_TASKS_MAX_BATCH} tasks can be added at once`);
+    if (taskIds.length > MOVE_TASKS_MAX_BATCH) {
+      throw new ConvexError(`At most ${MOVE_TASKS_MAX_BATCH} tasks can be added at once`);
     }
     const { userId, resource: cycle } = await requireResourceMember(ctx, "cycles", cycleId);
+    const target = await assertOpenCycleInProject(ctx, cycleId, cycle.projectId);
 
     let added = 0;
     for (const taskId of new Set(taskIds)) {
-      if (await addTaskToCycle(ctx, cycle, userId, taskId)) added++;
+      const task = await ctx.db.get(taskId);
+      if (!task) throw new ConvexError("Task not found");
+      // The caller authorized the CYCLE; `taskId` is unrelated to it. Without
+      // this a foreign task is filed into a local cycle and `listCycleTasks`
+      // then returns it enriched — including the assignee's email.
+      if (await moveTaskToCycle(ctx, { task, target, userId })) added++;
     }
     return added;
+  },
+});
+
+/** Send one task from a cycle back to the backlog. No-op if it isn't in that cycle. */
+export const removeTask = mutation({
+  args: {
+    cycleId: v.id("cycles"),
+    taskId: v.id("tasks"),
+  },
+  returns: v.null(),
+  handler: async (ctx, { cycleId, taskId }) => {
+    const { userId } = await requireResourceMember(ctx, "cycles", cycleId);
+    const task = await ctx.db.get(taskId);
+    if (task && task.cycleId === cycleId) {
+      await moveTaskToCycle(ctx, { task, target: null, userId });
+    }
+    return null;
   },
 });
 
@@ -342,24 +544,20 @@ export const addTasks = mutation({
 const SUGGEST_ADDABLE_DEFAULT_LIMIT = 25;
 
 /**
- * Candidate feed for the add-to-cycle dialog. Replaces a subscription to the
- * project's entire active task list that the dialog substring-filtered in JS
- * to fill a 16rem scroll box — the same shape `tasks.suggest` was written to
- * retire for the `#` mention menu.
+ * Candidate feed for the add-to-cycle picker.
  *
  * Two modes, and the product stance lives in the difference:
- * - **Browse** (no query): the project's newest active tasks. Cycle planning
- *   is forward-looking, so finished work is not offered by default.
- * - **Search** (query): the `nodes.by_name` search index, completed tasks
- *   included. The one real case for a completed task in a cycle is
- *   retroactive — "I finished it last week, it should count here" — and the
- *   user naming the task is the signal. No toggle needed.
+ * - **Browse** (no query): the project's newest unfinished *backlog* tasks.
+ *   Planning a cycle is pulling from the backlog; tasks already planned into
+ *   another cycle are not offered unasked.
+ * - **Search** (query): the `nodes.by_name` search index across the whole
+ *   project — other cycles and completed tasks included. Naming a task is the
+ *   signal ("move that one here", "I finished it last week, it counts here").
  *
- * Tasks already in the cycle are dropped server-side, so the page returned is
- * exactly what the picker can offer. The search branch post-filters a
- * workspace-wide index on `projectId` (the index has no project filter field),
- * so it over-fetches and can under-fill when other projects dominate the
- * matches — acceptable for a picker that ranks by relevance.
+ * Tasks already in this cycle are dropped server-side. The search branch
+ * post-filters a workspace-wide index on `projectId` (the index has no project
+ * filter field), so it over-fetches and can under-fill when other projects
+ * dominate the matches — acceptable for a picker that ranks by relevance.
  */
 export const suggestAddableTasks = query({
   args: {
@@ -376,21 +574,6 @@ export const suggestAddableTasks = query({
     const take = Math.max(1, Math.min(limit ?? SUGGEST_ADDABLE_DEFAULT_LIMIT, 50));
     const trimmed = (searchText ?? "").trim();
 
-    // Bounded by the cycle's size, which `listCycleTasks` already reads in
-    // full for the page this dialog opens from.
-    const inCycle = new Set(
-      (
-        // eslint-disable-next-line @convex-dev/no-collect-in-query
-        await ctx.db
-          .query("cycleTasks")
-          .withIndex("by_cycle", (q) => q.eq("cycleId", cycleId))
-          .collect()
-      ).map((ct) => ct.taskId),
-    );
-    // Headroom: rows already in the cycle are dropped after the index has
-    // spoken, so ask for that many more.
-    const candidateLimit = take + inCycle.size;
-
     let tasks: Doc<"tasks">[];
     if (trimmed.length > 0) {
       const candidates = await ctx.db
@@ -402,25 +585,26 @@ export const suggestAddableTasks = query({
             .eq("resourceType", "task")
             .eq("searchable", true),
         )
-        .take(Math.min(candidateLimit * 4, 200));
+        .take(Math.min(take * 4, 200));
       const fetched = await getAll(
         ctx.db,
         candidates.map((n) => n.resourceId as Id<"tasks">),
       );
-      tasks = fetched.filter(
-        (t): t is Doc<"tasks"> => t !== null && t.projectId === cycle.projectId,
-      );
+      tasks = fetched
+        .filter(
+          (t): t is Doc<"tasks"> =>
+            t !== null && t.projectId === cycle.projectId && t.cycleId !== cycleId,
+        )
+        .slice(0, take);
     } else {
       tasks = await ctx.db
         .query("tasks")
-        .withIndex("by_project_completed", (q) =>
-          q.eq("projectId", cycle.projectId).eq("completed", false),
+        .withIndex("by_project_cycle_completed", (q) =>
+          q.eq("projectId", cycle.projectId).eq("cycleId", undefined).eq("completed", false),
         )
         .order("desc")
-        .take(candidateLimit);
+        .take(take);
     }
-
-    tasks = tasks.filter((t) => !inCycle.has(t._id)).slice(0, take);
 
     const project = await ctx.db.get(cycle.projectId);
     const statusIds = [...new Set(tasks.map((t) => t.statusId))];
@@ -438,81 +622,28 @@ export const suggestAddableTasks = query({
   },
 });
 
-export const removeTask = mutation({
-  args: {
-    cycleId: v.id("cycles"),
-    taskId: v.id("tasks"),
-  },
-  returns: v.null(),
-  handler: async (ctx, { cycleId, taskId }) => {
-    const { userId, resource: cycle } = await requireResourceMember(ctx, "cycles", cycleId);
-
-    const ct = await ctx.db
-      .query("cycleTasks")
-      .withIndex("by_cycle_task", (q) => q.eq("cycleId", cycleId).eq("taskId", taskId))
-      .first();
-    if (ct) {
-      const task = await ctx.db.get(taskId);
-      await ctx.db.delete(ct._id);
-
-      await logActivity(ctx, {
-        userId, resourceType: "cycles", resourceId: cycleId,
-        action: "task_removed", oldValue: task?.title,
-        resourceName: cycle.name, scope: cycle.workspaceId,
-      });
-    }
-
-    return null;
-  },
-});
-
-// `listTaskCycleDueDates` was removed: no callers anywhere in the monorepo.
-// The calendar gets the same { taskId, cycleDueDate } pairs from
-// `listForCalendar` below, which returns them alongside the cycles in one
-// round-trip — that is the query that superseded this one, and this copy was
-// left behind on the public API with nothing exercising its gate.
-
 /**
- * Combined query for the calendar view: returns cycles with progress AND
- * task→cycleDueDate pairs in a single round-trip, avoiding two separate
- * subscriptions that both fetch the same cycles/cycleTasks data.
+ * The calendar's cycles. Task → cycle due-date fallback is resolved on the
+ * client from `task.cycleId`, which every task row now carries.
  */
 export const listForCalendar = query({
   args: { projectId: v.id("projects") },
   returns: v.object({
     cycles: v.array(cycleWithProgressValidator),
-    taskCycleDueDatePairs: v.array(
-      v.object({ taskId: v.id("tasks"), cycleDueDate: v.string() })
-    ),
   }),
   handler: async (ctx, { projectId }) => {
     const result = await checkResourceMember(ctx, "projects", projectId);
-    if (!result) return { cycles: [], taskCycleDueDatePairs: [] };
+    if (!result) return { cycles: [] };
 
     const rawCycles = await ctx.db
       .query("cycles")
       .withIndex("by_project", (q) => q.eq("projectId", projectId))
       .collect();
 
-    const taskCycleDueDatePairs: { taskId: Id<"tasks">; cycleDueDate: string }[] = [];
-
     const cycles = await Promise.all(
-      rawCycles.map(async (cycle) => {
-        const cts = await ctx.db
-          .query("cycleTasks")
-          .withIndex("by_cycle", (q) => q.eq("cycleId", cycle._id))
-          .collect();
-        if (cycle.dueDate) {
-          for (const ct of cts) {
-            taskCycleDueDatePairs.push({ taskId: ct.taskId, cycleDueDate: cycle.dueDate });
-          }
-        }
-
-        return { ...cycle, ...progressOf(cts) };
-      })
+      rawCycles.map((cycle) => withProgress(ctx, cycle, result.resource.currentCycleId)),
     );
-
-    return { cycles, taskCycleDueDatePairs };
+    return { cycles };
   },
 });
 
@@ -529,29 +660,20 @@ export const listCycleTasks = query({
 
     const project = await ctx.db.get(cycle.projectId);
 
-    const cts = await ctx.db
-      .query("cycleTasks")
-      .withIndex("by_cycle", (q) => q.eq("cycleId", cycleId))
+    // `projectId` comes from the authorized cycle, so the index cannot reach a
+    // task outside it.
+    const tasks = await ctx.db
+      .query("tasks")
+      .withIndex("by_project_cycle_completed", (q) => {
+        const scoped = q.eq("projectId", cycle.projectId).eq("cycleId", cycleId);
+        return hideCompleted ? scoped.eq("completed", false) : scoped;
+      })
       .collect();
-
-    // Belt-and-braces against a join row pointing outside this workspace:
-    // `addTask` now refuses those, but the read side must not depend on the
-    // write side having been correct — rows predating that guard still exist.
-    const tasks = (
-      await Promise.all(cts.map((ct) => ctx.db.get(ct.taskId)))
-    ).filter(
-      (t): t is NonNullable<typeof t> =>
-        t !== null && t.workspaceId === cycle.workspaceId,
-    );
-
-    const shouldHideCompleted = hideCompleted ?? false;
-    const filtered = shouldHideCompleted ? tasks.filter((t) => !t.completed) : tasks;
 
     // Enrich through the same helper tasks.listByProject uses, rather than a
     // copy of it: `enrichTasks` dedupes the status and assignee point-reads
-    // across the page, which the hand-rolled per-task `ctx.db.get` here did not
-    // — a cycle's tasks nearly all share a handful of statuses.
-    const enriched = await enrichTasks(ctx, filtered, project?.key);
+    // across the page — a cycle's tasks nearly all share a handful of statuses.
+    const enriched = await enrichTasks(ctx, tasks, project?.key);
 
     // Sort by position (fractional-indexing ordinal order)
     enriched.sort((a, b) => {

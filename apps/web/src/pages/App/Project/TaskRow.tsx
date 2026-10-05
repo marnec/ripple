@@ -18,6 +18,8 @@ import { formatDueDate, formatEstimate, isOverdue, getPriorityIcon } from "@/lib
 import { ExternalAssigneeAvatars, type ExternalAssignee } from "./ExternalAssignees";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Ban } from "lucide-react";
+import type { Id } from "@convex/_generated/dataModel";
+import { KanbanAssigneePicker } from "./KanbanAssigneePicker";
 
 type TaskRowProps = {
   task: {
@@ -31,6 +33,7 @@ type TaskRowProps = {
     estimate?: number;
     hasBlockers?: boolean;
     externalAssignees?: ExternalAssignee[];
+    assigneeId?: string;
     status: {
       name: string;
       color: string;
@@ -50,6 +53,12 @@ type TaskRowProps = {
   /** Hide the assignee avatar (e.g. on My Tasks where it's always the current user). */
   hideAssignee?: boolean;
   /**
+   * Render the assignee as the board's inline picker (dotted circle when
+   * unassigned) instead of a static avatar. Desktop lists only — on mobile the
+   * row is a swipe target.
+   */
+  assignable?: boolean;
+  /**
    * Bulk selection. When `onSelectedChange` is set the row shows a checkbox —
    * on hover, or always once any row is selected (`selectionActive`).
    * `shiftKey` lets the list extend a range.
@@ -59,7 +68,7 @@ type TaskRowProps = {
   onSelectedChange?: (selected: boolean, shiftKey: boolean) => void;
 };
 
-export function TaskRow({ task, statuses, onStatusChange, onClick, hideStatusMenu, flush, hideAssignee, selected, selectionActive, onSelectedChange }: TaskRowProps) {
+export function TaskRow({ task, statuses, onStatusChange, onClick, hideStatusMenu, flush, hideAssignee, assignable, selected, selectionActive, onSelectedChange }: TaskRowProps) {
   return (
     <Item
       onClick={(e) => {
@@ -168,7 +177,15 @@ export function TaskRow({ task, statuses, onStatusChange, onClick, hideStatusMen
           <ExternalAssigneeAvatars assignees={task.externalAssignees} side="left" />
         )}
 
-        {!hideAssignee && task.assignee && (
+        {!hideAssignee && assignable && (
+          <KanbanAssigneePicker
+            taskId={task._id as Id<"tasks">}
+            assigneeId={task.assigneeId as Id<"users"> | undefined}
+            assignee={task.assignee}
+          />
+        )}
+
+        {!hideAssignee && !assignable && task.assignee && (
           <UserAvatar
             className="h-6 w-6"
             name={task.assignee.name}

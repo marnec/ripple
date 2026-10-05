@@ -114,7 +114,7 @@ describe("cycles.suggestAddableTasks", () => {
     await f.createTask("done", { done: true });
     await f.createTask("elsewhere", { projectId: other.projectId });
     const newer = await f.createTask("newer");
-    await f.asUser.mutation(api.cycles.addTask, { cycleId: f.cycleId, taskId: inCycle });
+    await f.asUser.mutation(api.cycles.addTasks, { cycleId: f.cycleId, taskIds: [inCycle] });
 
     const result = await f.asUser.query(api.cycles.suggestAddableTasks, { cycleId: f.cycleId });
     expect(result.map((task) => task._id)).toEqual([newer, older]);
@@ -133,7 +133,7 @@ describe("cycles.suggestAddableTasks", () => {
     const free = await f.createTask("free");
     for (let i = 0; i < 3; i++) {
       const id = await f.createTask(`taken-${i}`);
-      await f.asUser.mutation(api.cycles.addTask, { cycleId: f.cycleId, taskId: id });
+      await f.asUser.mutation(api.cycles.addTasks, { cycleId: f.cycleId, taskIds: [id] });
     }
 
     // limit 1 with three newer tasks already in the cycle: without headroom
@@ -155,7 +155,7 @@ describe("cycles.suggestAddableTasks", () => {
     const inCycle = await f.createTask("migration planned");
     await f.createTask("migration elsewhere", { projectId: other.projectId });
     await f.createTask("unrelated");
-    await f.asUser.mutation(api.cycles.addTask, { cycleId: f.cycleId, taskId: inCycle });
+    await f.asUser.mutation(api.cycles.addTasks, { cycleId: f.cycleId, taskIds: [inCycle] });
 
     const result = await f.asUser.query(api.cycles.suggestAddableTasks, {
       cycleId: f.cycleId,

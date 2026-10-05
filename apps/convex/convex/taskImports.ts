@@ -704,6 +704,7 @@ export const createImportedTasks = internalMutation({
           projectId: job.projectId,
           taskId,
           completed: defaultStatus.isCompleted,
+          cycleId: undefined, // imported tasks land in the backlog
           dueDate: row.dueDate ?? undefined,
           plannedStartDate: row.plannedStartDate ?? undefined,
           assigneeId: undefined,

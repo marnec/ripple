@@ -16,6 +16,7 @@ import { getAll } from "convex-helpers/server/relationships";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { notify } from "./utils/notify";
+import { assertOpenCycleInProject } from "./lib/cycleRules";
 import {
   maybeEnqueueAssigneesPush,
   maybeEnqueueLabelsPush,
@@ -116,6 +117,7 @@ export const baseTaskFields = {
   priority: priorityValidator,
   tags: v.optional(v.array(v.string())),
   completed: v.boolean(),
+  cycleId: v.optional(v.id("cycles")),
   creatorId: v.id("users"),
   position: v.optional(v.string()),
   yjsSnapshotId: v.optional(v.id("_storage")),
@@ -238,6 +240,9 @@ export const create = mutation({
     dueDate: v.optional(v.string()),
     plannedStartDate: v.optional(v.string()),
     estimate: v.optional(v.number()),
+    // The board passes the cycle it is showing; anything else omits it and the
+    // task lands in the backlog.
+    cycleId: v.optional(v.id("cycles")),
   },
   returns: v.id("tasks"),
   handler: async (ctx, args) => {
@@ -280,6 +285,10 @@ export const create = mutation({
       await assertAssigneeInWorkspace(ctx, project.workspaceId, args.assigneeId);
     }
 
+    if (args.cycleId) {
+      await assertOpenCycleInProject(ctx, args.cycleId, args.projectId);
+    }
+
     // Calculate position if not provided
     let position = args.position;
     if (!position) {
@@ -314,6 +323,7 @@ export const create = mutation({
       priority: args.priority ?? "medium",
       tags: args.tags,
       completed: status.isCompleted,
+      cycleId: args.cycleId,
       creatorId: userId,
       position,
       number: nextNumber,
@@ -329,6 +339,7 @@ export const create = mutation({
         projectId: args.projectId,
         taskId,
         completed: status.isCompleted,
+        cycleId: args.cycleId,
         dueDate: args.dueDate,
         plannedStartDate: args.plannedStartDate,
         assigneeId: args.assigneeId,
@@ -452,9 +463,12 @@ export const listByProject = query({
     // for transferring all completed tasks just to discard most. AND
     // semantics across multiple tags (matches the client-side filter).
     tagNames: v.optional(v.array(v.string())),
+    // Scope: a cycle id is that cycle's board, `null` is the backlog, and
+    // omitted is the whole project (cross-cycle views such as the calendar).
+    cycleId: v.optional(v.union(v.id("cycles"), v.null())),
   },
   returns: v.array(enrichedTaskValidator),
-  handler: async (ctx, { projectId, completed, limit, tagNames }) => {
+  handler: async (ctx, { projectId, completed, limit, tagNames, cycleId }) => {
     const result = await checkResourceMember(ctx, "projects", projectId);
     if (!result) return [];
     const project = result.resource;
@@ -481,12 +495,23 @@ export const listByProject = query({
       const tagIds = tagRows.map((r) => r!._id);
 
       const driverTagId = tagIds[0];
-      const joinQuery = ctx.db
-        .query("taskTags")
-        .withIndex("by_project_tag_completed", (q) =>
-          q.eq("projectId", projectId).eq("tagId", driverTagId).eq("completed", completed),
-        )
-        .order("desc");
+      const joinQuery = (
+        cycleId === undefined
+          ? ctx.db
+              .query("taskTags")
+              .withIndex("by_project_tag_completed", (q) =>
+                q.eq("projectId", projectId).eq("tagId", driverTagId).eq("completed", completed),
+              )
+          : ctx.db
+              .query("taskTags")
+              .withIndex("by_project_cycle_tag_completed", (q) =>
+                q
+                  .eq("projectId", projectId)
+                  .eq("cycleId", cycleId ?? undefined)
+                  .eq("tagId", driverTagId)
+                  .eq("completed", completed),
+              )
+      ).order("desc");
       const joins = limit !== undefined
         ? await joinQuery.take(limit)
         : await joinQuery.collect();
@@ -500,12 +525,22 @@ export const listByProject = query({
         );
       }
     } else {
-      const baseQuery = ctx.db
-        .query("tasks")
-        .withIndex("by_project_completed", (q) =>
-          q.eq("projectId", projectId).eq("completed", completed),
-        )
-        .order("desc"); // newest first
+      const baseQuery = (
+        cycleId === undefined
+          ? ctx.db
+              .query("tasks")
+              .withIndex("by_project_completed", (q) =>
+                q.eq("projectId", projectId).eq("completed", completed),
+              )
+          : ctx.db
+              .query("tasks")
+              .withIndex("by_project_cycle_completed", (q) =>
+                q
+                  .eq("projectId", projectId)
+                  .eq("cycleId", cycleId ?? undefined)
+                  .eq("completed", completed),
+              )
+      ).order("desc"); // newest first
 
       tasks = limit !== undefined
         ? await baseQuery.take(limit)
@@ -1115,6 +1150,7 @@ export async function applyTaskUpdate(
       projectId: task.projectId,
       taskId,
       completed: task.completed,
+      cycleId: task.cycleId,
       dueDate: task.dueDate,
       plannedStartDate: task.plannedStartDate,
       // Use the incoming assigneeId override when present so the new

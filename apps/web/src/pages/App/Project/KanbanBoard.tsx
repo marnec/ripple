@@ -35,6 +35,7 @@ const LazyTaskDetailSheet = React.lazy(() =>
   import("./TaskDetailSheet").then((m) => ({ default: m.TaskDetailSheet })),
 );
 import type { TaskFilters, TaskSort } from "./TaskToolbar";
+import { scopeCycleArg, type TaskScope } from "./taskScope";
 import { useFilteredTasks } from "./useTaskFilters";
 
 const ANIMATION_DURATION_MS = 80;
@@ -57,6 +58,7 @@ type KanbanBoardProps = {
   workspaceId: Id<"workspaces">;
   filters: TaskFilters;
   sort: TaskSort;
+  scope: TaskScope;
   onSortBlocked?: () => void;
 };
 
@@ -68,7 +70,7 @@ const collisionDetection: CollisionDetection = (args) => {
   return closestCorners(args);
 };
 
-export function KanbanBoard({ projectId, workspaceId, filters, sort, onSortBlocked }: KanbanBoardProps) {
+export function KanbanBoard({ projectId, workspaceId, filters, sort, scope, onSortBlocked }: KanbanBoardProps) {
   const [selectedTaskId, setSelectedTaskId] = useState<Id<"tasks"> | null>(null);
   const [activeDragId, setActiveDragId] = useState<Id<"tasks"> | null>(null);
   const isMobile = useIsMobile();
@@ -122,15 +124,13 @@ export function KanbanBoard({ projectId, workspaceId, filters, sort, onSortBlock
   // Active tasks: full list. Completed: capped at KANBAN_COMPLETED_CAP+1 so we
   // can detect overflow via the +1 trick. Beyond the cap, the kanban surfaces
   // an overflow pill that links to the list view.
-  const activeTasks = useQuery(api.tasks.listByProject, {
-    projectId,
-    completed: false,
-  });
-  const completedRaw = useQuery(api.tasks.listByProject, {
-    projectId,
-    completed: true,
-    limit: KANBAN_COMPLETED_CAP + 1,
-  });
+  // Always scoped: the active list is read whole, so it must be one cycle's
+  // (or the backlog's), never the project's.
+  const cycleId = scopeCycleArg(scope);
+  const activeArgs = { projectId, completed: false, cycleId };
+  const completedArgs = { projectId, completed: true, limit: KANBAN_COMPLETED_CAP + 1, cycleId };
+  const activeTasks = useQuery(api.tasks.listByProject, activeArgs);
+  const completedRaw = useQuery(api.tasks.listByProject, completedArgs);
   const completedTruncated = (completedRaw?.length ?? 0) > KANBAN_COMPLETED_CAP;
   const completedTasks = completedRaw?.slice(0, KANBAN_COMPLETED_CAP);
   const liveTasks =
@@ -157,9 +157,7 @@ export function KanbanBoard({ projectId, workspaceId, filters, sort, onSortBlock
       // dropping into Done) settle when the server commits the completed
       // flip; until then the task stays in its source query with the new
       // statusId, which still groups it into the right kanban column.
-      const updateBucket = (
-        args: { projectId: Id<"projects">; completed: boolean; limit?: number },
-      ) => {
+      const updateBucket = (args: typeof activeArgs | typeof completedArgs) => {
         const current = localStore.getQuery(api.tasks.listByProject, args);
         if (current === undefined) return;
         localStore.setQuery(
@@ -170,8 +168,8 @@ export function KanbanBoard({ projectId, workspaceId, filters, sort, onSortBlock
           ),
         );
       };
-      updateBucket({ projectId, completed: false });
-      updateBucket({ projectId, completed: true, limit: KANBAN_COMPLETED_CAP + 1 });
+      updateBucket(activeArgs);
+      updateBucket(completedArgs);
     }
   );
 

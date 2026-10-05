@@ -22,6 +22,9 @@ import { useFilteredTasks } from "./useTaskFilters";
 import { EditCycleDialog } from "./EditCycleDialog";
 import { AddTasksToCycleDialog } from "./AddTasksToCycleDialog";
 import { CycleHeader } from "./CycleHeader";
+import { CloseCycleDialog } from "./CloseCycleDialog";
+import { TaskBulkActionBar } from "./TaskBulkActionBar";
+import { useTaskSelection } from "./useTaskSelection";
 
 export function CycleDetail() {
   const { workspaceId, projectId, cycleId } = useParams<QueryParams>();
@@ -61,6 +64,7 @@ function CycleDetailContent({
   const [sort, setSort] = useState<TaskSort>(null);
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
+  const [showCloseDialog, setShowCloseDialog] = useState(false);
 
   const cycle = useQuery(api.cycles.get, { cycleId });
   const cycleTasks = useQuery(api.cycles.listCycleTasks, { cycleId, hideCompleted: false });
@@ -68,8 +72,11 @@ function CycleDetailContent({
   const members = useWorkspaceMembers();
   const updateTask = useMutation(api.tasks.update);
   const removeTask = useMutation(api.cycles.removeTask);
+  const reopenCycle = useMutation(api.cycles.reopen);
+  const setCurrentCycle = useMutation(api.cycles.setCurrent);
 
   const filteredTasks = useFilteredTasks(cycleTasks, filters, sort);
+  const selection = useTaskSelection(filteredTasks);
   const closeAllSwipes = () => setSwipeOpenId(null);
   const listRef = useRef<HTMLDivElement>(null);
 
@@ -99,6 +106,9 @@ function CycleDetailContent({
         cycle={cycle}
         onEdit={() => setShowEditDialog(true)}
         onAddTasks={() => setShowAddDialog(true)}
+        onClose={() => setShowCloseDialog(true)}
+        onReopen={() => void reopenCycle({ cycleId })}
+        onSetCurrent={() => void setCurrentCycle({ cycleId })}
       />
 
       {/* Task toolbar */}
@@ -119,7 +129,7 @@ function CycleDetailContent({
         {filteredTasks === undefined ? null : filteredTasks.length === 0 ? (
           <div className="py-12 text-center text-sm text-muted-foreground">
             {cycleTasks?.length === 0
-              ? "No tasks in this cycle. Add some tasks to get started."
+              ? "No tasks in this cycle. Pull some in from the backlog to get started."
               : "No tasks match the current filters."}
           </div>
         ) : (
@@ -140,7 +150,7 @@ function CycleDetailContent({
                       })
                     }
                     className="flex items-center justify-center w-full bg-destructive text-destructive-foreground"
-                    aria-label="Remove from cycle"
+                    aria-label="Move to backlog"
                   >
                     <X className="h-4 w-4" />
                   </button>
@@ -152,6 +162,14 @@ function CycleDetailContent({
                       task={task}
                       flush={isMobile}
                       statuses={statuses ?? undefined}
+                      assignable={!isMobile}
+                      selected={selection.isSelected(task._id)}
+                      selectionActive={selection.active}
+                      onSelectedChange={
+                        isMobile
+                          ? undefined
+                          : (selected, shiftKey) => selection.toggle(task._id, selected, shiftKey)
+                      }
                       onStatusChange={(statusId) => {
                         void updateTask({
                           taskId: task._id,
@@ -169,7 +187,7 @@ function CycleDetailContent({
                       }}
                     />
                   </div>
-                  {/* Remove from cycle — desktop hover only */}
+                  {/* Move to backlog — desktop hover only */}
                   {!isMobile && (
                     <button
                       onClick={() =>
@@ -179,7 +197,7 @@ function CycleDetailContent({
                         })
                       }
                       className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0 p-1 rounded hover:bg-accent"
-                      aria-label="Remove from cycle"
+                      aria-label="Move to backlog"
                     >
                       <X className="h-3.5 w-3.5 text-muted-foreground" />
                     </button>
@@ -187,6 +205,17 @@ function CycleDetailContent({
                 </div>
               </SwipeToReveal>
             ))}
+            {!isMobile && selection.active && (
+              <TaskBulkActionBar
+                projectId={projectId}
+                workspaceId={workspaceId}
+                currentCycleId={cycleId}
+                selected={selection.selectedTasks}
+                visibleCount={filteredTasks.length}
+                onSelectAll={selection.selectAll}
+                onClear={selection.clear}
+              />
+            )}
           </div>
         )}
       </div>
@@ -208,6 +237,15 @@ function CycleDetailContent({
         open={showAddDialog}
         onOpenChange={setShowAddDialog}
       />
+
+      {showCloseDialog && (
+        <CloseCycleDialog
+          cycle={cycle}
+          projectId={projectId}
+          open={showCloseDialog}
+          onOpenChange={setShowCloseDialog}
+        />
+      )}
 
       {/* Edit cycle dialog */}
       {showEditDialog && (

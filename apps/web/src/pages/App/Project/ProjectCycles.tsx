@@ -22,7 +22,7 @@ import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 import { DatePickerField } from "./DatePickerField";
 import { EditCycleDialog } from "./EditCycleDialog";
-import { CYCLE_STATUS_STYLES, formatDateRange } from "./cycleUtils";
+import { cycleBadge, formatDateRange } from "./cycleUtils";
 import type { CycleStatus } from "@ripple/shared/types/cycles";
 
 type CycleDoc = {
@@ -32,6 +32,9 @@ type CycleDoc = {
   startDate?: string;
   dueDate?: string;
   status: CycleStatus;
+  isCurrent: boolean;
+  closedAt?: number;
+  _creationTime: number;
   totalTasks: number;
   completedTasks: number;
   progressPercent: number;
@@ -61,18 +64,17 @@ function ProjectCyclesContent({
 }) {
   const navigate = useNavigate();
   const cycles = useQuery(api.cycles.listByProject, { projectId });
-  const [showCompleted, setShowCompleted] = useState(false);
+  const [showClosed, setShowClosed] = useState(false);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [editingCycle, setEditingCycle] = useState<CycleDoc | null>(null);
 
-  const active = cycles?.filter((c) => c.status === "active") ?? [];
-  const upcoming = cycles
-    ?.filter((c) => c.status === "upcoming")
-    .sort((a, b) => (a.startDate ?? "").localeCompare(b.startDate ?? "")) ?? [];
-  const draft = cycles?.filter((c) => c.status === "draft") ?? [];
-  const completed = cycles
-    ?.filter((c) => c.status === "completed")
-    .sort((a, b) => (b.dueDate ?? "").localeCompare(a.dueDate ?? "")) ?? [];
+  // Current first, then the rest in the order they were opened.
+  const open = cycles
+    ?.filter((c) => c.status === "open")
+    .sort((a, b) => Number(b.isCurrent) - Number(a.isCurrent) || a._creationTime - b._creationTime) ?? [];
+  const closed = cycles
+    ?.filter((c) => c.status === "closed")
+    .sort((a, b) => (b.closedAt ?? 0) - (a.closedAt ?? 0)) ?? [];
 
   const isEmpty = cycles !== undefined && cycles.length === 0;
 
@@ -90,48 +92,32 @@ function ProjectCyclesContent({
         <EmptyCyclesState />
       )}
 
-      {active.length > 0 && (
+      {open.length > 0 && (
         <CycleSection
-          title="Active"
-          cycles={active}
-          onCycleClick={(id) => void navigate(id)}
-          onEdit={(c) => setEditingCycle(c)}
-        />
-      )}
-      {upcoming.length > 0 && (
-        <CycleSection
-          title="Upcoming"
-          cycles={upcoming}
-          onCycleClick={(id) => void navigate(id)}
-          onEdit={(c) => setEditingCycle(c)}
-        />
-      )}
-      {draft.length > 0 && (
-        <CycleSection
-          title="Draft"
-          cycles={draft}
+          title="Open"
+          cycles={open}
           onCycleClick={(id) => void navigate(id)}
           onEdit={(c) => setEditingCycle(c)}
         />
       )}
 
-      {completed.length > 0 && (
+      {closed.length > 0 && (
         <div className="mt-2">
           <button
-            onClick={() => setShowCompleted((v) => !v)}
+            onClick={() => setShowClosed((v) => !v)}
             className="flex items-center gap-1.5 text-sm text-muted-foreground mb-2 hover:text-foreground transition-colors"
           >
             <ChevronRight
               className={cn(
                 "h-4 w-4 transition-transform",
-                showCompleted && "rotate-90"
+                showClosed && "rotate-90"
               )}
             />
-            Completed ({completed.length})
+            Closed ({closed.length})
           </button>
-          {showCompleted && (
+          {showClosed && (
             <CycleSection
-              cycles={completed}
+              cycles={closed}
               onCycleClick={(id) => void navigate(id)}
               onEdit={(c) => setEditingCycle(c)}
             />
@@ -198,7 +184,7 @@ function CycleCard({
   onClick: () => void;
   onEdit: () => void;
 }) {
-  const styles = CYCLE_STATUS_STYLES[cycle.status];
+  const styles = cycleBadge(cycle);
   const dateRange = formatDateRange(cycle.startDate, cycle.dueDate);
 
   return (
@@ -241,7 +227,7 @@ function CycleCard({
           styles.badge
         )}
       >
-        {cycle.status}
+        {styles.label}
       </span>
 
       {/* Edit button — visible on hover */}
@@ -262,7 +248,7 @@ function EmptyCyclesState() {
       <RotateCcw className="h-10 w-10 text-muted-foreground/40 mb-4" />
       <h3 className="font-semibold mb-1">No cycles yet</h3>
       <p className="text-sm text-muted-foreground max-w-xs mb-6">
-        Cycles are time-boxed sprints that help you organize tasks into focused work periods.
+        Cycles are milestones: pull tasks in from the backlog, and close the cycle when it's done.
       </p>
     </div>
   );
@@ -296,10 +282,10 @@ function CreateCycleForm({
   return (
     <div className="space-y-4">
       <div className="space-y-1.5">
-        <Label htmlFor="cycle-name">Name</Label>
+        <Label htmlFor="cycle-name">Name (optional)</Label>
         <Input
           id="cycle-name"
-          placeholder="Sprint 1"
+          placeholder="Cycle name (optional)"
           value={name}
           onChange={(e) => setName(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter") onSave(); }}
@@ -320,7 +306,7 @@ function CreateCycleForm({
 
       <div className="flex gap-4">
         <div className="flex-1 space-y-1.5">
-          <Label>Start date</Label>
+          <Label>Start (optional)</Label>
           <DatePickerField
             value={startDate}
             onChange={(d) => setStartDate(d ?? undefined)}
@@ -328,7 +314,7 @@ function CreateCycleForm({
           />
         </div>
         <div className="flex-1 space-y-1.5">
-          <Label>Due date</Label>
+          <Label>Target (optional)</Label>
           <DatePickerField
             value={dueDate}
             onChange={(d) => setDueDate(d ?? undefined)}
@@ -369,13 +355,13 @@ function CreateCycleDialog({
   };
 
   const handleSave = async () => {
-    if (!name.trim()) return;
     setSaving(true);
     try {
       await createCycle({
         projectId,
         workspaceId,
-        name: name.trim(),
+        // Blank → the server names it "Cycle N".
+        name: name.trim() || undefined,
         description: description.trim() || undefined,
         startDate,
         dueDate,
@@ -413,7 +399,7 @@ function CreateCycleDialog({
           <Button variant="outline" onClick={() => handleOpenChange(false)}>
             Cancel
           </Button>
-          <Button onClick={() => void handleSave()} disabled={!name.trim() || saving}>
+          <Button onClick={() => void handleSave()} disabled={saving}>
             Create cycle
           </Button>
         </ResponsiveDialogFooter>

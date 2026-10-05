@@ -29,6 +29,7 @@ import { normalizeTagList } from "./tagSync";
 import { scheduleTaskReassign } from "./taskReassignPool";
 import { getUserDisplayName } from "@ripple/shared/displayName";
 import { notify } from "./utils/notify";
+import { assertOpenCycleInProject, moveTaskToCycle } from "./lib/cycleRules";
 import {
   applyTaskUpdate,
   assertAssigneeInWorkspace,
@@ -54,6 +55,8 @@ export const bulkOpValidator = v.union(
   v.object({ kind: v.literal("assignee"), assigneeId: v.union(v.id("users"), v.null()) }),
   v.object({ kind: v.literal("addTag"), tag: v.string() }),
   v.object({ kind: v.literal("removeTag"), tag: v.string() }),
+  // `null` is the backlog.
+  v.object({ kind: v.literal("moveToCycle"), cycleId: v.union(v.id("cycles"), v.null()) }),
 );
 export type BulkOp = Infer<typeof bulkOpValidator>;
 
@@ -89,13 +92,23 @@ async function validateOp(
       if (tag === undefined) throw new ConvexError("Invalid tag");
       return { ...op, tag };
     }
+    case "moveToCycle":
+      // Re-run per batch like the others: the cycle may be closed or deleted
+      // while the drain runs, and then the rest of the selection stays put.
+      if (op.cycleId !== null) {
+        await assertOpenCycleInProject(ctx, op.cycleId, project._id);
+      }
+      return op;
     default:
       return op;
   }
 }
 
 /** The per-task change `op` makes, or null when the task is already there. */
-function changesFor(task: Doc<"tasks">, op: Exclude<BulkOp, { kind: "delete" }>): TaskChanges | null {
+function changesFor(
+  task: Doc<"tasks">,
+  op: Exclude<BulkOp, { kind: "delete" } | { kind: "moveToCycle" }>,
+): TaskChanges | null {
   switch (op.kind) {
     case "status":
       return task.statusId === op.statusId ? null : { statusId: op.statusId };
@@ -201,8 +214,12 @@ export const applyBatch = internalMutation({
     const access = await checkResourceMemberAs(ctx, "projects", projectId, userId);
     if (!access) return false;
 
+    let targetCycle: Doc<"cycles"> | null = null;
     try {
       await validateOp(ctx, access.resource, op);
+      if (op.kind === "moveToCycle" && op.cycleId !== null) {
+        targetCycle = await ctx.db.get(op.cycleId);
+      }
     } catch (error) {
       if (error instanceof ConvexError) return false;
       throw error;
@@ -221,6 +238,11 @@ export const applyBatch = internalMutation({
           closeGithubIssue: op.closeGithubIssues,
           batched: true,
         });
+        continue;
+      }
+
+      if (op.kind === "moveToCycle") {
+        await moveTaskToCycle(ctx, { task, target: targetCycle, userId });
         continue;
       }
 

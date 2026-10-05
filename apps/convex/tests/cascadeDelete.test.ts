@@ -112,7 +112,7 @@ describe("cascade delete: projects.remove", () => {
       workspaceId,
       name: "Sprint 1",
     });
-    await asUser.mutation(api.cycles.addTask, { cycleId, taskId: taskId2 });
+    await asUser.mutation(api.cycles.addTasks, { cycleId, taskIds: [taskId2] });
 
     // Add an edge targeting the project (simulating a mention)
     await t.run(async (ctx) => {
@@ -143,7 +143,7 @@ describe("cascade delete: projects.remove", () => {
     // Verify everything exists before deletion
     expect(await countByIndex(t, "tasks", "by_project", "projectId", projectId)).toBe(2);
     expect(await countByIndex(t, "taskComments", "by_task", "taskId", taskId1)).toBe(1);
-    expect(await countByIndex(t, "cycleTasks", "by_cycle", "cycleId", cycleId)).toBe(1);
+    expect((await t.run(async (ctx) => ctx.db.get(taskId2)))?.cycleId).toBe(cycleId);
     expect(await countByIndex(t, "taskStatuses", "by_project", "projectId", projectId)).toBe(1);
     expect(await countByIndex(t, "edges", "by_target", "targetId", projectId)).toBeGreaterThanOrEqual(1);
     expect(await countByIndex(t, "projectNotificationPreferences", "by_project", "projectId", projectId)).toBe(1);
@@ -165,9 +165,6 @@ describe("cascade delete: projects.remove", () => {
 
     // Task comments cascaded
     expect(await countByIndex(t, "taskComments", "by_task", "taskId", taskId1)).toBe(0);
-
-    // Cycle tasks cascaded (via tasks→cycleTasks AND cycles→cycleTasks)
-    expect(await countByIndex(t, "cycleTasks", "by_cycle", "cycleId", cycleId)).toBe(0);
 
     // Cycles deleted
     const cycle = await t.run(async (ctx) => ctx.db.get(cycleId));

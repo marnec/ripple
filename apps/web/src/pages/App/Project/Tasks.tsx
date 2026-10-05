@@ -3,9 +3,9 @@ import { AnimatePresence, m } from "framer-motion";
 import { SwipeToReveal } from "@/components/SwipeToReveal";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { useMutation, usePaginatedQuery } from "convex/react";
+import { useMutation } from "convex/react";
 import { useQuery } from "convex-helpers/react/cache";;
-import { CheckSquare, ArrowRight, Loader2 } from "lucide-react";
+import { CheckSquare, ArrowRight } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
@@ -17,18 +17,18 @@ import { TaskRow } from "./TaskRow";
 import { TaskBulkActionBar } from "./TaskBulkActionBar";
 import type { TaskFilters, TaskSort } from "./TaskToolbar";
 import { useFilteredTasks } from "./useTaskFilters";
-import { deriveCompletedFilter, deriveCompletedSort } from "./completedTaskQuery";
-
-const COMPLETED_PAGE_SIZE = 20;
+import { scopeCycleArg, type TaskScope } from "./taskScope";
+import { useTaskSelection } from "./useTaskSelection";
 
 type TasksProps = {
   projectId: Id<"projects">;
   workspaceId: Id<"workspaces">;
   filters: TaskFilters;
   sort: TaskSort;
+  scope: TaskScope;
 };
 
-export function Tasks({ projectId, workspaceId, filters, sort }: TasksProps) {
+export function Tasks({ projectId, workspaceId, filters, sort, scope }: TasksProps) {
   const [selectedTaskId, setSelectedTaskId] = useState<Id<"tasks"> | null>(
     null
   );
@@ -36,42 +36,18 @@ export function Tasks({ projectId, workspaceId, filters, sort }: TasksProps) {
   const isMobile = useIsMobile();
   const navigate = useNavigate();
 
-  const isCompletedView = filters.completionFilter === "completed";
-
-  // Active path: full uncompleted set, client-side filter/sort. Bounded by
-  // typical workload (~hundreds of tasks per project).
-  const activeRaw = useQuery(
-    api.tasks.listByProject,
-    isCompletedView ? "skip" : { projectId, completed: false },
-  );
-
-  // Completed path: paginated, indexed-only. Every (filter, sort) combo is
-  // a single indexed range scan — see listCompletedByProject in tasks.ts.
-  const completedPag = usePaginatedQuery(
-    api.tasks.listCompletedByProject,
-    isCompletedView
-      ? {
-          projectId,
-          filter: deriveCompletedFilter(filters),
-          sort: deriveCompletedSort(sort),
-        }
-      : "skip",
-    { initialNumItems: COMPLETED_PAGE_SIZE },
-  );
+  // One cycle's tasks, or the backlog's — never the whole project. The
+  // completion filter picks the half; assignee/priority/tag/sort apply
+  // client-side below.
+  const liveTasks = useQuery(api.tasks.listByProject, {
+    projectId,
+    completed: filters.completionFilter === "completed",
+    cycleId: scopeCycleArg(scope),
+  });
 
   // Track which row has its swipe action revealed (only one at a time)
   const [swipeOpenId, setSwipeOpenId] = useState<string | null>(null);
 
-  // While the completed query is loading its first page, `results` is `[]`.
-  // Returning `undefined` here keeps `useAnimatedQuery`'s buffer holding the
-  // previous content (the active list) visible — once the completed data
-  // arrives we get a single smooth view transition from active → completed
-  // instead of a flash through the "No tasks yet" empty state.
-  const liveTasks = isCompletedView
-    ? (completedPag.status === "LoadingFirstPage"
-        ? undefined
-        : (completedPag.results as typeof activeRaw))
-    : activeRaw;
   // Hold the last loaded list while a query reloads (e.g. switching to the
   // completed view, whose first page loads asynchronously) so rows persist
   // and animate via motion instead of flashing through the empty state.
@@ -82,42 +58,9 @@ export function Tasks({ projectId, workspaceId, filters, sort }: TasksProps) {
   if (liveTasks !== undefined && !Object.is(liveTasks, allTasks)) {
     setAllTasks(liveTasks);
   }
-  // useFilteredTasks applies assignee/priority/tag/sort over the active set.
-  // For the completed view the backend already returned the right rows, so
-  // we render `allTasks` directly without re-filtering client-side.
-  const filteredActive = useFilteredTasks(allTasks, filters, sort);
-  const tasks = isCompletedView ? allTasks : filteredActive;
+  const tasks = useFilteredTasks(allTasks, filters, sort);
 
-  // Bulk selection (desktop only — mobile rows are swipe targets). Ids, not
-  // rows: the selection is intersected with what is visible on every render,
-  // so tasks a bulk delete removes, or a filter hides, drop out of the count.
-  const [selectedIds, setSelectedIds] = useState<ReadonlySet<Id<"tasks">>>(() => new Set());
-  const [selectionAnchor, setSelectionAnchor] = useState<Id<"tasks"> | null>(null);
-  const selectedTasks = (tasks ?? []).filter((t) => selectedIds.has(t._id));
-  const selectionActive = selectedTasks.length > 0;
-
-  const toggleSelected = (taskId: Id<"tasks">, selected: boolean, shiftKey: boolean) => {
-    const visible = tasks ?? [];
-    const from = selectionAnchor ? visible.findIndex((t) => t._id === selectionAnchor) : -1;
-    const to = visible.findIndex((t) => t._id === taskId);
-    const range =
-      shiftKey && from !== -1 && to !== -1
-        ? visible.slice(Math.min(from, to), Math.max(from, to) + 1).map((t) => t._id)
-        : [taskId];
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      for (const id of range) {
-        if (selected) next.add(id);
-        else next.delete(id);
-      }
-      return next;
-    });
-    setSelectionAnchor(taskId);
-  };
-  const clearSelection = () => {
-    setSelectedIds(new Set());
-    setSelectionAnchor(null);
-  };
+  const selection = useTaskSelection(tasks);
 
   const statuses = useQuery(api.taskStatuses.listByProject, { projectId });
   const updateTask = useMutation(api.tasks.update);
@@ -160,8 +103,6 @@ export function Tasks({ projectId, workspaceId, filters, sort }: TasksProps) {
 
   const totalCount = allTasks.length;
 
-  const showLoadMore = isCompletedView && completedPag.status === "CanLoadMore";
-  const loadingMore = isCompletedView && completedPag.status === "LoadingMore";
 
   return (
     <div>
@@ -169,7 +110,9 @@ export function Tasks({ projectId, workspaceId, filters, sort }: TasksProps) {
       {totalCount === 0 ? (
         <div className="py-12 text-center">
           <CheckSquare className="w-12 h-12 mx-auto text-muted-foreground mb-3" />
-          <h3 className="text-lg font-medium mb-1">No tasks yet</h3>
+          <h3 className="text-lg font-medium mb-1">
+            {scope.kind === "backlog" ? "The backlog is empty" : "No tasks yet"}
+          </h3>
           <p className="text-sm text-muted-foreground">
             Use the New task button to get started
           </p>
@@ -218,12 +161,13 @@ export function Tasks({ projectId, workspaceId, filters, sort }: TasksProps) {
                       statuses={statuses ?? undefined}
                       hideStatusMenu={isMobile}
                       flush={isMobile}
-                      selected={selectedIds.has(task._id)}
-                      selectionActive={selectionActive}
+                      assignable={!isMobile}
+                      selected={selection.isSelected(task._id)}
+                      selectionActive={selection.active}
                       onSelectedChange={
                         isMobile
                           ? undefined
-                          : (selected, shiftKey) => toggleSelected(task._id, selected, shiftKey)
+                          : (selected, shiftKey) => selection.toggle(task._id, selected, shiftKey)
                       }
                       onStatusChange={(statusId) => {
                         void updateTask({ taskId: task._id, statusId: statusId as Id<"taskStatuses"> });
@@ -241,31 +185,15 @@ export function Tasks({ projectId, workspaceId, filters, sort }: TasksProps) {
               );
             })}
           </AnimatePresence>
-          {(showLoadMore || loadingMore) && (
-            <button
-              type="button"
-              onClick={() => completedPag.loadMore(COMPLETED_PAGE_SIZE)}
-              disabled={loadingMore}
-              className="mt-2 flex w-full items-center justify-center gap-2 rounded-md border border-dashed border-border/70 bg-transparent px-3 py-2 text-xs text-muted-foreground transition-colors hover:border-border hover:bg-accent/40 hover:text-foreground cursor-pointer disabled:cursor-default disabled:opacity-50"
-            >
-              {loadingMore ? (
-                <>
-                  <Loader2 className="h-3 w-3 animate-spin" />
-                  Loading…
-                </>
-              ) : (
-                "Load more completed tasks"
-              )}
-            </button>
-          )}
-          {!isMobile && selectionActive && (
+          {!isMobile && selection.active && (
             <TaskBulkActionBar
               projectId={projectId}
               workspaceId={workspaceId}
-              selected={selectedTasks}
+              currentCycleId={scope.kind === "cycle" ? scope.cycleId : null}
+              selected={selection.selectedTasks}
               visibleCount={tasks.length}
-              onSelectAll={() => setSelectedIds(new Set(tasks.map((t) => t._id)))}
-              onClear={clearSelection}
+              onSelectAll={selection.selectAll}
+              onClear={selection.clear}
             />
           )}
         </div>

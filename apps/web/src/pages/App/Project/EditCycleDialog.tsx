@@ -15,6 +15,8 @@ import { cn } from "@/lib/utils";
 import { useMutation } from "convex/react";
 import { Trash2 } from "lucide-react";
 import { useState } from "react";
+import { toast } from "sonner";
+import { getErrorMessage } from "@/lib/errors";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 import { DatePickerField } from "./DatePickerField";
@@ -75,7 +77,7 @@ function EditCycleForm({
 
       <div className="flex gap-4">
         <div className="flex-1 space-y-1.5">
-          <Label>Start date</Label>
+          <Label>Start</Label>
           <DatePickerField
             value={startDate}
             onChange={(d) => setStartDate(d ?? undefined)}
@@ -83,7 +85,7 @@ function EditCycleForm({
           />
         </div>
         <div className="flex-1 space-y-1.5">
-          <Label>Due date</Label>
+          <Label>Target</Label>
           <DatePickerField
             value={dueDate}
             onChange={(d) => setDueDate(d ?? undefined)}
@@ -204,8 +206,16 @@ export function EditCycleDialog({
       setConfirmDelete(true);
       return;
     }
-    await removeCycle({ cycleId: cycle._id });
-    onOpenChange(false);
+    try {
+      await removeCycle({ cycleId: cycle._id });
+      onOpenChange(false);
+    } catch (error) {
+      // A project's last cycle can't be deleted — the server says why.
+      setConfirmDelete(false);
+      toast.error("Could not delete the cycle", {
+        description: getErrorMessage(error),
+      });
+    }
   };
 
   const formProps = {

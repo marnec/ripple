@@ -382,7 +382,7 @@ describe("tasks.remove", () => {
     expect(task).toBeNull();
   });
 
-  it("cleans up cycle associations on delete", async () => {
+  it("drops a deleted task from its cycle's progress", async () => {
     const t = createTestContext();
     const { workspaceId, userId, asUser } = await setupWorkspaceWithAdmin(t);
     const { projectId } = await setupProjectWithStatuses(t, {
@@ -401,27 +401,13 @@ describe("tasks.remove", () => {
       workspaceId,
       name: "Sprint 1",
     });
-    await asUser.mutation(api.cycles.addTask, { cycleId, taskId });
+    await asUser.mutation(api.cycles.addTasks, { cycleId, taskIds: [taskId] });
 
-    // Verify task is in cycle
-    const ctBefore = await t.run(async (ctx) =>
-      ctx.db
-        .query("cycleTasks")
-        .withIndex("by_task", (q) => q.eq("taskId", taskId))
-        .collect(),
-    );
-    expect(ctBefore).toHaveLength(1);
+    expect(await asUser.query(api.cycles.get, { cycleId })).toMatchObject({ totalTasks: 1 });
 
-    // Delete task — should cascade
     await asUser.mutation(api.tasks.remove, { taskId });
 
-    const ctAfter = await t.run(async (ctx) =>
-      ctx.db
-        .query("cycleTasks")
-        .withIndex("by_task", (q) => q.eq("taskId", taskId))
-        .collect(),
-    );
-    expect(ctAfter).toHaveLength(0);
+    expect(await asUser.query(api.cycles.get, { cycleId })).toMatchObject({ totalTasks: 0 });
   });
 
   it("rejects non-workspace members", async () => {

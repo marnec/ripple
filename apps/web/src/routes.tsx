@@ -317,17 +317,22 @@ export const router = createBrowserRouter(
                     })),
                   children: [
                     {
+                      // No overview page: a project opens on its board.
                       index: true,
-                      lazy: () =>
-                        import("./pages/App/Project/ProjectOverview").then(
-                          (m) => ({ Component: m.ProjectOverview }),
-                        ),
+                      element: <Navigate to="tasks" replace />,
                     },
                     {
                       path: "tasks",
                       lazy: () =>
                         import("./pages/App/Project/ProjectTasksPage").then(
                           (m) => ({ Component: m.ProjectTasksPage }),
+                        ),
+                    },
+                    {
+                      path: "backlog",
+                      lazy: () =>
+                        import("./pages/App/Project/ProjectTasksPage").then(
+                          (m) => ({ Component: m.ProjectBacklogPage }),
                         ),
                     },
                     {
