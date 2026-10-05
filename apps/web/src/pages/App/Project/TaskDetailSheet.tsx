@@ -1,3 +1,4 @@
+import { BacklinksButton } from "@/components/BacklinksDrawer";
 import { RippleSpinner } from "@/components/RippleSpinner";
 import { Button } from "@ripple/ui/components/button";
 import {
@@ -7,11 +8,12 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
-import { Maximize2, Minimize2, Trash2 } from "lucide-react";
+import { Maximize2, Minimize2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { Id } from "@convex/_generated/dataModel";
 import {
+  TaskActionsMenu,
   TaskActivitySection,
   TaskDeleteDialogSection,
   TaskDependenciesSection,
@@ -163,13 +165,19 @@ function SheetShell({
           )}
           {loadState === "ready" && task && (
             <>
-              <SheetHeader className="shrink-0 pr-28 gap-3">
-                <div className="flex items-center gap-2">
-                  <TaskIdentity className="text-sm" />
-                  {/* Right-aligned action cluster, anchored clear of the
-                      sheet's built-in close button. Flex so gaps close when the
-                      GitHub affordances are absent (the common, native case). */}
-                  <div className="absolute top-3 right-12 flex items-center gap-1">
+              <SheetHeader className="shrink-0 gap-2 pt-3 pb-1">
+                {/* `pr-8` reserves the sheet's built-in close button (absolute,
+                    top-3 right-3). The action cluster sits in the flow, not
+                    absolutely positioned, so a wide GitHub cluster pushes the
+                    identity chips to truncate instead of drawing over them. */}
+                <div className="flex min-h-7 items-center gap-2 pr-8">
+                  <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
+                    <TaskIdentity className="text-sm" />
+                  </div>
+                  <div className="flex shrink-0 items-center gap-1">
+                    {taskId && (
+                      <BacklinksButton resourceId={taskId} workspaceId={workspaceId} />
+                    )}
                     <TaskGithubActions
                       task={task}
                       projectId={projectId}
@@ -187,20 +195,10 @@ function SheetShell({
                     >
                       <Maximize2 className="h-4 w-4" />
                     </Button>
+                    <TaskActionsMenu />
                   </div>
                 </div>
-                <div className="flex items-center gap-1 h-7">
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    className="shrink-0"
-                    onClick={() => detail.setShowDeleteDialog(true)}
-                    title="Delete task"
-                  >
-                    <Trash2 className="h-4 w-4 text-destructive" />
-                  </Button>
-                  <TaskTitleField className="text-lg font-semibold leading-none focus-visible:ring-0 px-2 h-full" />
-                </div>
+                <TaskTitleField className="text-lg font-semibold leading-snug" />
               </SheetHeader>
 
               <div className="flex-1 min-h-0 flex flex-col gap-3 px-4 pb-4">
@@ -294,6 +292,7 @@ function SheetShell({
                       className="flex flex-col min-w-0"
                     >
                       <TaskActivitySection
+                        fillHeight
                         collapsed={panelState === "description"}
                         onToggle={toggleActivity}
                         toggleIcon={panelState === "activity" ? "minimize" : "maximize"}

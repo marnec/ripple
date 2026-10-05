@@ -9,7 +9,10 @@
     "skipLibCheck": true,
     "noEmit": true,
     "isolatedModules": true,
-    "allowImportingTsExtensions": true
+    "allowImportingTsExtensions": true,
+    "paths": {
+      "@ripple/ui/*": ["./src/*"]
+    }
   },
   "include": ["src"]
 }

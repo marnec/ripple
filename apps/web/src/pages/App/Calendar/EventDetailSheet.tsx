@@ -92,7 +92,7 @@ export function EventDetailSheet({
       <Sheet open={open} onOpenChange={onOpenChange}>
         {/* The base SheetContent applies `data-[side=right]:sm:max-w-sm`
           (24rem). To override, our class must match the same modifier
-          signature exactly so twMerge can dedupe — a plain `sm:max-w-xl`
+          signature exactly so `cn` can dedupe — a plain `sm:max-w-xl`
           loses on selector specificity. The `data-[side=right]:w-3/4`
           underneath stays fine: at desktop widths 75vw is much larger
           than max-w-xl (36rem), so the cap controls the visible width. */}

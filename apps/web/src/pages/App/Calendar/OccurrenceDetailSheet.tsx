@@ -76,7 +76,7 @@ export function OccurrenceDetailSheet({
       <Sheet open={open} onOpenChange={onOpenChange}>
         {/* Same width override as EventDetailSheet: the base applies
           `data-[side=right]:sm:max-w-sm`, so ours has to match that modifier
-          signature exactly for twMerge to dedupe it. */}
+          signature exactly for `cn` to dedupe it. */}
         <SheetContent
           side="right"
           className="flex flex-col gap-0 p-0 outline-none data-[side=right]:sm:max-w-xl"

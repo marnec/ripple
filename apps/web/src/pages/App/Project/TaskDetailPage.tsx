@@ -1,17 +1,26 @@
 import { BacklinksButton } from "@/components/BacklinksDrawer";
 import { RippleSpinner } from "@/components/RippleSpinner";
-import { TagPickerButton } from "@/components/TagPickerButton";
 import { Button } from "@ripple/ui/components/button";
+import { cn } from "@/lib/utils";
 import { HeaderSlot, MobileHeaderTitle } from "@/contexts/HeaderSlotContext";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { LG_MEDIA_QUERY, useMediaQuery } from "@/hooks/use-media-query";
+import { useAutoHideScrollbar } from "@/hooks/use-autohide-scrollbar";
 import { ResourceDeleted } from "@/pages/ResourceDeleted";
 import SomethingWentWrong from "@/pages/SomethingWentWrong";
 import type { QueryParams } from "@convex/types/routes";
-import { Trash2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { MessageSquare } from "lucide-react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { useDefaultLayout } from "react-resizable-panels";
+import {
+  ResizableHandle,
+  ResizablePanel,
+  ResizablePanelGroup,
+} from "@ripple/ui/components/resizable";
 import type { Id } from "@convex/_generated/dataModel";
 import {
+  TaskActionsMenu,
   TaskActivitySection,
   TaskDeleteDialogSection,
   TaskDependenciesSection,
@@ -86,6 +95,10 @@ function PageShell({
   const detail = useTaskDetailContext();
   const navigate = useNavigate();
   const isMobile = useIsMobile();
+  const isWide = useMediaQuery(LG_MEDIA_QUERY);
+  const activityRef = useRef<HTMLDivElement>(null);
+  // Thumb shows while the description scrolls, as in the document editor.
+  const descriptionScrollRef = useAutoHideScrollbar<HTMLDivElement>();
 
   if (detail.loadState === "loading") {
     return (
@@ -99,89 +112,110 @@ function PageShell({
     return <ResourceDeleted resourceType="task" />;
   }
 
+  const title = (
+    <TaskTitleField className="text-xl font-semibold leading-snug md:text-2xl" />
+  );
+  // `bounded` (wide layout, where the panel is the page's height): the box
+  // grows with its content from the same minimum as below lg until it reaches
+  // the bottom of the panel, then scrolls inside itself — `min-h-0` lets the
+  // section shrink to the space left under the title, while the box's own
+  // min-height stops it shrinking past the minimum. Unbounded, it flows in
+  // the single scrolling column.
+  const description = (bounded: boolean) => (
+    <TaskDescriptionSection
+      className={cn(
+        "space-y-2 animate-fade-in",
+        bounded && "flex min-h-0 flex-col",
+      )}
+      headerClassName={bounded ? "shrink-0" : undefined}
+      heading={
+        <h3 className="text-sm font-semibold text-muted-foreground">
+          Description
+        </h3>
+      }
+      editorClassName={cn("min-h-50 md:min-h-75", bounded && "scrollbar-autohide")}
+      editorScrollRef={bounded ? descriptionScrollRef : undefined}
+    />
+  );
+  // Folded to the essentials in both layouts: below lg so the description
+  // stays above the fold, from lg so the activity under it keeps its height.
+  const details = (
+    <div className="space-y-5">
+      <TaskPropertiesSection collapsible />
+      <TaskGithubSection />
+      <TaskDependenciesSection collapsible />
+    </div>
+  );
+
   return (
     <div className="flex h-full min-h-0 flex-col">
-      {/* Task toolbar — desktop only. On mobile, the breadcrumb shows
-          the task code + title and the delete action moves to HeaderSlot. */}
+      {/* Task toolbar — desktop only: identity, backlinks (in the toolbar, as
+          on every other entity's `SurfaceHeader`) and actions. The title is
+          not in here at any size; it heads the content column. On mobile the
+          breadcrumb carries code + title and the rest moves to HeaderSlot. */}
       {!isMobile && (
-        <div className="flex h-11 shrink-0 items-center gap-3 border-b px-3">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-7 w-7 shrink-0 p-0"
-            onClick={() => detail.setShowDeleteDialog(true)}
-            title="Delete task"
-          >
-            <Trash2 className="h-4 w-4 text-destructive" />
-          </Button>
-          <TagPickerButton
-            workspaceId={workspaceId}
-            value={detail.task.tags ?? []}
-            onChange={(tags) => void detail.patch({ tags })}
-          />
-          <TaskIdentity className="text-sm" />
-          <TaskTitleField className="h-8 min-w-0 flex-1 border-0 bg-transparent px-2 text-lg font-semibold shadow-none focus-visible:ring-0" />
+        <div className="flex h-11 shrink-0 items-center gap-2 border-b px-3">
+          <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
+            <TaskIdentity className="text-sm" />
+          </div>
+          <BacklinksButton resourceId={taskId} workspaceId={workspaceId} />
           <TaskGithubActions
             task={detail.task}
             projectId={projectId}
             workspaceId={workspaceId}
           />
+          <TaskActionsMenu />
         </div>
       )}
 
       {isMobile && (
         <HeaderSlot>
+          <BacklinksButton resourceId={taskId} workspaceId={workspaceId} />
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => detail.setShowDeleteDialog(true)}
-            aria-label="Delete task"
+            onClick={() =>
+              activityRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
+            }
+            aria-label="Jump to comments"
           >
-            <Trash2 className="size-4 text-destructive" />
+            <MessageSquare className="size-4" />
           </Button>
+          <TaskActionsMenu size="icon" />
         </HeaderSlot>
       )}
       <MobileHeaderTitle name={detail.titleValue} />
 
-      <div className="flex-1 min-h-0 overflow-y-auto lg:overflow-hidden">
-        <div className="mx-auto flex w-full max-w-430 flex-col lg:h-full lg:flex-row">
-          <div className="min-w-0 lg:flex lg:h-full lg:flex-2 lg:flex-col">
-            <div className="space-y-5 px-3 pt-2 pb-6 md:space-y-8 md:px-4 md:pt-6 lg:flex lg:flex-1 lg:flex-col lg:min-h-0 lg:pr-8">
-              {isMobile && (
-                <div className="mb-4 md:mb-6">
-                  <TaskTitleField className="h-7 text-lg font-bold focus-visible:ring-0 md:h-10 md:text-2xl" />
+      <div className="flex-1 min-h-0">
+        {isWide ? (
+          <WideLayout
+            main={
+              <div className="mx-auto flex h-full w-full max-w-3xl flex-col gap-8 px-8 py-6">
+                <div className="shrink-0">{title}</div>
+                {description(true)}
+              </div>
+            }
+            details={details}
+            activity={detail.currentUser && <TaskActivitySection fillHeight />}
+          />
+        ) : (
+          // Single scrolling column, details folded to their essentials so
+          // the description is above the fold on a phone.
+          <div className="h-full overflow-y-auto">
+            <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-3 pt-3 pb-8 md:px-6 md:pt-6">
+              {title}
+              {details}
+              {description(false)}
+              {/* The timeline needs a viewer to attribute comments to;
+                  without one the block (and its divider) stays out. */}
+              {detail.currentUser && (
+                <div ref={activityRef} className="scroll-mt-4 border-t pt-6">
+                  <TaskActivitySection />
                 </div>
               )}
-
-              <TaskPropertiesSection />
-
-              <TaskGithubSection />
-
-              <TaskDependenciesSection collapsible />
-
-              <BacklinksButton resourceId={taskId} workspaceId={workspaceId} />
-
-              <TaskDescriptionSection
-                className="space-y-2 animate-fade-in lg:flex lg:flex-1 lg:flex-col lg:min-h-0"
-                headerClassName="lg:shrink-0"
-                heading={
-                  <h3 className="text-sm font-semibold text-muted-foreground">
-                    Description
-                  </h3>
-                }
-                editorClassName="min-h-50 md:min-h-75 lg:min-h-0 lg:flex-1 lg:overflow-y-auto"
-              />
             </div>
           </div>
-
-          {/* The timeline needs a viewer to attribute comments to; without one
-              the whole column (and its border) stays out of the layout. */}
-          {detail.currentUser && (
-            <div className="min-w-0 border-t px-3 pt-6 pb-6 md:pl-6 md:pr-4 lg:flex lg:h-full lg:flex-1 lg:flex-col lg:border-t-0 lg:border-l lg:pt-6 lg:pb-6 lg:pl-8">
-              <TaskActivitySection />
-            </div>
-          )}
-        </div>
+        )}
       </div>
 
       <TaskDeleteDialogSection
@@ -190,5 +224,51 @@ function PageShell({
         }}
       />
     </div>
+  );
+}
+
+/**
+ * The lg+ layout: the description gets the main panel, and a resizable right
+ * panel holds the details with the activity filling what is left under them.
+ * Activity sits beside the description, not below it, so on a long-running
+ * task the comments are where you land rather than past a long description —
+ * and the two can be read side by side. The right panel's width is the
+ * user's, remembered across tasks.
+ */
+function WideLayout({
+  main,
+  details,
+  activity,
+}: {
+  main: ReactNode;
+  details: ReactNode;
+  activity: ReactNode;
+}) {
+  const layout = useDefaultLayout({ id: "task-detail-panels" });
+
+  return (
+    <ResizablePanelGroup
+      defaultLayout={layout.defaultLayout}
+      onLayoutChanged={layout.onLayoutChanged}
+    >
+      {/* Not a scroll container: the title stays put and the description's
+          editor box scrolls once it has grown to the bottom of the panel. */}
+      <ResizablePanel id="main" minSize="40%">
+        {main}
+      </ResizablePanel>
+      <ResizableHandle withHandle />
+      {/* Pixel sizes (numbers): the panel's job is to fit a comment thread,
+          which needs a width in px, not a share of the window. */}
+      <ResizablePanel id="side" defaultSize={384} minSize={320} maxSize="60%">
+        <div className="flex h-full flex-col">
+          {/* Capped so an expanded "More details" can't squeeze the activity
+              out; past the cap the details scroll on their own. */}
+          <div className="max-h-[50%] shrink-0 overflow-y-auto border-b px-5 pt-5 pb-4">
+            {details}
+          </div>
+          {activity && <div className="min-h-0 flex-1 px-5 py-4">{activity}</div>}
+        </div>
+      </ResizablePanel>
+    </ResizablePanelGroup>
   );
 }

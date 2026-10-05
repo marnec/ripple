@@ -67,7 +67,10 @@ type TaskActivityTimelineProps = {
    *  lanes (private note vs reply on the provider); unlinked tasks have no
    *  lanes and their comments carry none. */
   isLinked?: boolean;
-  /** On lg+, pin header & composer and scroll only the list. Requires a parent with a defined height. */
+  /** Pin header & composer and scroll only the list. Requires a parent with a
+   *  defined height. Unconditional rather than `lg:`-gated: the host (a 44rem
+   *  sheet) has the same width at every viewport, so a viewport breakpoint
+   *  would switch the layout for reasons unrelated to the space it has. */
   fillHeight?: boolean;
   /** When set, the header becomes a click target and renders the toggle icon. */
   onToggle?: () => void;
@@ -286,11 +289,16 @@ export function TaskActivityTimeline({ taskId, currentUserId, workspaceId, membe
     void removeComment({ id: commentId });
   };
 
+  // "Integration" only exists for a linked task; if the link goes away while
+  // it is selected, fall back rather than show an empty, tab-less filter.
+  const activeFilter: TimelineFilter =
+    !isLinked && filter === "integration" ? "comments" : filter;
+
   const filteredItems = timeline === undefined
     ? []
-    : filter === "comments"
+    : activeFilter === "comments"
       ? timeline.filter((item: TimelineItem) => item.kind === "comment")
-      : filter === "integration"
+      : activeFilter === "integration"
         ? timeline.filter(
             (item: TimelineItem) =>
               item.kind === "activity" && item.source === "integration",
@@ -299,11 +307,11 @@ export function TaskActivityTimeline({ taskId, currentUserId, workspaceId, membe
 
   const listRef = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
-    if (!fillHeight || filter !== "all") return;
+    if (!fillHeight || activeFilter !== "all") return;
     const el = listRef.current;
     if (!el) return;
     el.scrollTop = el.scrollHeight;
-  }, [fillHeight, filter, filteredItems.length]);
+  }, [fillHeight, activeFilter, filteredItems.length]);
 
   if (timeline === undefined || workspaceMembers === undefined) {
     return null;
@@ -313,7 +321,7 @@ export function TaskActivityTimeline({ taskId, currentUserId, workspaceId, membe
     <div
       className={
         fillHeight
-          ? "animate-fade-in space-y-4 lg:flex lg:h-full lg:min-h-0 lg:flex-col lg:space-y-0"
+          ? "animate-fade-in flex h-full min-h-0 flex-col"
           : "animate-fade-in space-y-4"
       }
     >
@@ -321,8 +329,8 @@ export function TaskActivityTimeline({ taskId, currentUserId, workspaceId, membe
       <div
         className={cn(
           "flex items-center justify-between gap-2",
-          fillHeight && "lg:mb-3 lg:shrink-0",
-          fillHeight && !collapsed && "lg:border-b lg:pb-3",
+          fillHeight && "mb-3 shrink-0",
+          fillHeight && !collapsed && "border-b pb-3",
         )}
       >
         {onToggle ? (
@@ -349,11 +357,13 @@ export function TaskActivityTimeline({ taskId, currentUserId, workspaceId, membe
           <h3 className="text-sm font-semibold text-muted-foreground">Activity</h3>
         )}
         {!collapsed && (
-          <Tabs value={filter} onValueChange={(v) => setFilter(v as TimelineFilter)}>
-            <TabsList className="h-7">
-              <TabsTrigger value="comments" className="text-xs px-2 py-0.5">Comments</TabsTrigger>
-              <TabsTrigger value="integration" className="text-xs px-2 py-0.5">Integration</TabsTrigger>
-              <TabsTrigger value="all" className="text-xs px-2 py-0.5">All</TabsTrigger>
+          <Tabs value={activeFilter} onValueChange={(v) => setFilter(v as TimelineFilter)}>
+            <TabsList className="h-7 pointer-coarse:h-9">
+              <TabsTrigger value="comments" className="text-xs px-2 py-0.5 pointer-coarse:px-3">Comments</TabsTrigger>
+              {isLinked && (
+                <TabsTrigger value="integration" className="text-xs px-2 py-0.5 pointer-coarse:px-3">Integration</TabsTrigger>
+              )}
+              <TabsTrigger value="all" className="text-xs px-2 py-0.5 pointer-coarse:px-3">All</TabsTrigger>
             </TabsList>
           </Tabs>
         )}
@@ -370,7 +380,7 @@ export function TaskActivityTimeline({ taskId, currentUserId, workspaceId, membe
       <div
         className={
           fillHeight
-            ? "space-y-4 lg:space-y-0 lg:flex-1 lg:min-h-0 lg:flex lg:flex-col lg:overflow-hidden lg:contain-[size]"
+            ? "flex-1 min-h-0 flex flex-col overflow-hidden contain-[size]"
             : collapsed
               ? "hidden"
               : "space-y-4"
@@ -381,7 +391,7 @@ export function TaskActivityTimeline({ taskId, currentUserId, workspaceId, membe
         ref={listRef}
         className={
           fillHeight
-            ? "lg:min-h-0 lg:flex-1 lg:overflow-y-auto"
+            ? "min-h-0 flex-1 overflow-y-auto"
             : ""
         }
       >
@@ -399,9 +409,9 @@ export function TaskActivityTimeline({ taskId, currentUserId, workspaceId, membe
           )}
           <div className="space-y-1">
             {filteredItems.length === 0 ? (
-              filter === "comments" ? null : (
+              activeFilter === "comments" ? null : (
                 <p className="text-sm text-muted-foreground">
-                  {filter === "integration"
+                  {activeFilter === "integration"
                     ? "No integration activity yet"
                     : "No activity yet"}
                 </p>
@@ -438,19 +448,19 @@ export function TaskActivityTimeline({ taskId, currentUserId, workspaceId, membe
       <div
         className={
           fillHeight
-            ? "space-y-2 lg:mt-3 lg:shrink-0 lg:border-t lg:pt-3"
+            ? "space-y-2 mt-3 shrink-0 border-t pt-3"
             : "space-y-2"
         }
         onKeyDown={handleKeyDown}
       >
         {isLinked && (
           <Tabs value={lane} onValueChange={(v) => setLane(v as CommentLane)}>
-            <TabsList className="h-7">
-              <TabsTrigger value="private" className="h-6 gap-1 px-2 text-xs">
+            <TabsList className="h-7 pointer-coarse:h-9">
+              <TabsTrigger value="private" className="h-6 gap-1 px-2 text-xs pointer-coarse:h-8">
                 <Lock className="h-3 w-3" />
                 Private note
               </TabsTrigger>
-              <TabsTrigger value="reply" className="h-6 gap-1 px-2 text-xs">
+              <TabsTrigger value="reply" className="h-6 gap-1 px-2 text-xs pointer-coarse:h-8">
                 {provider === "gitlab" ? <GitlabMark className="h-3 w-3" /> : <GithubMark className="h-3 w-3" />}
                 Reply on {providerLabel(provider)}
               </TabsTrigger>
@@ -585,7 +595,7 @@ function CommentItem({
             <CommentBody body={item.body ?? ""} />
             {/* Edit/delete — bottom-right of comment box */}
             {item.userId === currentUserId && (
-              <div className="absolute bottom-1 right-1 flex gap-1.5 transition-opacity md:opacity-0 md:group-hover:opacity-100">
+              <div className="absolute bottom-1 right-1 flex gap-1.5 transition-opacity pointer-fine:opacity-0 pointer-fine:group-hover:opacity-100 pointer-fine:group-focus-within:opacity-100">
                 <button
                   type="button"
                   onClick={() => onEdit(commentId)}

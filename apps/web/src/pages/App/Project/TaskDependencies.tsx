@@ -141,9 +141,11 @@ export function TaskDependencies({ taskId, workspaceId, collapsible = false }: T
         </div>
       </div>
 
-      {/* Body wrapper animates max-height between 0 and the fixed ScrollArea
+      {/* Body wrapper animates max-height between 0 and the ScrollArea's
           height (7rem == h-28). overflow-hidden clips content during the
-          transition. Non-collapsible (full-page) callers always see expanded. */}
+          transition. Non-collapsible (full-page) callers always see expanded.
+          The fixed-height ScrollArea is only for an actual list: the empty
+          state is one line, and boxing it in 7rem left a blank block. */}
       <div
         className="overflow-hidden"
         style={{
@@ -151,12 +153,11 @@ export function TaskDependencies({ taskId, workspaceId, collapsible = false }: T
           transition: "max-height 250ms cubic-bezier(0.16, 1, 0.3, 1)",
         }}
       >
+        {deps !== undefined && !hasDeps ? (
+          <p className="text-xs text-muted-foreground py-1 animate-fade-in">No dependencies</p>
+        ) : (
         <ScrollArea className="h-28">
           <div className={cn("space-y-3 pr-3", deps !== undefined && "animate-fade-in")}>
-            {deps !== undefined && !hasDeps && (
-              <p className="text-xs text-muted-foreground py-1">No dependencies</p>
-            )}
-
             {blockedBy.length > 0 && (
               <DependencyGroup
                 label="Blocked by"
@@ -185,6 +186,7 @@ export function TaskDependencies({ taskId, workspaceId, collapsible = false }: T
             )}
           </div>
         </ScrollArea>
+        )}
       </div>
     </div>
   );
@@ -230,7 +232,7 @@ function DependencyGroup({
             <Button
               variant="ghost"
               size="icon"
-              className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity"
+              className="h-5 w-5 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 pointer-coarse:h-8 pointer-coarse:w-8 pointer-coarse:opacity-100"
               onClick={() => onRemove(item.edgeId)}
             >
               <X className="h-3 w-3" />

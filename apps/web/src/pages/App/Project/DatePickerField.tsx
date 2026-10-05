@@ -14,6 +14,10 @@ type DatePickerFieldProps = {
   onChange: (date: string | null) => void;
   placeholder?: string;
   overdue?: boolean;
+  /** Borderless trigger, for a property list (see `PROPERTY_TRIGGER_CLASS`). */
+  ghost?: boolean;
+  /** Open the calendar on mount — for a field the user just asked to add. */
+  defaultOpen?: boolean;
 };
 
 export function DatePickerField({
@@ -21,17 +25,21 @@ export function DatePickerField({
   onChange,
   placeholder = "No date",
   overdue,
+  ghost,
+  defaultOpen,
 }: DatePickerFieldProps) {
   return (
     <div className="flex items-center gap-2 min-w-0">
-      <Popover>
+      <Popover defaultOpen={defaultOpen}>
         <PopoverTrigger
           render={<Button
-            variant="outline"
+            variant={ghost ? "ghost" : "outline"}
             className={cn(
               "min-w-0 flex-1 justify-start text-left font-normal",
+              ghost && "h-8 px-2.5 hover:bg-muted/60 aria-expanded:bg-muted/60 pointer-coarse:h-9",
               !value && "text-muted-foreground",
-              overdue && "text-red-500 border-red-500/50",
+              overdue && "text-red-500",
+              overdue && !ghost && "border-red-500/50",
             )}
           />}
         >
@@ -58,8 +66,9 @@ export function DatePickerField({
         <Button
           variant="ghost"
           size="icon"
-          className="h-8 w-8 shrink-0"
+          className="h-8 w-8 shrink-0 pointer-coarse:h-9 pointer-coarse:w-9"
           onClick={() => onChange(null)}
+          aria-label="Clear date"
         >
           <X className="h-3 w-3" />
         </Button>

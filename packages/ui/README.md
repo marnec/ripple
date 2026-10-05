@@ -32,6 +32,11 @@ package, so the file lands here and both apps get it:
 cd apps/web && pnpm dlx shadcn@latest add popover
 ```
 
+The CLI resolves this package's `components.json` aliases (`@ripple/ui/lib`,
+`@ripple/ui/hooks`, …) through the `paths` entry in its `tsconfig.json`
+(`"@ripple/ui/*": ["./src/*"]`, as in shadcn's monorepo template). Without it,
+`add` aborts with "Could not resolve the following aliases … lib, hooks".
+
 `components.json` here has an empty `tailwind.css`, since the package owns no
 stylesheet. If a generated component needs a token neither app defines, add the
 token to **both** apps' `index.css` — with each app's own value — rather than

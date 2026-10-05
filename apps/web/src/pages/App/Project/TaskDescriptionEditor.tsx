@@ -36,6 +36,9 @@ type TaskDescriptionEditorProps = {
    */
   workspaceId?: Id<"workspaces">;
   className?: string;
+  /** Ref for the bordered editor box — the element that scrolls when a host
+   *  caps its height (e.g. to attach `useAutoHideScrollbar`). */
+  scrollRef?: (node: HTMLDivElement | null) => void;
   hideLabel?: boolean;
   /**
    * Hold the editor back behind a spinner while a GitHub description seed is
@@ -55,6 +58,7 @@ export function TaskDescriptionEditor({
   members,
   workspaceId,
   className,
+  scrollRef,
   hideLabel,
   loading,
   unavailableOffline,
@@ -220,6 +224,7 @@ export function TaskDescriptionEditor({
         </h3>
       )}
       <div
+        ref={scrollRef}
         className={cn(
           "task-description-editor border rounded-md p-2 animate-fade-in",
           className

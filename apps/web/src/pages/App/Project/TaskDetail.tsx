@@ -1,7 +1,22 @@
 import { type CSSProperties, type ReactNode } from "react";
+import { Inbox, Link2, MoreHorizontal, RefreshCw, Trash2 } from "lucide-react";
+import { toast } from "sonner";
+import { useQuery } from "convex-helpers/react/cache";
+import { useMutation } from "convex/react";
+import { api } from "@convex/_generated/api";
+import { getErrorMessage } from "@/lib/errors";
 import type { Id } from "@convex/_generated/dataModel";
 import { TaskDetailContext, useTaskDetailContext } from "./taskDetailContext";
-import { Input } from "@ripple/ui/components/input";
+import { Button } from "@ripple/ui/components/button";
+import {
+  ResponsiveDropdownMenu,
+  ResponsiveDropdownMenuContent,
+  ResponsiveDropdownMenuGroup,
+  ResponsiveDropdownMenuItem,
+  ResponsiveDropdownMenuLabel,
+  ResponsiveDropdownMenuSeparator,
+  ResponsiveDropdownMenuTrigger,
+} from "@/components/ui/responsive-dropdown-menu";
 import { TaskCode } from "@/components/TaskCode";
 import { cn } from "@/lib/utils";
 import { TaskActivityTimeline } from "./TaskActivityTimeline";
@@ -103,22 +118,126 @@ export function TaskIdentity({ className }: { className?: string }) {
 }
 
 /**
- * The task title input. Rendered up to three times across the two shells
- * (sheet header, page desktop toolbar, page mobile heading) — identical
- * wiring, different sizing, so only `className` varies.
+ * The task title. A textarea that grows with its content (`field-sizing`), so
+ * a long title wraps instead of being clipped by a one-line input — but it is
+ * still a single line of data: Enter commits, and pasted newlines are folded
+ * into spaces. Each shell sizes it through `className`.
  */
 export function TaskTitleField({ className }: { className?: string }) {
   const detail = useTaskDetailContext();
 
   return (
-    <Input
+    <textarea
+      rows={1}
       value={detail.titleValue}
-      onChange={(e) => detail.setTitleValue(e.target.value)}
+      onChange={(e) => detail.setTitleValue(e.target.value.replace(/\s*\n\s*/g, " "))}
       onBlur={detail.handleTitleBlur}
       onKeyDown={detail.handleTitleKeyDown}
-      className={className}
+      className={cn(
+        "field-sizing-content w-[calc(100%+1rem)] resize-none rounded-md bg-transparent px-2 py-1 -mx-2 outline-none placeholder:text-muted-foreground hover:bg-muted/40 focus-visible:bg-muted/40",
+        className,
+      )}
       placeholder="Task title"
+      aria-label="Task title"
     />
+  );
+}
+
+/**
+ * The task's secondary actions — move to another cycle, copy link, delete —
+ * behind one overflow button, so the destructive action is never the control
+ * sitting next to the title. A drawer on mobile (via `ResponsiveDropdownMenu`).
+ */
+export function TaskActionsMenu({ size = "icon-sm" }: { size?: "icon" | "icon-sm" }) {
+  const detail = useLoadedTask();
+  if (!detail) return null;
+  const { task, taskId, workspaceId } = detail;
+
+  const copyLink = () => {
+    const url = `${window.location.origin}/workspaces/${workspaceId}/projects/${task.projectId}/tasks/${taskId}`;
+    void navigator.clipboard.writeText(url).then(
+      () => toast.success("Link copied"),
+      () => toast.error("Could not copy the link"),
+    );
+  };
+
+  return (
+    <ResponsiveDropdownMenu>
+      <ResponsiveDropdownMenuTrigger
+        render={
+          <Button variant="ghost" size={size} title="More actions" aria-label="More actions" />
+        }
+      >
+        <MoreHorizontal className="h-4 w-4" />
+      </ResponsiveDropdownMenuTrigger>
+      <ResponsiveDropdownMenuContent align="end" className="w-56">
+        <TaskCycleMenuItems taskId={taskId} projectId={task.projectId} cycleId={task.cycleId} />
+        <ResponsiveDropdownMenuItem onSelect={copyLink}>
+          <Link2 className="text-muted-foreground" />
+          <span>Copy link</span>
+        </ResponsiveDropdownMenuItem>
+        <ResponsiveDropdownMenuSeparator />
+        <ResponsiveDropdownMenuItem
+          variant="destructive"
+          className="text-destructive"
+          onSelect={() => detail.setShowDeleteDialog(true)}
+        >
+          <Trash2 className="text-destructive" />
+          <span>Delete task</span>
+        </ResponsiveDropdownMenuItem>
+      </ResponsiveDropdownMenuContent>
+    </ResponsiveDropdownMenu>
+  );
+}
+
+/**
+ * "Move to cycle" targets: the open cycles other than the task's own, plus the
+ * backlog when the task is in a cycle — the same set the bulk action bar
+ * offers. A flat labelled group rather than a submenu, because the menu is a
+ * drawer on mobile and a drawer has no submenus. Renders nothing (separator
+ * included) when there is nowhere to move to.
+ */
+function TaskCycleMenuItems({
+  taskId,
+  projectId,
+  cycleId,
+}: {
+  taskId: Id<"tasks">;
+  projectId: Id<"projects">;
+  cycleId?: Id<"cycles">;
+}) {
+  const cycles = useQuery(api.cycles.listByProject, { projectId });
+  const moveTasks = useMutation(api.cycles.moveTasks);
+  const targets = (cycles ?? []).filter((c) => c.status === "open" && c._id !== cycleId);
+  if (targets.length === 0 && !cycleId) return null;
+
+  const move = (target: Id<"cycles"> | null) => {
+    void moveTasks({ projectId, taskIds: [taskId], cycleId: target }).catch(
+      (error: unknown) => toast.error(getErrorMessage(error, "Could not move the task")),
+    );
+  };
+
+  return (
+    <>
+      {/* Base UI's GroupLabel must sit inside a Group. */}
+      <ResponsiveDropdownMenuGroup>
+        <ResponsiveDropdownMenuLabel>Move to cycle</ResponsiveDropdownMenuLabel>
+        {targets.map((c) => (
+          <ResponsiveDropdownMenuItem key={c._id} onSelect={() => move(c._id)}>
+            <RefreshCw className="text-muted-foreground" />
+            <span className="truncate">{c.name}</span>
+            {c.isCurrent && <span className="ml-auto text-xs text-muted-foreground">current</span>}
+          </ResponsiveDropdownMenuItem>
+        ))}
+        {cycleId && (
+          <ResponsiveDropdownMenuItem onSelect={() => move(null)}>
+            <Inbox className="text-muted-foreground" />
+            <span>Backlog</span>
+          </ResponsiveDropdownMenuItem>
+        )}
+      </ResponsiveDropdownMenuGroup>
+      <ResponsiveDropdownMenuSeparator />
+    </>
   );
 }
 
@@ -127,14 +246,18 @@ export function TaskTitleField({ className }: { className?: string }) {
  * through the module's single `patch`, so a failure in any of them surfaces
  * the same way.
  */
-export function TaskPropertiesSection() {
+export function TaskPropertiesSection({ collapsible }: { collapsible?: boolean }) {
   const detail = useLoadedTask();
   if (!detail || !detail.statuses || !detail.members) return null;
   const { task, patch } = detail;
 
   return (
     <TaskProperties
+      // Keyed so view-local state (which optional rows the user added, the
+      // details fold) resets when the sheet switches task.
+      key={task._id}
       task={task}
+      collapsible={collapsible}
       statuses={detail.statuses}
       members={detail.members}
       onStatusChange={(statusId) => void patch({ statusId })}
@@ -191,6 +314,7 @@ export function TaskDescriptionSection({
   toolbarClassName,
   editorWrapper,
   editorClassName,
+  editorScrollRef,
 }: {
   heading: ReactNode;
   className?: string;
@@ -201,6 +325,8 @@ export function TaskDescriptionSection({
   /** Wrap the editor — the sheet needs a `contain: size` box to collapse it. */
   editorWrapper?: (editor: ReactNode) => ReactNode;
   editorClassName?: string;
+  /** Ref for the editor box, when the shell makes it the scroll container. */
+  editorScrollRef?: (node: HTMLDivElement | null) => void;
 }) {
   const detail = useLoadedTask();
   if (!detail) return null;
@@ -211,6 +337,7 @@ export function TaskDescriptionSection({
       members={detail.members}
       workspaceId={detail.workspaceId}
       className={editorClassName}
+      scrollRef={editorScrollRef}
       hideLabel
       loading={!detail.descriptionReady}
       unavailableOffline={detail.unavailableOffline}
@@ -243,10 +370,13 @@ export function TaskDescriptionSection({
  * timeline needs a current user to attribute comments to.
  */
 export function TaskActivitySection({
+  fillHeight,
   collapsed,
   onToggle,
   toggleIcon,
 }: {
+  /** Pin header + composer and scroll the list — needs a sized parent. */
+  fillHeight?: boolean;
   collapsed?: boolean;
   onToggle?: () => void;
   toggleIcon?: "maximize" | "minimize";
@@ -262,7 +392,7 @@ export function TaskActivitySection({
       members={detail.members}
       provider={detail.linkedProvider}
       isLinked={detail.isGithubLinked}
-      fillHeight
+      fillHeight={fillHeight}
       collapsed={collapsed}
       onToggle={onToggle}
       toggleIcon={toggleIcon}

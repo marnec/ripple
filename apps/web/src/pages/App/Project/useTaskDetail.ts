@@ -17,6 +17,7 @@ import { useResourceDoc } from "../../../hooks/use-collab-session";
 import { syncState } from "@/lib/collab/connection-policy";
 import { useTaskGithubLink } from "./useTaskGithubLink";
 import { useTaskEditTracking } from "./useTaskEditTracking";
+import { useTitleDraft } from "./useTitleDraft";
 
 const taskDescriptionDictionary = {
   ...richTextDictionary,
@@ -59,7 +60,7 @@ export function useTaskDetail({
   const removeTask = useMutation(api.tasks.remove);
 
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-  const [titleValue, setTitleValue] = useState("");
+  const [titleValue, setTitleValue] = useTitleDraft(task?.title);
 
   const fileUpload = useUploadFile(workspaceId);
 
@@ -135,17 +136,6 @@ export function useTaskDetail({
     descriptionEdited,
   });
 
-  // Sync title when task loads — render-time derived state from server.
-  const [prevServerTitle, setPrevServerTitle] = useState<string | undefined>(
-    task?.title,
-  );
-  if (task?.title !== prevServerTitle) {
-    setPrevServerTitle(task?.title);
-    if (task?.title && task.title !== titleValue) {
-      setTitleValue(task.title);
-    }
-  }
-
   // The one write path. Every property edit goes through it, so the error
   // path (and the "no task selected" guard) is written once instead of nine
   // times — eight of which used to swallow rejections silently.
@@ -161,7 +151,7 @@ export function useTaskDetail({
   // ref used to be threaded out of this hook and every consumer had to
   // destructure it away, because reading any member off a ref-carrying object
   // trips the React Compiler's "no refs during render" rule.
-  const handleTitleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+  const handleTitleKeyDown = (e: React.KeyboardEvent<HTMLElement>) => {
     if (e.key === "Enter") {
       e.preventDefault();
       e.currentTarget.blur();
