@@ -3127,6 +3127,24 @@ export declare const api: {
       >
     >;
   };
+  taskBulk: {
+    apply: FunctionReference<
+      "mutation",
+      "public",
+      {
+        op:
+          | { closeGithubIssues: boolean; kind: "delete" }
+          | { kind: "status"; statusId: Id<"taskStatuses"> }
+          | { kind: "priority"; priority: "urgent" | "high" | "medium" | "low" }
+          | { assigneeId: Id<"users"> | null; kind: "assignee" }
+          | { kind: "addTag"; tag: string }
+          | { kind: "removeTag"; tag: string };
+        projectId: Id<"projects">;
+        taskIds: Array<Id<"tasks">>;
+      },
+      null
+    >;
+  };
   taskComments: {
     create: FunctionReference<
       "mutation",
@@ -7436,6 +7454,42 @@ export declare const internal: {
       "action",
       "internal",
       { tagId: Id<"tags"> },
+      null
+    >;
+  };
+  taskBulk: {
+    applyBatch: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        op:
+          | { closeGithubIssues: boolean; kind: "delete" }
+          | { kind: "status"; statusId: Id<"taskStatuses"> }
+          | { kind: "priority"; priority: "urgent" | "high" | "medium" | "low" }
+          | { assigneeId: Id<"users"> | null; kind: "assignee" }
+          | { kind: "addTag"; tag: string }
+          | { kind: "removeTag"; tag: string };
+        projectId: Id<"projects">;
+        taskIds: Array<Id<"tasks">>;
+        userId: Id<"users">;
+      },
+      boolean
+    >;
+    run: FunctionReference<
+      "action",
+      "internal",
+      {
+        op:
+          | { closeGithubIssues: boolean; kind: "delete" }
+          | { kind: "status"; statusId: Id<"taskStatuses"> }
+          | { kind: "priority"; priority: "urgent" | "high" | "medium" | "low" }
+          | { assigneeId: Id<"users"> | null; kind: "assignee" }
+          | { kind: "addTag"; tag: string }
+          | { kind: "removeTag"; tag: string };
+        projectId: Id<"projects">;
+        taskIds: Array<Id<"tasks">>;
+        userId: Id<"users">;
+      },
       null
     >;
   };

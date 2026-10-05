@@ -14,6 +14,7 @@ const LazyTaskDetailSheet = React.lazy(() =>
   import("./TaskDetailSheet").then((m) => ({ default: m.TaskDetailSheet })),
 );
 import { TaskRow } from "./TaskRow";
+import { TaskBulkActionBar } from "./TaskBulkActionBar";
 import type { TaskFilters, TaskSort } from "./TaskToolbar";
 import { useFilteredTasks } from "./useTaskFilters";
 import { deriveCompletedFilter, deriveCompletedSort } from "./completedTaskQuery";
@@ -86,6 +87,37 @@ export function Tasks({ projectId, workspaceId, filters, sort }: TasksProps) {
   // we render `allTasks` directly without re-filtering client-side.
   const filteredActive = useFilteredTasks(allTasks, filters, sort);
   const tasks = isCompletedView ? allTasks : filteredActive;
+
+  // Bulk selection (desktop only — mobile rows are swipe targets). Ids, not
+  // rows: the selection is intersected with what is visible on every render,
+  // so tasks a bulk delete removes, or a filter hides, drop out of the count.
+  const [selectedIds, setSelectedIds] = useState<ReadonlySet<Id<"tasks">>>(() => new Set());
+  const [selectionAnchor, setSelectionAnchor] = useState<Id<"tasks"> | null>(null);
+  const selectedTasks = (tasks ?? []).filter((t) => selectedIds.has(t._id));
+  const selectionActive = selectedTasks.length > 0;
+
+  const toggleSelected = (taskId: Id<"tasks">, selected: boolean, shiftKey: boolean) => {
+    const visible = tasks ?? [];
+    const from = selectionAnchor ? visible.findIndex((t) => t._id === selectionAnchor) : -1;
+    const to = visible.findIndex((t) => t._id === taskId);
+    const range =
+      shiftKey && from !== -1 && to !== -1
+        ? visible.slice(Math.min(from, to), Math.max(from, to) + 1).map((t) => t._id)
+        : [taskId];
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      for (const id of range) {
+        if (selected) next.add(id);
+        else next.delete(id);
+      }
+      return next;
+    });
+    setSelectionAnchor(taskId);
+  };
+  const clearSelection = () => {
+    setSelectedIds(new Set());
+    setSelectionAnchor(null);
+  };
 
   const statuses = useQuery(api.taskStatuses.listByProject, { projectId });
   const updateTask = useMutation(api.tasks.update);
@@ -186,6 +218,13 @@ export function Tasks({ projectId, workspaceId, filters, sort }: TasksProps) {
                       statuses={statuses ?? undefined}
                       hideStatusMenu={isMobile}
                       flush={isMobile}
+                      selected={selectedIds.has(task._id)}
+                      selectionActive={selectionActive}
+                      onSelectedChange={
+                        isMobile
+                          ? undefined
+                          : (selected, shiftKey) => toggleSelected(task._id, selected, shiftKey)
+                      }
                       onStatusChange={(statusId) => {
                         void updateTask({ taskId: task._id, statusId: statusId as Id<"taskStatuses"> });
                       }}
@@ -218,6 +257,16 @@ export function Tasks({ projectId, workspaceId, filters, sort }: TasksProps) {
                 "Load more completed tasks"
               )}
             </button>
+          )}
+          {!isMobile && selectionActive && (
+            <TaskBulkActionBar
+              projectId={projectId}
+              workspaceId={workspaceId}
+              selected={selectedTasks}
+              visibleCount={tasks.length}
+              onSelectAll={() => setSelectedIds(new Set(tasks.map((t) => t._id)))}
+              onClear={clearSelection}
+            />
           )}
         </div>
       )}

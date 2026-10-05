@@ -17,6 +17,8 @@ type TaskDeleteDialogProps = {
   onConfirm: (closeGithubIssue: boolean) => void;
   /** When true, offer to also close the linked GitHub issue. */
   isGithubLinked?: boolean;
+  /** How many tasks the confirm deletes — the bulk action passes its selection size. */
+  count?: number;
 };
 
 export function TaskDeleteDialog({
@@ -24,6 +26,7 @@ export function TaskDeleteDialog({
   onOpenChange,
   onConfirm,
   isGithubLinked = false,
+  count = 1,
 }: TaskDeleteDialogProps) {
   const [closeGithubIssue, setCloseGithubIssue] = useState(false);
 
@@ -40,9 +43,12 @@ export function TaskDeleteDialog({
     <ResponsiveDialog open={open} onOpenChange={onOpenChange}>
       <ResponsiveDialogContent>
         <ResponsiveDialogHeader>
-          <ResponsiveDialogTitle>Delete Task</ResponsiveDialogTitle>
+          <ResponsiveDialogTitle>
+            {count === 1 ? "Delete Task" : `Delete ${count} Tasks`}
+          </ResponsiveDialogTitle>
           <ResponsiveDialogDescription>
-            Delete this task? This action cannot be undone.
+            {count === 1 ? "Delete this task?" : `Delete these ${count} tasks?`} This
+            action cannot be undone.
           </ResponsiveDialogDescription>
         </ResponsiveDialogHeader>
         {isGithubLinked && (
@@ -55,9 +61,11 @@ export function TaskDeleteDialog({
               className="mt-0.5"
             />
             <span>
-              Also close the linked GitHub issue.{" "}
+              {count === 1
+                ? "Also close the linked GitHub issue."
+                : "Also close the linked GitHub issues."}{" "}
               <span className="text-muted-foreground">
-                Marks the issue as completed on GitHub. (Issues can&apos;t be
+                {count === 1 ? "Marks the issue" : "Marks them"} as completed on GitHub. (Issues can&apos;t be
                 deleted via the API.)
               </span>
             </span>

@@ -1,6 +1,7 @@
 import { ConvexError, v, type Infer } from "convex/values";
 import { paginationOptsValidator } from "convex/server";
 import { internalQuery, query } from "./_generated/server";
+import { internal } from "./_generated/api";
 import { mutation } from "./functions";
 import { generateKeyBetween } from "fractional-indexing";
 import { getUserDisplayName } from "@ripple/shared/displayName";
@@ -13,7 +14,7 @@ import { syncTaskTags, normalizeTagList } from "./tagSync";
 import { applyStatusSideEffects } from "./taskStatusSideEffects";
 import { getAll } from "convex-helpers/server/relationships";
 import type { Doc, Id } from "./_generated/dataModel";
-import type { QueryCtx } from "./_generated/server";
+import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { notify } from "./utils/notify";
 import {
   maybeEnqueueAssigneesPush,
@@ -53,7 +54,7 @@ export async function hasBlockingEdge(
  * sync paths in `core/syncIn` may place a task there. Every user-facing
  * mutation that writes `statusId` runs this guard.
  */
-function assertNotTriage(status: Doc<"taskStatuses">): void {
+export function assertNotTriage(status: Doc<"taskStatuses">): void {
   if (status.isTriage) {
     throw new ConvexError(
       `"${status.name}" is a triage status, reserved for incoming issues from integrations. Tasks can't be moved there manually.`,
@@ -73,7 +74,7 @@ function assertNotTriage(status: Doc<"taskStatuses">): void {
  * Every user-facing mutation that writes `statusId` runs this next to
  * `assertNotTriage`. Regression tests: tests/crossWorkspace.access.test.ts.
  */
-function assertStatusInProject(
+export function assertStatusInProject(
   status: Doc<"taskStatuses">,
   projectId: Id<"projects">,
 ): void {
@@ -93,7 +94,7 @@ function assertStatusInProject(
  * Every user-facing mutation that writes `assigneeId` runs this.
  * Regression tests: tests/crossWorkspace.access.test.ts.
  */
-async function assertAssigneeInWorkspace(
+export async function assertAssigneeInWorkspace(
   ctx: QueryCtx,
   workspaceId: Id<"workspaces">,
   assigneeId: Id<"users">,
@@ -1049,206 +1050,247 @@ export const update = mutation({
     estimate: v.optional(v.union(v.number(), v.null())),
   },
   returns: v.null(),
-  handler: async (ctx, { taskId, title, statusId, assigneeId, priority, tags, position, dueDate, plannedStartDate, estimate }) => {
+  handler: async (ctx, { taskId, ...changes }) => {
     const { userId, resource: task } = await requireResourceMember(ctx, "tasks", taskId);
+    await applyTaskUpdate(ctx, { userId, task, changes });
+    return null;
+  },
+});
 
-    // Build patch object with only provided fields
-    const patch: Record<string, any> = {};
+export type TaskChanges = {
+  title?: string;
+  statusId?: Id<"taskStatuses">;
+  assigneeId?: Id<"users"> | null;
+  priority?: Doc<"tasks">["priority"];
+  tags?: string[];
+  position?: string;
+  dueDate?: string | null;
+  plannedStartDate?: string | null;
+  estimate?: number | null;
+};
 
-    if (title !== undefined) patch.title = title;
-    if (assigneeId === null) patch.assigneeId = undefined;
-    else if (assigneeId !== undefined) {
-      // Before the patch is built, not after — `syncTaskTags` below reads the
-      // incoming assignee to rebuild the join rows.
-      await assertAssigneeInWorkspace(ctx, task.workspaceId, assigneeId);
-      patch.assigneeId = assigneeId;
+/**
+ * The write behind `tasks.update`, after authorization: the patch, the status
+ * side effects, the activity log, notifications and the outbound integration
+ * pushes. `taskBulk` runs every per-task change through here too, so a bulk
+ * edit is indistinguishable from N single edits — except `silent`, which drops
+ * the per-task notifications (the bulk mutation sends one summary instead of
+ * pushing N near-identical ones to the same person).
+ *
+ * The caller has authorized `userId` against `task`; the caller-supplied ids
+ * in `changes` (status, assignee) are validated here.
+ */
+export async function applyTaskUpdate(
+  ctx: MutationCtx,
+  {
+    userId,
+    task,
+    changes,
+    silent = false,
+  }: {
+    userId: Id<"users">;
+    task: Doc<"tasks">;
+    changes: TaskChanges;
+    silent?: boolean;
+  },
+): Promise<void> {
+  const taskId = task._id;
+  const { title, statusId, assigneeId, priority, tags, position, dueDate, plannedStartDate, estimate } = changes;
+
+  // Build patch object with only provided fields
+  const patch: Record<string, any> = {};
+
+  if (title !== undefined) patch.title = title;
+  if (assigneeId === null) patch.assigneeId = undefined;
+  else if (assigneeId !== undefined) {
+    // Before the patch is built, not after — `syncTaskTags` below reads the
+    // incoming assignee to rebuild the join rows.
+    await assertAssigneeInWorkspace(ctx, task.workspaceId, assigneeId);
+    patch.assigneeId = assigneeId;
+  }
+  if (priority !== undefined) patch.priority = priority;
+  if (tags !== undefined) {
+    patch.tags = await syncTaskTags(ctx, {
+      workspaceId: task.workspaceId,
+      projectId: task.projectId,
+      taskId,
+      completed: task.completed,
+      dueDate: task.dueDate,
+      plannedStartDate: task.plannedStartDate,
+      // Use the incoming assigneeId override when present so the new
+      // taskTags rows agree with the post-patch task row.
+      assigneeId: assigneeId === null ? undefined : assigneeId ?? task.assigneeId,
+      nextTagNames: tags,
+    });
+  }
+  if (position !== undefined) patch.position = position;
+  if (dueDate === null) patch.dueDate = undefined;
+  else if (dueDate !== undefined) patch.dueDate = dueDate;
+  if (plannedStartDate === null) patch.plannedStartDate = undefined;
+  else if (plannedStartDate !== undefined) patch.plannedStartDate = plannedStartDate;
+  if (estimate === null) patch.estimate = undefined;
+  else if (estimate !== undefined) patch.estimate = estimate;
+
+  // If statusId changed: look up new status, sync completed field and work periods
+  if (statusId !== undefined) {
+    const newStatus = await ctx.db.get(statusId);
+    if (!newStatus) throw new ConvexError("Status not found");
+    assertNotTriage(newStatus);
+    assertStatusInProject(newStatus, task.projectId);
+
+    patch.statusId = statusId;
+    // Canonical status side-effects: two-way `completed` sync + work-period
+    // open/close. Shared with kanban drag, PR automation, and inbound sync.
+    const effects = applyStatusSideEffects(task, newStatus);
+    patch.completed = effects.completed;
+    if (effects.workPeriods !== undefined) {
+      patch.workPeriods = effects.workPeriods;
     }
-    if (priority !== undefined) patch.priority = priority;
-    if (tags !== undefined) {
-      patch.tags = await syncTaskTags(ctx, {
-        workspaceId: task.workspaceId,
-        projectId: task.projectId,
-        taskId,
-        completed: task.completed,
-        dueDate: task.dueDate,
-        plannedStartDate: task.plannedStartDate,
-        // Use the incoming assigneeId override when present so the new
-        // taskTags rows agree with the post-patch task row.
-        assigneeId: assigneeId === null ? undefined : assigneeId ?? task.assigneeId,
-        nextTagNames: tags,
-      });
-    }
-    if (position !== undefined) patch.position = position;
-    if (dueDate === null) patch.dueDate = undefined;
-    else if (dueDate !== undefined) patch.dueDate = dueDate;
-    if (plannedStartDate === null) patch.plannedStartDate = undefined;
-    else if (plannedStartDate !== undefined) patch.plannedStartDate = plannedStartDate;
-    if (estimate === null) patch.estimate = undefined;
-    else if (estimate !== undefined) patch.estimate = estimate;
+  }
 
-    // If statusId changed: look up new status, sync completed field and work periods
-    if (statusId !== undefined) {
+  if (Object.keys(patch).length > 0) {
+    await ctx.db.patch(taskId, patch);
+  }
+
+  // Log activity for each changed field
+  if (title !== undefined && title !== task.title) {
+    await logTaskActivity(ctx, { taskId, userId, workspaceId: task.workspaceId, type: "title_change", oldValue: task.title, newValue: title, taskTitle: task.title });
+  }
+  if (statusId !== undefined && statusId !== task.statusId) {
+    const oldStatus = await ctx.db.get(task.statusId);
+    const newStatus = await ctx.db.get(statusId);
+    await logTaskActivity(ctx, {
+      taskId, userId, workspaceId: task.workspaceId, type: "status_change",
+      oldValue: oldStatus?.name ?? "Unknown",
+      newValue: newStatus?.name ?? "Unknown",
+      taskTitle: task.title,
+    });
+  }
+  if (priority !== undefined && priority !== task.priority) {
+    await logTaskActivity(ctx, { taskId, userId, workspaceId: task.workspaceId, type: "priority_change", oldValue: task.priority, newValue: priority, taskTitle: task.title });
+  }
+  if (assigneeId !== undefined && assigneeId !== task.assigneeId) {
+    const oldUser = task.assigneeId ? await ctx.db.get(task.assigneeId) : null;
+    const newUser = assigneeId ? await ctx.db.get(assigneeId) : null;
+    await logTaskActivity(ctx, {
+      taskId, userId, workspaceId: task.workspaceId, type: "assignee_change",
+      oldValue: oldUser ? getUserDisplayName(oldUser) : undefined,
+      newValue: newUser ? getUserDisplayName(newUser) : undefined,
+      taskTitle: task.title,
+    });
+  }
+  if (tags !== undefined) {
+    const oldTags = task.tags ?? [];
+    const newTags = patch.tags ?? [];
+    const added = newTags.filter((t: string) => !oldTags.includes(t));
+    const removed = oldTags.filter((t) => !newTags.includes(t));
+    for (const tag of added) {
+      await logTaskActivity(ctx, { taskId, userId, workspaceId: task.workspaceId, type: "tag_add", newValue: tag, taskTitle: task.title });
+    }
+    for (const tag of removed) {
+      await logTaskActivity(ctx, { taskId, userId, workspaceId: task.workspaceId, type: "tag_remove", oldValue: tag, taskTitle: task.title });
+    }
+  }
+  if (dueDate !== undefined && dueDate !== task.dueDate) {
+    await logTaskActivity(ctx, {
+      taskId, userId, workspaceId: task.workspaceId, type: "due_date_change",
+      oldValue: task.dueDate ?? undefined,
+      newValue: dueDate ?? undefined,
+      taskTitle: task.title,
+    });
+  }
+  if (plannedStartDate !== undefined && plannedStartDate !== task.plannedStartDate) {
+    await logTaskActivity(ctx, {
+      taskId, userId, workspaceId: task.workspaceId, type: "start_date_change",
+      oldValue: task.plannedStartDate ?? undefined,
+      newValue: plannedStartDate ?? undefined,
+      taskTitle: task.title,
+    });
+  }
+  if (estimate !== undefined && estimate !== task.estimate) {
+    await logTaskActivity(ctx, {
+      taskId, userId, workspaceId: task.workspaceId, type: "estimate_change",
+      oldValue: task.estimate !== undefined ? String(task.estimate) : undefined,
+      newValue: estimate !== null ? String(estimate) : undefined,
+      taskTitle: task.title,
+    });
+  }
+
+  // Schedule notifications after database write
+  let currentUser: any = null;
+
+  // Assignment change notification
+  const assigneeChanged = !silent && assigneeId !== undefined && assigneeId !== null && assigneeId !== task.assigneeId;
+  if (assigneeChanged && assigneeId !== userId) {
+    currentUser = await ctx.db.get(userId);
+    await notify(ctx, {
+      category: "taskAssigned",
+      userId,
+      userName: getUserDisplayName(currentUser),
+      recipientIds: [assigneeId],
+      resourceId: task.projectId,
+      title: `${getUserDisplayName(currentUser)} assigned you a task`,
+      body: title ?? task.title,
+      url: `/workspaces/${task.workspaceId}/projects/${task.projectId}?task=${taskId}`,
+    });
+  }
+
+  // Status change notification (notify assignee if they didn't make the change)
+  const effectiveAssignee = assigneeId === null ? undefined : (assigneeId ?? task.assigneeId);
+  if (!silent && statusId !== undefined && statusId !== task.statusId && effectiveAssignee && effectiveAssignee !== userId) {
+    // A *new* assignee is already proven in-workspace by
+    // `assertAssigneeInWorkspace` above, but `effectiveAssignee` falls back to
+    // whatever is on the row — and nothing clears `tasks.assigneeId` when a
+    // member is removed from the workspace. Without this filter, every
+    // subsequent status change web-pushes the task title to someone who has
+    // lost all access to it. `notify` forwards recipients verbatim and
+    // `deliverPush` filters only by per-user preferences, so this is the
+    // access decision for the push body — same as the mention path below.
+    const recipientIds = await filterWorkspaceRecipients(
+      ctx,
+      task.workspaceId,
+      [effectiveAssignee],
+    );
+    if (recipientIds.length > 0) {
+      if (!currentUser) currentUser = await ctx.db.get(userId);
       const newStatus = await ctx.db.get(statusId);
-      if (!newStatus) throw new ConvexError("Status not found");
-      assertNotTriage(newStatus);
-      assertStatusInProject(newStatus, task.projectId);
-
-      patch.statusId = statusId;
-      // Canonical status side-effects: two-way `completed` sync + work-period
-      // open/close. Shared with kanban drag, PR automation, and inbound sync.
-      const effects = applyStatusSideEffects(task, newStatus);
-      patch.completed = effects.completed;
-      if (effects.workPeriods !== undefined) {
-        patch.workPeriods = effects.workPeriods;
-      }
-    }
-
-    if (Object.keys(patch).length > 0) {
-      await ctx.db.patch(taskId, patch);
-    }
-
-    // Log activity for each changed field
-    if (title !== undefined && title !== task.title) {
-      await logTaskActivity(ctx, { taskId, userId, workspaceId: task.workspaceId, type: "title_change", oldValue: task.title, newValue: title, taskTitle: task.title });
-    }
-    if (statusId !== undefined && statusId !== task.statusId) {
-      const oldStatus = await ctx.db.get(task.statusId);
-      const newStatus = await ctx.db.get(statusId);
-      await logTaskActivity(ctx, {
-        taskId, userId, workspaceId: task.workspaceId, type: "status_change",
-        oldValue: oldStatus?.name ?? "Unknown",
-        newValue: newStatus?.name ?? "Unknown",
-        taskTitle: task.title,
-      });
-    }
-    if (priority !== undefined && priority !== task.priority) {
-      await logTaskActivity(ctx, { taskId, userId, workspaceId: task.workspaceId, type: "priority_change", oldValue: task.priority, newValue: priority, taskTitle: task.title });
-    }
-    if (assigneeId !== undefined && assigneeId !== task.assigneeId) {
-      const oldUser = task.assigneeId ? await ctx.db.get(task.assigneeId) : null;
-      const newUser = assigneeId ? await ctx.db.get(assigneeId) : null;
-      await logTaskActivity(ctx, {
-        taskId, userId, workspaceId: task.workspaceId, type: "assignee_change",
-        oldValue: oldUser ? getUserDisplayName(oldUser) : undefined,
-        newValue: newUser ? getUserDisplayName(newUser) : undefined,
-        taskTitle: task.title,
-      });
-    }
-    if (tags !== undefined) {
-      const oldTags = task.tags ?? [];
-      const newTags = patch.tags ?? [];
-      const added = newTags.filter((t: string) => !oldTags.includes(t));
-      const removed = oldTags.filter((t) => !newTags.includes(t));
-      for (const tag of added) {
-        await logTaskActivity(ctx, { taskId, userId, workspaceId: task.workspaceId, type: "tag_add", newValue: tag, taskTitle: task.title });
-      }
-      for (const tag of removed) {
-        await logTaskActivity(ctx, { taskId, userId, workspaceId: task.workspaceId, type: "tag_remove", oldValue: tag, taskTitle: task.title });
-      }
-    }
-    if (dueDate !== undefined && dueDate !== task.dueDate) {
-      await logTaskActivity(ctx, {
-        taskId, userId, workspaceId: task.workspaceId, type: "due_date_change",
-        oldValue: task.dueDate ?? undefined,
-        newValue: dueDate ?? undefined,
-        taskTitle: task.title,
-      });
-    }
-    if (plannedStartDate !== undefined && plannedStartDate !== task.plannedStartDate) {
-      await logTaskActivity(ctx, {
-        taskId, userId, workspaceId: task.workspaceId, type: "start_date_change",
-        oldValue: task.plannedStartDate ?? undefined,
-        newValue: plannedStartDate ?? undefined,
-        taskTitle: task.title,
-      });
-    }
-    if (estimate !== undefined && estimate !== task.estimate) {
-      await logTaskActivity(ctx, {
-        taskId, userId, workspaceId: task.workspaceId, type: "estimate_change",
-        oldValue: task.estimate !== undefined ? String(task.estimate) : undefined,
-        newValue: estimate !== null ? String(estimate) : undefined,
-        taskTitle: task.title,
-      });
-    }
-
-    // Schedule notifications after database write
-    let currentUser: any = null;
-
-    // Assignment change notification
-    const assigneeChanged = assigneeId !== undefined && assigneeId !== null && assigneeId !== task.assigneeId;
-    if (assigneeChanged && assigneeId !== userId) {
-      currentUser = await ctx.db.get(userId);
       await notify(ctx, {
-        category: "taskAssigned",
+        category: "taskStatusChange",
         userId,
         userName: getUserDisplayName(currentUser),
-        recipientIds: [assigneeId],
+        recipientIds,
         resourceId: task.projectId,
-        title: `${getUserDisplayName(currentUser)} assigned you a task`,
+        title: `${getUserDisplayName(currentUser)} changed task status to ${newStatus?.name ?? "Unknown"}`,
         body: title ?? task.title,
         url: `/workspaces/${task.workspaceId}/projects/${task.projectId}?task=${taskId}`,
       });
     }
+  }
 
-    // Status change notification (notify assignee if they didn't make the change)
-    const effectiveAssignee = assigneeId === null ? undefined : (assigneeId ?? task.assigneeId);
-    if (statusId !== undefined && statusId !== task.statusId && effectiveAssignee && effectiveAssignee !== userId) {
-      // A *new* assignee is already proven in-workspace by
-      // `assertAssigneeInWorkspace` above, but `effectiveAssignee` falls back to
-      // whatever is on the row — and nothing clears `tasks.assigneeId` when a
-      // member is removed from the workspace. Without this filter, every
-      // subsequent status change web-pushes the task title to someone who has
-      // lost all access to it. `notify` forwards recipients verbatim and
-      // `deliverPush` filters only by per-user preferences, so this is the
-      // access decision for the push body — same as the mention path below.
-      const recipientIds = await filterWorkspaceRecipients(
-        ctx,
-        task.workspaceId,
-        [effectiveAssignee],
-      );
-      if (recipientIds.length > 0) {
-        if (!currentUser) currentUser = await ctx.db.get(userId);
-        const newStatus = await ctx.db.get(statusId);
-        await notify(ctx, {
-          category: "taskStatusChange",
-          userId,
-          userName: getUserDisplayName(currentUser),
-          recipientIds,
-          resourceId: task.projectId,
-          title: `${getUserDisplayName(currentUser)} changed task status to ${newStatus?.name ?? "Unknown"}`,
-          body: title ?? task.title,
-          url: `/workspaces/${task.workspaceId}/projects/${task.projectId}?task=${taskId}`,
-        });
-      }
-    }
-
-    // Outbound integration push — fires only when the task is linked to an
-    // external issue AND the desired external state differs. The helper
-    // itself returns silently for unlinked / frozen / no-change cases, so
-    // it's safe to call unconditionally.
-    if (statusId !== undefined && statusId !== task.statusId) {
-      await maybeEnqueueOutboundPush(ctx, taskId);
-    }
-    // Independent dimension: label edits trigger a separate label push.
-    // Helper handles the unlinked/frozen/echo gates internally. A priority
-    // change rides the same push: on a link with a priority↔label map the
-    // outbound set includes the mapped label, and on a link without one the
-    // set is unchanged and the echo gate drops it.
-    if (
-      tags !== undefined ||
-      (priority !== undefined && priority !== task.priority)
-    ) {
-      await maybeEnqueueLabelsPush(ctx, taskId);
-    }
-    // Independent dimension: assignee changes trigger an assignee push.
-    // Helper handles unlinked/frozen/unmappable-assignee gates internally.
-    if (assigneeId !== undefined && assigneeId !== task.assigneeId) {
-      await maybeEnqueueAssigneesPush(ctx, taskId);
-    }
-
-    return null;
-  },
-});
+  // Outbound integration push — fires only when the task is linked to an
+  // external issue AND the desired external state differs. The helper
+  // itself returns silently for unlinked / frozen / no-change cases, so
+  // it's safe to call unconditionally.
+  if (statusId !== undefined && statusId !== task.statusId) {
+    await maybeEnqueueOutboundPush(ctx, taskId);
+  }
+  // Independent dimension: label edits trigger a separate label push.
+  // Helper handles the unlinked/frozen/echo gates internally. A priority
+  // change rides the same push: on a link with a priority↔label map the
+  // outbound set includes the mapped label, and on a link without one the
+  // set is unchanged and the echo gate drops it.
+  if (
+    tags !== undefined ||
+    (priority !== undefined && priority !== task.priority)
+  ) {
+    await maybeEnqueueLabelsPush(ctx, taskId);
+  }
+  // Independent dimension: assignee changes trigger an assignee push.
+  // Helper handles unlinked/frozen/unmappable-assignee gates internally.
+  if (assigneeId !== undefined && assigneeId !== task.assigneeId) {
+    await maybeEnqueueAssigneesPush(ctx, taskId);
+  }
+}
 
 export const notifyDescriptionMentions = mutation({
   args: {
@@ -1397,26 +1439,65 @@ export const remove = mutation({
   returns: v.null(),
   handler: async (ctx, { taskId, closeGithubIssue }) => {
     const { userId, resource: task } = await requireResourceMember(ctx, "tasks", taskId);
-
-    await logTaskActivity(ctx, {
-      taskId, userId, workspaceId: task.workspaceId,
-      taskTitle: task.title, type: "deleted",
-    });
-
-    // Enqueue the GitHub issue close BEFORE the cascade — it reads the
-    // taskIntegrationLinks row that the cascade is about to remove.
-    if (closeGithubIssue) {
-      await enqueueIssueClose(ctx, taskId);
-    }
-
-    await cascadeDelete.deleteWithCascade(ctx, "tasks", taskId, {
-      onComplete: logCascadeSummary({
-        userId, resourceType: "tasks", resourceId: taskId, scope: task.workspaceId,
-      }),
-    });
+    await deleteTask(ctx, { userId, task, closeGithubIssue });
     return null;
   },
 });
+
+/**
+ * The delete behind `tasks.remove`, after authorization. Shared with
+ * `taskBulk`, which passes `batched`: a bulk batch deletes many tasks in one
+ * transaction, so each task's subtree streams through the batched cascade
+ * (root row now, dependents step by step) instead of all landing inline.
+ */
+export async function deleteTask(
+  ctx: MutationCtx,
+  {
+    userId,
+    task,
+    closeGithubIssue,
+    batched = false,
+  }: {
+    userId: Id<"users">;
+    task: Doc<"tasks">;
+    closeGithubIssue?: boolean;
+    batched?: boolean;
+  },
+): Promise<void> {
+  const taskId = task._id;
+
+  await logTaskActivity(ctx, {
+    taskId, userId, workspaceId: task.workspaceId,
+    taskTitle: task.title, type: "deleted",
+  });
+
+  // Enqueue the GitHub issue close BEFORE the cascade — it reads the
+  // taskIntegrationLinks row that the cascade is about to remove.
+  if (closeGithubIssue) {
+    await enqueueIssueClose(ctx, taskId);
+  }
+
+  if (batched) {
+    await cascadeDelete.deleteWithCascadeBatched(ctx, "tasks", taskId, {
+      batchHandlerRef: internal.cascadeDelete._cascadeBatchHandler,
+      // Small per-task budget: up to BULK_BATCH_SIZE tasks share this
+      // transaction, and a task's first step runs inline with the rest.
+      batchSize: 50,
+      maxReadsPerBatch: 64,
+      onComplete: internal.cascadeDelete._batchCascadeOnComplete,
+      onCompleteContext: {
+        userId, resourceType: "tasks", resourceId: taskId, scope: task.workspaceId,
+      },
+    });
+    return;
+  }
+
+  await cascadeDelete.deleteWithCascade(ctx, "tasks", taskId, {
+    onComplete: logCascadeSummary({
+      userId, resourceType: "tasks", resourceId: taskId, scope: task.workspaceId,
+    }),
+  });
+}
 
 /**
  * Re-attempts outbound GitHub sync for a task whose previous push failed.

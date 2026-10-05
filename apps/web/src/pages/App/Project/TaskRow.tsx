@@ -16,6 +16,7 @@ import { TaskCode } from "@/components/TaskCode";
 import { cn } from "@/lib/utils";
 import { formatDueDate, formatEstimate, isOverdue, getPriorityIcon } from "@/lib/task-utils";
 import { ExternalAssigneeAvatars, type ExternalAssignee } from "./ExternalAssignees";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Ban } from "lucide-react";
 
 type TaskRowProps = {
@@ -48,15 +49,51 @@ type TaskRowProps = {
   flush?: boolean;
   /** Hide the assignee avatar (e.g. on My Tasks where it's always the current user). */
   hideAssignee?: boolean;
+  /**
+   * Bulk selection. When `onSelectedChange` is set the row shows a checkbox —
+   * on hover, or always once any row is selected (`selectionActive`).
+   * `shiftKey` lets the list extend a range.
+   */
+  selected?: boolean;
+  selectionActive?: boolean;
+  onSelectedChange?: (selected: boolean, shiftKey: boolean) => void;
 };
 
-export function TaskRow({ task, statuses, onStatusChange, onClick, hideStatusMenu, flush, hideAssignee }: TaskRowProps) {
+export function TaskRow({ task, statuses, onStatusChange, onClick, hideStatusMenu, flush, hideAssignee, selected, selectionActive, onSelectedChange }: TaskRowProps) {
   return (
     <Item
-      onClick={onClick}
-      className={cn("cursor-pointer hover:bg-accent transition-colors", flush ? "rounded-none border-transparent!" : "border-transparent! md:border-input!")}
+      onClick={(e) => {
+        // While selecting, a row click extends the selection instead of opening the task.
+        if (onSelectedChange && selectionActive) {
+          onSelectedChange(!selected, e.shiftKey);
+          return;
+        }
+        onClick();
+      }}
+      className={cn(
+        "group/row cursor-pointer hover:bg-accent transition-colors",
+        flush ? "rounded-none border-transparent!" : "border-transparent! md:border-input!",
+        selected && "bg-accent/60",
+      )}
     >
       <ItemMedia>
+        {onSelectedChange && (
+          <span
+            className={cn(
+              "flex transition-opacity",
+              selectionActive ? "opacity-100" : "opacity-0 group-hover/row:opacity-100 focus-within:opacity-100",
+            )}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <Checkbox
+              checked={selected ?? false}
+              aria-label={`Select ${task.title}`}
+              onCheckedChange={(checked, details) =>
+                onSelectedChange(checked, (details.event as MouseEvent | KeyboardEvent).shiftKey)
+              }
+            />
+          </span>
+        )}
         {getPriorityIcon(task.priority)}
         {task.hasBlockers && (
           <span title="Blocked"><Ban className="w-3 h-3 text-red-500" /></span>

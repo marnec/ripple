@@ -13,6 +13,10 @@
  * They were already enqueued through this pool for scheduler contention, but
  * the pool was not retrying them, which for an *action* means at-most-once —
  * one thrown batch and the drain is gone with nothing to notice it.
+ *
+ * `taskBulk.run` (the list view's bulk actions) runs here too, for the same
+ * reason. It retires nothing, so a give-up only records the failure; the tasks
+ * it did not reach are simply still selected-and-unchanged in the list.
  */
 
 import { Workpool } from "@convex-dev/workpool";
