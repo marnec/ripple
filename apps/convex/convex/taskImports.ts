@@ -14,7 +14,7 @@
 //      before each insert so a single bad row doesn't abort the job.
 
 import { ConvexError, v } from "convex/values";
-import { internalAction, query } from "./_generated/server";
+import { internalAction, internalQuery, query } from "./_generated/server";
 import { internalMutation, mutation } from "./functions";
 import { internal } from "./_generated/api";
 import { generateKeyBetween } from "fractional-indexing";
@@ -23,6 +23,10 @@ import { requireWorkspaceMember, checkResourceMember } from "./authHelpers";
 import { syncTaskTags } from "./tagSync";
 import { enrichedTaskValidator, enrichTasks } from "./tasks";
 import { scheduleTaskImport } from "./taskImportPool";
+import {
+  descriptionSnapshotValidator,
+  type DescriptionSnapshot,
+} from "./lib/importDescriptionSnapshot";
 import { isImportJobStale } from "@ripple/shared/taskImportStaleness";
 import {
   TASK_IMPORT_MAX_PAYLOAD_BYTES,
@@ -373,17 +377,52 @@ export const runImport = internalAction({
   handler: async (ctx, { jobId }) => {
     const startResult = await ctx.runMutation(internal.taskImports.startJob, { jobId });
     if (!startResult) return null;
-    const { totalRows } = startResult;
+    const { totalRows, hasDescriptions } = startResult;
 
     for (let startIndex = 0; startIndex < totalRows; startIndex += IMPORT_BATCH_SIZE) {
       const count = Math.min(IMPORT_BATCH_SIZE, totalRows - startIndex);
+
+      // Descriptions are Yjs documents, and markdown → Yjs needs the Node
+      // runtime, so the batch's descriptions are converted and stored first
+      // and the tasks are then *born* pointing at them. Seeding after insert
+      // (the GitHub path) races the first open: an empty room auto-saves a
+      // snapshot and the seed's "only if absent" check then drops it.
+      // Skipped outright for a file with no descriptions — the conversion
+      // re-reads the job's payload.
+      let descriptionSnapshots: DescriptionSnapshot[] = [];
+      if (hasDescriptions) {
+        try {
+          descriptionSnapshots = await ctx.runAction(
+            internal.taskImportDescriptions.convertDescriptions,
+            { jobId, startIndex, count },
+          );
+        } catch (err) {
+          // The tasks are worth more than their descriptions: import the
+          // batch without them rather than failing it.
+          console.error("taskImports.runImport description conversion failure", {
+            jobId,
+            startIndex,
+            count,
+            err,
+          });
+        }
+      }
+
       try {
         await ctx.runMutation(internal.taskImports.createImportedTasks, {
           jobId,
           startIndex,
           count,
+          descriptionSnapshots,
         });
       } catch (err) {
+        // None of the batch's writes landed, so nothing references the
+        // converted blobs.
+        await Promise.all(
+          descriptionSnapshots.map(({ storageId }) =>
+            ctx.storage.delete(storageId).catch(() => {}),
+          ),
+        );
         // createImportedTasks swallows per-row data failures into the job's
         // failedRows counter, so reaching here means the mutation itself threw
         // uncaught and none of its writes landed. Book the batch as failed
@@ -497,13 +536,47 @@ const ACTIVE_JOB_PROBE_LIMIT = 16;
 
 export const startJob = internalMutation({
   args: { jobId: v.id("taskImportJobs") },
-  returns: v.union(v.object({ totalRows: v.number() }), v.null()),
+  returns: v.union(
+    v.object({ totalRows: v.number(), hasDescriptions: v.boolean() }),
+    v.null(),
+  ),
   handler: async (ctx, { jobId }) => {
     const job = await ctx.db.get(jobId);
     if (!job) return null;
-    if (job.status !== "queued") return { totalRows: job.totalRows };
+    // Answered here because this read already carries the payload — it lets
+    // runImport skip the per-batch conversion for the common file that has
+    // no descriptions at all.
+    const result = {
+      totalRows: job.totalRows,
+      hasDescriptions: job.rows.some((row) => descriptionOf(row) !== null),
+    };
+    if (job.status !== "queued") return result;
     await ctx.db.patch(jobId, { status: "running", lastProgressAt: Date.now() });
-    return { totalRows: job.totalRows };
+    return result;
+  },
+});
+
+/**
+ * The non-blank descriptions in a slice of the job's stored rows, for the
+ * Node conversion step. Reads the payload a second time per batch, which is
+ * why runImport only calls it when `startJob` saw a description.
+ */
+export const getRowDescriptions = internalQuery({
+  args: {
+    jobId: v.id("taskImportJobs"),
+    startIndex: v.number(),
+    count: v.number(),
+  },
+  returns: v.array(v.object({ rowIndex: v.number(), markdown: v.string() })),
+  handler: async (ctx, { jobId, startIndex, count }) => {
+    const job = await ctx.db.get(jobId);
+    if (!job) return [];
+    const out: { rowIndex: number; markdown: string }[] = [];
+    for (let rowIndex = startIndex; rowIndex < startIndex + count; rowIndex++) {
+      const markdown = descriptionOf(job.rows[rowIndex]);
+      if (markdown !== null) out.push({ rowIndex, markdown });
+    }
+    return out;
   },
 });
 
@@ -588,11 +661,24 @@ export const createImportedTasks = internalMutation({
     jobId: v.id("taskImportJobs"),
     startIndex: v.number(),
     count: v.number(),
+    // Pre-converted description snapshots, by row (see runImport). Each blob
+    // is referenced by its task or deleted before this returns — a row that
+    // fails, or a batch that bails, must not leave orphans in storage.
+    descriptionSnapshots: v.optional(v.array(descriptionSnapshotValidator)),
   },
   returns: v.null(),
-  handler: async (ctx, { jobId, startIndex, count }) => {
+  handler: async (ctx, { jobId, startIndex, count, descriptionSnapshots = [] }) => {
+    const unclaimed = new Map(
+      descriptionSnapshots.map((d) => [d.rowIndex, d.storageId]),
+    );
+    const discardUnclaimed = () =>
+      Promise.all([...unclaimed.values()].map((id) => ctx.storage.delete(id)));
+
     const job = await ctx.db.get(jobId);
-    if (!job) return null;
+    if (!job) {
+      await discardUnclaimed();
+      return null;
+    }
 
     const finish = (failedRows: number, newErrors: TaskImportRowError[] = []) =>
       ctx.db.patch(jobId, {
@@ -615,6 +701,7 @@ export const createImportedTasks = internalMutation({
         errorMessage: "The project was deleted while the import was running.",
       });
       await finish(count);
+      await discardUnclaimed();
       return null;
     }
 
@@ -679,6 +766,9 @@ export const createImportedTasks = internalMutation({
       const position = generateKeyBetween(previousPosition, null);
       previousPosition = position;
 
+      const yjsSnapshotId = unclaimed.get(rowIndex);
+      unclaimed.delete(rowIndex);
+
       // `tasks.tags` is a denormalized projection; syncTaskTags (below) is the
       // source of truth for tag membership (dictionary `tags` + `taskTags`).
       const taskId = await ctx.db.insert("tasks", {
@@ -695,6 +785,7 @@ export const createImportedTasks = internalMutation({
         dueDate: row.dueDate ?? undefined,
         plannedStartDate: row.plannedStartDate ?? undefined,
         estimate: row.estimate ?? undefined,
+        yjsSnapshotId,
         importJobId: jobId,
       });
 
@@ -728,11 +819,26 @@ export const createImportedTasks = internalMutation({
     }
 
     await finish(failedRows, rowErrors);
+    // Blobs for rows that failed validation above.
+    await discardUnclaimed();
     return null;
   },
 });
 
 // ── helpers ─────────────────────────────────────────────────────────────
+
+/**
+ * A stored row's description, or null when it has none worth converting.
+ * Rows are `v.any()` on the job (see the file header), and rows from a job
+ * queued before the column existed have no `description` key at all.
+ */
+function descriptionOf(row: unknown): string | null {
+  if (typeof row !== "object" || row === null) return null;
+  const description = (row as { description?: unknown }).description;
+  return typeof description === "string" && description.trim().length > 0
+    ? description
+    : null;
+}
 
 import type { Doc } from "./_generated/dataModel";
 

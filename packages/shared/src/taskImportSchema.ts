@@ -15,9 +15,29 @@ export const TASK_IMPORT_HEADERS = [
   "dueDate",
   "plannedStartDate",
   "estimate",
+  "description",
 ] as const;
 
 export type TaskImportHeader = (typeof TASK_IMPORT_HEADERS)[number];
+
+/**
+ * `description` arrived after files had already been written against the
+ * six-column template, and it is last precisely so those files can leave it
+ * off: a header that is the full list, or the full list minus that one
+ * trailing column, is accepted. Anything else — a missing middle column, a
+ * reordering — is still rejected.
+ */
+const TASK_IMPORT_OPTIONAL_TRAILING_HEADERS = 1;
+
+/** True when a CSV header row is one the import accepts (see above). */
+export function hasTaskImportHeaders(fields: readonly string[]): boolean {
+  const min = TASK_IMPORT_HEADERS.length - TASK_IMPORT_OPTIONAL_TRAILING_HEADERS;
+  return (
+    fields.length >= min &&
+    fields.length <= TASK_IMPORT_HEADERS.length &&
+    fields.every((h, i) => h === TASK_IMPORT_HEADERS[i])
+  );
+}
 
 const PRIORITY_VALUES = [
   TaskPriority.URGENT,
@@ -52,6 +72,12 @@ const nullable = <T extends z.ZodTypeAny>(s: T) =>
  *
  * The column lands in `tasks.tags`, the denormalized projection that the
  * central `tags` / `taskTags` tables sync from.
+ *
+ * `description` is markdown and is NOT trimmed — leading indentation is
+ * meaningful there (nested lists, code blocks). It becomes the task's
+ * collaborative description (a Yjs document, not a column), converted in a
+ * Node step before the task is inserted; see `taskImportDescriptions.ts`. A
+ * file without the column yields null, same as a blank cell.
  */
 export const taskImportRowSchema = z.object({
   title: z
@@ -83,6 +109,10 @@ export const taskImportRowSchema = z.object({
     z.coerce
       .number({ message: "estimate must be a positive number" })
       .positive("estimate must be a positive number"),
+  ),
+  description: z.preprocess(
+    (v) => (v === undefined ? null : toNullIfBlank(v)),
+    z.string({ message: "description must be text" }).nullable(),
   ),
 });
 
@@ -132,6 +162,9 @@ export const taskImportRowOutputSchema = z.object({
     .number("estimate must be a positive number")
     .positive("estimate must be a positive number")
     .nullable(),
+  // Optional, not just nullable: rows stored by a job queued before the
+  // column existed have no key at all, and this schema re-reads them.
+  description: z.string("description must be text").nullable().optional(),
 });
 
 /**
@@ -198,6 +231,7 @@ export const TASK_IMPORT_EXAMPLE_ROW: Record<TaskImportHeader, string> = {
   dueDate: "2026-09-30",
   plannedStartDate: "2026-09-15",
   estimate: "3",
+  description: "Markdown works here: **bold**, `code`, [links](https://example.com).",
 };
 
 /** True for the template's example row, left in the file at upload time. */

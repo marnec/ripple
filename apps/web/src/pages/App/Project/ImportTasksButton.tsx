@@ -7,7 +7,7 @@
 //
 // On file pick we run the full validation pipeline synchronously:
 //   1. papaparse CSV → row objects
-//   2. header order check against TASK_IMPORT_HEADERS
+//   2. header order check (hasTaskImportHeaders)
 //   3. phase-1 zod parse over the whole array (one cheap pass)
 //   4. payload size pre-check (Convex 1MB doc limit)
 //   5. createImportJob mutation → navigate to the job status page
@@ -34,6 +34,7 @@ import {
   TASK_IMPORT_HEADERS,
   TASK_IMPORT_MAX_PAYLOAD_BYTES,
   buildTaskImportTemplateCsv,
+  hasTaskImportHeaders,
   stripTaskImportExampleRows,
   taskImportRowsSchema,
 } from "@ripple/shared/taskImportSchema";
@@ -130,13 +131,10 @@ export function ImportTasksButton({ projectId, workspaceId }: Props) {
         return;
       }
 
-      // Header check — strict order. papaparse exposes the parsed header
-      // order via meta.fields when header: true.
-      const fields = parsed.meta.fields ?? [];
-      if (
-        fields.length !== TASK_IMPORT_HEADERS.length ||
-        fields.some((h, i) => h !== TASK_IMPORT_HEADERS[i])
-      ) {
+      // Header check — strict order, trailing `description` optional.
+      // papaparse exposes the parsed header order via meta.fields when
+      // header: true.
+      if (!hasTaskImportHeaders(parsed.meta.fields ?? [])) {
         toast.error("CSV columns are wrong or out of order", {
           description: `Expected: ${TASK_IMPORT_HEADERS.join(", ")}`,
           action: {

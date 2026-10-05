@@ -7564,11 +7564,27 @@ export declare const internal: {
       null
     >;
   };
+  taskImportDescriptions: {
+    convertDescriptions: FunctionReference<
+      "action",
+      "internal",
+      { count: number; jobId: Id<"taskImportJobs">; startIndex: number },
+      Array<{ rowIndex: number; storageId: Id<"_storage"> }>
+    >;
+  };
   taskImports: {
     createImportedTasks: FunctionReference<
       "mutation",
       "internal",
-      { count: number; jobId: Id<"taskImportJobs">; startIndex: number },
+      {
+        count: number;
+        descriptionSnapshots?: Array<{
+          rowIndex: number;
+          storageId: Id<"_storage">;
+        }>;
+        jobId: Id<"taskImportJobs">;
+        startIndex: number;
+      },
       null
     >;
     expireStaleImportJobs: FunctionReference<"mutation", "internal", {}, null>;
@@ -7577,6 +7593,12 @@ export declare const internal: {
       "internal",
       { jobId: Id<"taskImportJobs"> },
       null
+    >;
+    getRowDescriptions: FunctionReference<
+      "query",
+      "internal",
+      { count: number; jobId: Id<"taskImportJobs">; startIndex: number },
+      Array<{ markdown: string; rowIndex: number }>
     >;
     recordRowFailures: FunctionReference<
       "mutation",
@@ -7599,7 +7621,7 @@ export declare const internal: {
       "mutation",
       "internal",
       { jobId: Id<"taskImportJobs"> },
-      { totalRows: number } | null
+      { hasDescriptions: boolean; totalRows: number } | null
     >;
   };
   taskReassignRecovery: {

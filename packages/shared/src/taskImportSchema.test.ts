@@ -4,6 +4,7 @@ import {
   TASK_IMPORT_EXAMPLE_ROW,
   TASK_IMPORT_HEADERS,
   buildTaskImportTemplateCsv,
+  hasTaskImportHeaders,
   isTaskImportExampleRow,
   stripTaskImportExampleRows,
   taskImportRowOutputSchema,
@@ -77,6 +78,36 @@ describe("taskImportRowSchema", () => {
     const result = taskImportRowSchema.safeParse(parsed);
     expect(result.success).toBe(false);
     expect(result.error?.issues.map((i) => i.path.join("."))).toContain("tags");
+  });
+});
+
+describe("description column", () => {
+  it("keeps markdown verbatim, indentation included", () => {
+    const md = "  - nested\n    - deeper\n\n```\ncode\n```";
+    expect(taskImportRowSchema.parse(csvRow({ description: md })).description).toBe(md);
+  });
+
+  it("nulls a blank cell and a missing column alike", () => {
+    expect(taskImportRowSchema.parse(csvRow({ description: "  " })).description).toBeNull();
+    expect(taskImportRowSchema.parse(csvRow()).description).toBeNull();
+  });
+});
+
+describe("hasTaskImportHeaders", () => {
+  it("accepts the full header and the one without the trailing description", () => {
+    expect(hasTaskImportHeaders([...TASK_IMPORT_HEADERS])).toBe(true);
+    expect(hasTaskImportHeaders(TASK_IMPORT_HEADERS.slice(0, -1))).toBe(true);
+  });
+
+  it("rejects a missing middle column, a reordering or an extra column", () => {
+    expect(
+      hasTaskImportHeaders(TASK_IMPORT_HEADERS.filter((h) => h !== "tags")),
+    ).toBe(false);
+    const swapped = [...TASK_IMPORT_HEADERS];
+    [swapped[0], swapped[1]] = [swapped[1]!, swapped[0]!];
+    expect(hasTaskImportHeaders(swapped)).toBe(false);
+    expect(hasTaskImportHeaders([...TASK_IMPORT_HEADERS, "assignee"])).toBe(false);
+    expect(hasTaskImportHeaders(TASK_IMPORT_HEADERS.slice(0, -2))).toBe(false);
   });
 });
 
