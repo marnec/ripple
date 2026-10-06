@@ -317,9 +317,11 @@ export const router = createBrowserRouter(
                     })),
                   children: [
                     {
-                      // No overview page: a project opens on its board.
                       index: true,
-                      element: <Navigate to="tasks" replace />,
+                      lazy: () =>
+                        import("./pages/App/Project/ProjectOverview").then(
+                          (m) => ({ Component: m.ProjectOverview }),
+                        ),
                     },
                     {
                       path: "tasks",

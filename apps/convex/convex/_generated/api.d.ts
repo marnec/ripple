@@ -887,6 +887,12 @@ export declare const api: {
       { cycleId: Id<"cycles">; taskIds: Array<Id<"tasks">> },
       number
     >;
+    backlogSize: FunctionReference<
+      "query",
+      "public",
+      { projectId: Id<"projects"> },
+      { open: number; total: number } | null
+    >;
     close: FunctionReference<
       "mutation",
       "public",

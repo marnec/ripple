@@ -455,6 +455,26 @@ export const listByProject = query({
   },
 });
 
+/**
+ * How many tasks sit in the project's backlog and how many of those are open.
+ * Read from the backlog's `tasksByCycle` namespace, so the overview's backlog
+ * figure doesn't subscribe to every backlog task.
+ */
+export const backlogSize = query({
+  args: { projectId: v.id("projects") },
+  returns: v.union(v.object({ total: v.number(), open: v.number() }), v.null()),
+  handler: async (ctx, { projectId }) => {
+    const result = await checkResourceMember(ctx, "projects", projectId);
+    if (!result) return null;
+    const namespace = cycleNamespace(projectId, undefined);
+    const [total, completed] = await Promise.all([
+      tasksByCycle.count(ctx, { namespace, bounds: {} }),
+      tasksByCycle.sum(ctx, { namespace, bounds: {} }),
+    ]);
+    return { total, open: total - completed };
+  },
+});
+
 /** Upper bound on one `moveTasks` / `addTasks` call — the pickers offer at most 50. */
 const MOVE_TASKS_MAX_BATCH = 100;
 

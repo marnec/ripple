@@ -1,5 +1,5 @@
 import { ArrowRight } from "lucide-react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import type { Id } from "@convex/_generated/dataModel";
 
 type KanbanCompletedOverflowProps = {
@@ -22,15 +22,12 @@ export function KanbanCompletedOverflow({
   projectId,
 }: KanbanCompletedOverflowProps) {
   const navigate = useNavigate();
-  // Same route, same `?cycle=` — "view all" means all of this cycle's
-  // completed tasks, in the list view that is not capped.
-  const { search } = useLocation();
 
   return (
     <button
       type="button"
       onClick={() =>
-        void navigate(`/workspaces/${workspaceId}/projects/${projectId}/tasks${search}`, {
+        void navigate(`/workspaces/${workspaceId}/projects/${projectId}/tasks`, {
           state: { initialCompletionFilter: "completed" },
         })
       }

@@ -193,4 +193,30 @@ describe("cycle progress", () => {
     });
     expect(openOnly.map((task) => task.title)).toEqual(["Open"]);
   });
+
+  it("counts the backlog apart from cycles, and follows completion and moves", async () => {
+    const t = createTestContext();
+    const f = await setupCycleFixture(t);
+
+    const a = await f.createTask("A");
+    const b = await f.createTask("B");
+    await f.createTask("C");
+    await f.asUser.mutation(api.cycles.addTasks, { cycleId: f.cycleId, taskIds: [a] });
+    await f.asUser.mutation(api.tasks.update, { taskId: b, statusId: f.doneId });
+
+    expect(
+      await f.asUser.query(api.cycles.backlogSize, { projectId: f.projectId }),
+    ).toEqual({ total: 2, open: 1 });
+  });
+
+  it("hides the backlog size from non-members", async () => {
+    const t = createTestContext();
+    const f = await setupCycleFixture(t);
+    await f.createTask("A");
+
+    const { asUser: outsider } = await setupWorkspaceWithAdmin(t);
+    expect(
+      await outsider.query(api.cycles.backlogSize, { projectId: f.projectId }),
+    ).toBeNull();
+  });
 });

@@ -15,7 +15,7 @@ import { useQuery } from "convex-helpers/react/cache";
 import { useMutation } from "convex/react";
 import { LayoutList, Kanban, Plus, RefreshCw } from "lucide-react";
 import { useRef, useState } from "react";
-import { Link, useLocation, useParams, useSearchParams } from "react-router-dom";
+import { Link, useLocation, useParams } from "react-router-dom";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 import { KanbanBoard } from "./KanbanBoard";
@@ -23,15 +23,14 @@ import { CreateTaskDialog } from "./CreateTaskDialog";
 import { Tasks } from "./Tasks";
 import { TaskToolbar, type TaskFilters, type TaskSort, type CompletionFilter } from "./TaskToolbar";
 import { ImportTasksButton } from "./ImportTasksButton";
-import { CycleSelector } from "./CycleSelector";
 import { scopeCreateCycle, scopeCycleArg, type TaskScope } from "./taskScope";
 import { SafeAreaSpacer } from "@/components/SafeAreaSpacer";
 
 /**
- * The project's task views. `cycles` (the Tasks tab) shows one cycle at a
- * time — the current one unless `?cycle=` says otherwise — as a board or a
- * list. `backlog` (the Backlog tab) is the list of tasks in no cycle, where
- * work is triaged and pulled into cycles.
+ * The project's task views. `cycles` (the Tasks tab) shows the current
+ * cycle, as a board or a list. `backlog` (the Backlog tab) is the list of
+ * tasks in no cycle, where work is triaged and pulled into cycles. Other
+ * cycles are browsed from the Cycles tab, not here.
  */
 export function ProjectTasksPage({ mode = "cycles" }: { mode?: "cycles" | "backlog" }) {
   const { workspaceId, projectId } = useParams<QueryParams>();
@@ -61,38 +60,12 @@ export function ProjectBacklogPage() {
 function useTaskScope(
   projectId: Id<"projects">,
   mode: "cycles" | "backlog",
-): {
-  scope: TaskScope | null | undefined;
-  setScope: (scope: TaskScope) => void;
-  cycles: NonNullable<ReturnType<typeof useQuery<typeof api.cycles.listByProject>>> | undefined;
-} {
-  const [searchParams, setSearchParams] = useSearchParams();
-  const cycles = useQuery(api.cycles.listByProject, { projectId });
-  const param = searchParams.get("cycle");
-
-  const setScope = (next: TaskScope) => {
-    const current = cycles?.find((c) => c.isCurrent);
-    setSearchParams(
-      (prev) => {
-        const params = new URLSearchParams(prev);
-        // The current cycle is the default, so it keeps the URL clean.
-        if (next.kind === "cycle" && next.cycleId === current?._id) params.delete("cycle");
-        else if (next.kind === "cycle") params.set("cycle", next.cycleId);
-        return params;
-      },
-      { replace: true },
-    );
-  };
-
-  if (mode === "backlog") return { scope: { kind: "backlog" }, setScope, cycles };
-  if (cycles === undefined) return { scope: undefined, setScope, cycles };
-  const requested = param ? cycles.find((c) => c._id === param) : undefined;
-  const cycle = requested ?? cycles.find((c) => c.isCurrent);
-  return {
-    scope: cycle ? { kind: "cycle", cycleId: cycle._id } : null,
-    setScope,
-    cycles,
-  };
+): TaskScope | null | undefined {
+  const cycles = useQuery(api.cycles.listByProject, mode === "cycles" ? { projectId } : "skip");
+  if (mode === "backlog") return { kind: "backlog" };
+  if (cycles === undefined) return undefined;
+  const current = cycles.find((c) => c.isCurrent);
+  return current ? { kind: "cycle", cycleId: current._id } : null;
 }
 
 function ProjectTasksContent({
@@ -104,7 +77,7 @@ function ProjectTasksContent({
   projectId: Id<"projects">;
   mode: "cycles" | "backlog";
 }) {
-  const { scope, setScope, cycles } = useTaskScope(projectId, mode);
+  const scope = useTaskScope(projectId, mode);
   const isMobile = useIsMobile();
   const location = useLocation();
   const routeState = location.state as {
@@ -142,30 +115,6 @@ function ProjectTasksContent({
     priorities: [],
     tags: [],
   });
-  // Follow the viewed cycle with the completion filter: a closed cycle is a
-  // record of what got done, an open one is work in progress. Keyed on the
-  // resolved cycle rather than the selector's click so a link straight to a
-  // closed cycle lands on its completed tasks too. The first resolution keeps
-  // a preset filter (the overflow pill, My Tasks) unless the cycle is closed.
-  // setState-during-render is React's derived-state pattern; the key guard
-  // prevents a loop.
-  const viewedCycle =
-    scope?.kind === "cycle" ? cycles?.find((c) => c._id === scope.cycleId) : undefined;
-  const cycleKey = viewedCycle ? `${viewedCycle._id}:${viewedCycle.status}` : null;
-  const [prevCycleKey, setPrevCycleKey] = useState<string | null>(null);
-  if (viewedCycle && cycleKey !== prevCycleKey) {
-    const isFirst = prevCycleKey === null;
-    setPrevCycleKey(cycleKey);
-    const next: CompletionFilter =
-      viewedCycle.status === "closed"
-        ? "completed"
-        : isFirst
-          ? filters.completionFilter
-          : "uncompleted";
-    if (next !== filters.completionFilter) {
-      setFilters({ ...filters, completionFilter: next });
-    }
-  }
   const [sort, setSort] = useState<TaskSort>(null);
   const [sortBlocked, setSortBlocked] = useState(false);
   const sortBlockedTimer = useRef<ReturnType<typeof setTimeout>>(null);
@@ -207,9 +156,6 @@ function ProjectTasksContent({
       <Tabs value={effectiveView} onValueChange={(v) => setView(v as "list" | "board")} className="flex-1 flex flex-col min-h-0">
         <div className="flex items-start justify-between mb-2">
           <div className="flex items-center gap-3">
-            {mode === "cycles" && scope && cycles && (
-              <CycleSelector cycles={cycles} scope={scope} onChange={setScope} />
-            )}
             {!isMobile && mode === "cycles" && (
               <TabsList>
                 <TabsTrigger value="board" className="flex items-center gap-2">
