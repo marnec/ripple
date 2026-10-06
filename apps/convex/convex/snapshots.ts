@@ -2,6 +2,8 @@ import { internalQuery, query, type QueryCtx } from "./_generated/server";
 import { internalMutation } from "./functions";
 import { v } from "convex/values";
 import { Id } from "./_generated/dataModel";
+import { syncOwnerRefs } from "./mediaRefs";
+import type { MediaOwnerType } from "./utils/mediaTokens";
 import {
   collabResourceValidator,
   getUser,
@@ -15,6 +17,14 @@ import {
  * room kind: the field is common to all four, so the union of docs still has it.
  */
 type SnapshotTable = "documents" | "diagrams" | "spreadsheets" | "tasks";
+
+/** The `mediaRefs` owner type of each collaborative resource. */
+const SNAPSHOT_MEDIA_OWNER: Record<CollabResource, MediaOwnerType> = {
+  doc: "document",
+  diagram: "diagram",
+  spreadsheet: "spreadsheet",
+  task: "task",
+};
 
 /** The resource id as it arrives on the wire — a string — typed for its table. */
 function snapshotId(resourceId: string): Id<SnapshotTable> {
@@ -32,9 +42,17 @@ export const saveSnapshot = internalMutation({
     resourceType: collabResourceValidator,
     resourceId: v.string(),
     storageId: v.id("_storage"),
+    /**
+     * Upload tokens found in the snapshot's bytes (`extractMediaTokens`), read
+     * by the HTTP action that already holds them — a mutation cannot read a
+     * blob. Becomes the resource's full `mediaRefs` set. Omitted by writers
+     * whose content cannot embed uploads (the transcript seeder), which then
+     * leave the references alone rather than clearing them.
+     */
+    mediaTokens: v.optional(v.array(v.string())),
   },
   returns: v.null(),
-  handler: async (ctx, { resourceType, resourceId, storageId }) => {
+  handler: async (ctx, { resourceType, resourceId, storageId, mediaTokens }) => {
     const resource = await ctx.db.get(snapshotId(resourceId));
 
     if (!resource) {
@@ -60,6 +78,14 @@ export const saveSnapshot = internalMutation({
 
     // Update resource with new snapshot ID
     await ctx.db.patch(snapshotId(resourceId), { yjsSnapshotId: storageId });
+
+    if (mediaTokens) {
+      await syncOwnerRefs(
+        ctx,
+        { type: SNAPSHOT_MEDIA_OWNER[resourceType], id: resourceId },
+        mediaTokens,
+      );
+    }
 
     return null;
   },

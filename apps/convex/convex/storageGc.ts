@@ -152,3 +152,70 @@ export const runGarbageCollection = internalMutation({
     return null;
   },
 });
+
+/**
+ * How long an upload may sit with nothing referencing it before it is
+ * collected. Long enough to cover an upload whose message is still being
+ * written, an image removed from a document and brought back by undo or by a
+ * collaborator's offline edit, and a backfill that missed a reference in a
+ * place it does not scan.
+ */
+export const ORPHANED_MEDIA_GRACE_MS = 7 * 24 * 60 * 60 * 1000;
+
+/**
+ * Collect uploads that nothing has referenced for the grace period: the
+ * `medias` row and its blob. Which uploads are referenced is `mediaRefs`'
+ * business (see `mediaRefs.syncOwnerRefs`); this only acts on its verdict,
+ * re-checking it first so a reference that appeared without clearing the
+ * stamp can never cost a file.
+ *
+ * Only tracked rows ever carry `orphanedAt`, so uploads that predate
+ * references are untouched until `mediaBackfill` has accounted for them.
+ */
+export const sweepOrphanedMedias = internalMutation({
+  args: { totalDeleted: v.optional(v.number()) },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const cutoff = Date.now() - ORPHANED_MEDIA_GRACE_MS;
+    // `gte(0)` excludes rows without the field, which sort before numbers.
+    const batch = await ctx.db
+      .query("medias")
+      .withIndex("by_orphanedAt", (q) => q.gte("orphanedAt", 0).lt("orphanedAt", cutoff))
+      .take(BATCH_SIZE);
+
+    let deleted = 0;
+    for (const media of batch) {
+      const ref = await ctx.db
+        .query("mediaRefs")
+        .withIndex("by_media", (q) => q.eq("mediaId", media._id))
+        .first();
+      if (ref) {
+        await ctx.db.patch(media._id, { orphanedAt: undefined });
+        continue;
+      }
+      try {
+        await ctx.storage.delete(media.storageId);
+      } catch (error) {
+        // Already gone (a workspace cascade, the orphan sweep below): the row
+        // is still worth removing.
+        console.warn(`sweepOrphanedMedias: blob ${media.storageId} already deleted`, error);
+      }
+      await ctx.db.delete(media._id);
+      deleted++;
+    }
+
+    const totalDeleted = (args.totalDeleted ?? 0) + deleted;
+    if (batch.length === BATCH_SIZE) {
+      await ctx.scheduler.runAfter(0, internal.storageGc.sweepOrphanedMedias, { totalDeleted });
+    } else if (totalDeleted > 0) {
+      await auditLog.log(ctx, {
+        action: "storage.orphaned_media_collected",
+        actorId: "system:garbage-collector",
+        severity: "info",
+        metadata: { resourceName: "Unreferenced uploads", deletedCount: totalDeleted },
+      });
+      console.log(`Orphaned media sweep complete: deleted=${totalDeleted}`);
+    }
+    return null;
+  },
+});

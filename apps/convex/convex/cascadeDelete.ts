@@ -233,6 +233,13 @@ export const cascadeRules = defineCascadeRules({
     { to: "messageReactions", via: "by_message", field: "messageId" },
   ],
 
+  // A deleted upload takes the references to it. Owners release their own
+  // references through their delete triggers (`dbTriggers.ts`); this covers
+  // the other direction — the workspace cascade deleting uploads directly.
+  medias: [
+    { to: "mediaRefs", via: "by_media", field: "mediaId" },
+  ],
+
   // ── documents ───────────────────────────────────────────────────────
   documents: [
     { to: "documentBlockRefs", via: "by_document", field: "documentId" },

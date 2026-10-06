@@ -202,6 +202,21 @@ whole graph to every client on the page. Nothing that reads the graph reads this
 table; that is the point, so keep it that way.
 _Avoid_: mention count table, edge weight, mention index
 
+**Upload reference**:
+A `mediaRefs` row: one piece of content — a message, a task comment, or a
+collaborative resource's Yjs snapshot — showing one upload (`medias` row).
+Content stores storage URLs, never storage ids, so the join is the URL's uuid,
+recorded as `medias.token`. Owners restate their full set on every write
+(`mediaRefs.syncOwnerRefs`, from the messages / taskComments triggers and
+`snapshots.saveSnapshot`) and release it when deleted or soft-deleted. An upload
+with none is stamped `orphanedAt` and collected after a grace period
+(`storageGc.sweepOrphanedMedias`) — the period is what makes an undo, a
+collaborator's offline edit or a message still being written safe. Uploads
+older than the table are untracked (kept) until `mediaBackfill` has scanned
+every source for them. A foreign key, not an `edges` row: an upload is not a
+resource, and this grows with messages sent (see **mention counter**).
+_Avoid_: attachment edge, media link, file backlink
+
 **Route adapter**:
 The preamble every machine-to-machine HTTP route shares, as one module
 (`convex/httpAdapter.ts`): `requireSharedSecret` (the `Bearer` gate),

@@ -3,6 +3,16 @@ import { internal } from "./_generated/api";
 
 const crons = cronJobs();
 
+// Collect uploads nothing has referenced for the grace period, daily at 3:45
+// AM UTC — ahead of the 04:00 chain below rather than inside it: it deletes
+// its blobs itself, so the storage sweep that follows has nothing to find.
+crons.cron(
+  "orphaned media sweep",
+  "45 3 * * *",
+  internal.storageGc.sweepOrphanedMedias,
+  {},
+);
+
 // Run storage garbage collection daily at 4:00 AM UTC
 // 04:00 is the head of a hand-staggered chain (04:00 → 04:30 → 04:50 → 05:00)
 // that keeps the heavy daily sweeps from overlapping; the minute is chosen

@@ -1129,12 +1129,39 @@ export type DataModel = {
     searchIndexes: {};
     vectorIndexes: {};
   };
+  mediaRefs: {
+    document: {
+      mediaId: Id<"medias">;
+      ownerId: string;
+      ownerType:
+        | "message"
+        | "taskComment"
+        | "document"
+        | "task"
+        | "diagram"
+        | "spreadsheet";
+      _id: Id<"mediaRefs">;
+      _creationTime: number;
+    };
+    fieldPaths: "_creationTime" | "_id" | "mediaId" | "ownerId" | "ownerType";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_media: ["mediaId", "_creationTime"];
+      by_owner: ["ownerType", "ownerId", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
   medias: {
     document: {
       fileName: string;
       mimeType: string;
+      orphanedAt?: number;
       size: number;
       storageId: Id<"_storage">;
+      token?: string;
+      tracked?: boolean;
       type: "image" | "file";
       uploadedBy: Id<"users">;
       workspaceId: Id<"workspaces">;
@@ -1146,15 +1173,20 @@ export type DataModel = {
       | "_id"
       | "fileName"
       | "mimeType"
+      | "orphanedAt"
       | "size"
       | "storageId"
+      | "token"
+      | "tracked"
       | "type"
       | "uploadedBy"
       | "workspaceId";
     indexes: {
       by_id: ["_id"];
       by_creation_time: ["_creationTime"];
+      by_orphanedAt: ["orphanedAt", "_creationTime"];
       by_storage_id: ["storageId", "_creationTime"];
+      by_token: ["token", "_creationTime"];
       by_workspace: ["workspaceId", "_creationTime"];
     };
     searchIndexes: {};

@@ -3,6 +3,7 @@ import { query } from "./_generated/server";
 import { mutation } from "./functions";
 import { checkWorkspaceMember, requireUser, requireWorkspaceMember } from "./authHelpers";
 import { MESSAGE_FILE_ATTACHMENT_MAX_BYTES, formatFileSize } from "@ripple/shared/constants";
+import { mediaTokenFromUrl } from "./utils/mediaTokens";
 
 export const generateUploadUrl = mutation({
   args: {},
@@ -46,6 +47,16 @@ export const saveMedia = mutation({
       }
     }
 
+    const url = await ctx.storage.getUrl(args.storageId);
+    if (!url) throw new ConvexError("Failed to get URL for uploaded file");
+
+    // Born tracked and orphaned: nothing references the upload until the
+    // message, comment or document that uses it is saved (`mediaRefs`). One
+    // that never gets used — a composer abandoned mid-draft — is collected
+    // after the grace period instead of living forever. Without a token
+    // nothing could ever reference it, so it stays untracked (kept) rather
+    // than being collected while on screen.
+    const token = mediaTokenFromUrl(url);
     await ctx.db.insert("medias", {
       storageId: args.storageId,
       workspaceId: args.workspaceId,
@@ -54,10 +65,8 @@ export const saveMedia = mutation({
       mimeType: args.mimeType,
       size: args.size,
       type: args.type,
+      ...(token ? { token, tracked: true, orphanedAt: Date.now() } : {}),
     });
-
-    const url = await ctx.storage.getUrl(args.storageId);
-    if (!url) throw new ConvexError("Failed to get URL for uploaded file");
 
     return url;
   },

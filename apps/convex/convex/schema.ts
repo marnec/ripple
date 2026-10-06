@@ -7,6 +7,7 @@ import {
   WorkspaceRole,
 } from "@ripple/shared/enums/roles";
 import { defineSchema, defineTable } from "convex/server";
+import { mediaOwnerTypeValidator } from "./utils/mediaTokens";
 import { v } from "convex/values";
 
 export const channelRoleSchema = v.union(
@@ -918,9 +919,42 @@ export default defineSchema({
     // `image` is the chat/document image path (thumbnail + full are two rows);
     // `file` is any other chat attachment, stored and served as-is.
     type: v.union(v.literal("image"), v.literal("file")), // extend later: "video", etc.
+    // The uuid in this upload's storage URL — how content (which stores URLs,
+    // never storage ids) is matched back to the row. See `utils/mediaTokens`.
+    // Absent only on rows predating it, until `mediaBackfill` fills them.
+    token: v.optional(v.string()),
+    // Lifetime is managed by `mediaRefs`: once nothing references the upload
+    // it is collected after a grace period. Every upload since references
+    // existed is tracked from birth; older rows stay untracked — kept forever,
+    // since nothing proves they are unused — until `mediaBackfill` has
+    // recorded what references them and flips the flag.
+    tracked: v.optional(v.boolean()),
+    // Set while a tracked upload has no references (from upload until the
+    // content that uses it is saved, and again once the last reference goes);
+    // cleared when one appears. `storageGc.sweepOrphanedMedias` deletes rows
+    // orphaned for longer than the grace period.
+    orphanedAt: v.optional(v.number()),
   })
     .index("by_workspace", ["workspaceId"])
-    .index("by_storage_id", ["storageId"]),
+    .index("by_storage_id", ["storageId"])
+    .index("by_token", ["token"])
+    .index("by_orphanedAt", ["orphanedAt"]),
+
+  // Which content uses which upload: one row per (upload, owner). An owner is
+  // a message or comment (whose body embeds the URL) or a collaborative
+  // resource (whose Yjs snapshot does). Maintained from the owners' side — the
+  // messages / taskComments triggers, `snapshots.saveSnapshot`, and the
+  // resources' delete triggers — via `mediaRefs.syncOwnerRefs`. A plain foreign
+  // key rather than `edges`: uploads are not resources, and this grows with
+  // messages sent, which `edges` deliberately does not (see CONTEXT.md,
+  // "Mention counter").
+  mediaRefs: defineTable({
+    mediaId: v.id("medias"),
+    ownerType: mediaOwnerTypeValidator,
+    ownerId: v.string(),
+  })
+    .index("by_owner", ["ownerType", "ownerId"])
+    .index("by_media", ["mediaId"]),
 
   cycles: defineTable({
     projectId: v.id("projects"),

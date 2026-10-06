@@ -9,6 +9,7 @@ import { hintFromUrl } from "./transcriptFormat";
 import { COLLAB_RESOURCES, COLLAB_ROOMS } from "./authHelpers";
 import { YJS_SHARE_ROOMS, type YjsShareRoom } from "@ripple/shared/shareTypes";
 import type { Id } from "./_generated/dataModel";
+import { extractMediaTokens } from "./utils/mediaTokens";
 import {
   guarded,
   json,
@@ -586,12 +587,20 @@ http.route({
       );
       if (room.kind !== "ok") return roomIdError(room);
 
-      const storageId = await ctx.storage.store(await request.blob());
+      // Read once: the bytes are both stored and scanned for the uploads the
+      // resource's content embeds (images in a document or task description),
+      // which is how those uploads stay alive while the content shows them.
+      const bytes = await request.arrayBuffer();
+      const storageId = await ctx.storage.store(
+        new Blob([bytes], { type: "application/octet-stream" }),
+      );
+      const mediaTokens = extractMediaTokens(new TextDecoder().decode(bytes));
 
       await ctx.runMutation(internal.snapshots.saveSnapshot, {
         resourceType: room.resourceType,
         resourceId: room.resourceId,
         storageId,
+        mediaTokens,
       });
 
       return json({ success: true });

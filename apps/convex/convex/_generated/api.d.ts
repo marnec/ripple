@@ -6266,6 +6266,68 @@ export declare const internal: {
       };
     };
   };
+  mediaBackfill: {
+    applySnapshotRefs: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        scanned: Array<{
+          id: string;
+          snapshotId: Id<"_storage">;
+          tokens: Array<string>;
+        }>;
+        table: "documents" | "tasks" | "diagrams" | "spreadsheets";
+      },
+      null
+    >;
+    backfillCommentRefs: FunctionReference<
+      "mutation",
+      "internal",
+      { cursor: string | null },
+      null
+    >;
+    backfillMessageRefs: FunctionReference<
+      "mutation",
+      "internal",
+      { cursor: string | null },
+      null
+    >;
+    backfillSnapshotRefs: FunctionReference<
+      "action",
+      "internal",
+      {
+        cursor: string | null;
+        table: "documents" | "tasks" | "diagrams" | "spreadsheets";
+      },
+      null
+    >;
+    backfillTokens: FunctionReference<
+      "mutation",
+      "internal",
+      { cursor: string | null },
+      null
+    >;
+    finalizeTracking: FunctionReference<
+      "mutation",
+      "internal",
+      { cursor: string | null; orphaned: number; tracked: number },
+      null
+    >;
+    snapshotPage: FunctionReference<
+      "query",
+      "internal",
+      {
+        cursor: string | null;
+        table: "documents" | "tasks" | "diagrams" | "spreadsheets";
+      },
+      {
+        continueCursor: string;
+        isDone: boolean;
+        items: Array<{ id: string; snapshotId: Id<"_storage"> }>;
+      }
+    >;
+    start: FunctionReference<"mutation", "internal", {}, null>;
+  };
   migrations: {
     backfillAuditScope: FunctionReference<
       "mutation",
@@ -7429,6 +7491,7 @@ export declare const internal: {
       "mutation",
       "internal",
       {
+        mediaTokens?: Array<string>;
         resourceId: string;
         resourceType: "doc" | "diagram" | "task" | "spreadsheet";
         storageId: Id<"_storage">;
@@ -7495,6 +7558,12 @@ export declare const internal: {
         totalScanned?: number;
         workspaceCounts?: string;
       },
+      null
+    >;
+    sweepOrphanedMedias: FunctionReference<
+      "mutation",
+      "internal",
+      { totalDeleted?: number },
       null
     >;
   };

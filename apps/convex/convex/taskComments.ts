@@ -3,6 +3,7 @@ import { query } from "./_generated/server";
 import { internalMutation, mutation } from "./functions";
 import { getAll } from "convex-helpers/server/relationships";
 import { extractMentionedUserIds } from "./utils/blocknote";
+import { extractMediaTokens } from "./utils/mediaTokens";
 import { getUserDisplayName } from "@ripple/shared/displayName";
 import { logTaskActivity } from "./auditLog";
 import { requireResourceMember, filterWorkspaceRecipients } from "./authHelpers";
@@ -88,6 +89,20 @@ export const list = query({
   },
 });
 
+/**
+ * Uploads stay in Ripple. A public comment on a linked task is pushed to the
+ * provider, and a storage URL is a bearer capability to the file — the issue's
+ * readers (possibly the whole internet) would get it. So attachments ride only
+ * on private notes, or on comments of an unlinked task, which go nowhere.
+ */
+function assertNoUploads(body: string) {
+  if (extractMediaTokens(body).length > 0) {
+    throw new ConvexError(
+      "Attachments can only be added to private notes on a task linked to an issue",
+    );
+  }
+}
+
 export const create = mutation({
   args: {
     taskId: v.id("tasks"),
@@ -122,6 +137,8 @@ export const create = mutation({
         .withIndex("by_task", (q) => q.eq("taskId", taskId))
         .unique()) !== null;
     const isPrivate = internal === true && isLinked;
+
+    if (isLinked && !isPrivate) assertNoUploads(body);
 
     // Insert comment
     const commentId = await ctx.db.insert("taskComments", {
@@ -220,6 +237,17 @@ export const update = mutation({
     // Author-only check, narrowing the workspace rule rather than replacing it
     if (comment.userId !== userId) {
       throw new ConvexError("Not authorized");
+    }
+
+    // The lane is fixed at creation, so a public comment on a linked task
+    // stays one: it cannot gain uploads by being edited.
+    if (comment.internal !== true) {
+      const isLinked =
+        (await ctx.db
+          .query("taskIntegrationLinks")
+          .withIndex("by_task", (q) => q.eq("taskId", comment.taskId))
+          .unique()) !== null;
+      if (isLinked) assertNoUploads(body);
     }
 
     // Update body with trimmed value

@@ -2,7 +2,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@ripple/ui/components/avata
 import { useWorkspaceMembers } from "@/contexts/WorkspaceMembersContext";
 import { Button } from "@ripple/ui/components/button";
 import { Tabs, TabsList, TabsTrigger } from "@ripple/ui/components/tabs";
-import { isBlocksEmpty, parseCommentBody } from "@/lib/editor-utils";
+import { isBlocksEmpty } from "@/lib/editor-utils";
 import { providerLabel } from "@ripple/shared/integrationProvider";
 import { useMutation } from "convex/react";
 import { useQuery } from "convex-helpers/react/cache";;
@@ -43,6 +43,9 @@ import "@blocknote/core/fonts/inter.css";
 import "@blocknote/shadcn/style.css";
 import { useMemberSuggestions } from "../../../hooks/use-member-suggestions";
 import { StaticCommentBody } from "./StaticCommentBody";
+import { joinCommentBody, splitCommentBody } from "./commentAttachments";
+import { AttachFilesButton, DraftAttachmentList } from "./CommentAttachments";
+import { useCommentAttachments } from "./useCommentAttachments";
 import { GithubMark } from "@/components/GithubMark";
 import { GitlabMark } from "@/components/GitlabMark";
 import { cn } from "@/lib/utils";
@@ -263,9 +266,19 @@ export function TaskActivityTimeline({ taskId, currentUserId, workspaceId, membe
     editor,
   });
 
+  const attachments = useCommentAttachments(workspaceId);
+  // Attachments stay in Ripple: a reply pushed to the provider would hand the
+  // issue's readers a bearer URL to the file (and the push carries the text
+  // only anyway). So they ride on private notes, or on any comment of an
+  // unlinked task — the server holds the same line.
+  const canAttach = !isLinked || lane === "private";
+  const blockedAttachments = !canAttach && attachments.items.length > 0;
+  const canSubmit =
+    (!isEmpty || attachments.items.length > 0) && !attachments.isUploading && !blockedAttachments;
+
   const handleSubmit = () => {
-    if (isBlocksEmpty(editor.document)) return;
-    const body = JSON.stringify(editor.document);
+    if (!canSubmit) return;
+    const body = joinCommentBody(editor.document, attachments.uploaded);
     // Render to markdown for the provider push; mentions leave as tokens the
     // dispatcher resolves. Stored body stays BlockNote JSON for Ripple rendering.
     const bodyMarkdown = editor.blocksToMarkdownLossy(editor.document);
@@ -275,6 +288,7 @@ export function TaskActivityTimeline({ taskId, currentUserId, workspaceId, membe
     void createComment({ taskId, body, bodyMarkdown, internal }).then(() => {
       editor.replaceBlocks(editor.document, [{ id: crypto.randomUUID(), type: "paragraph", content: "" }]);
       setIsEmpty(true);
+      attachments.clear();
     });
   };
 
@@ -426,6 +440,7 @@ export function TaskActivityTimeline({ taskId, currentUserId, workspaceId, membe
                     editingCommentId={editingCommentId}
                     workspaceMembers={workspaceMembers}
                     workspaceId={workspaceId}
+                    canAttach={!isLinked || item.internal === true}
                     onEdit={setEditingCommentId}
                     onDelete={handleDelete}
                     onSave={(id, body, bodyMarkdown) => {
@@ -484,9 +499,22 @@ export function TaskActivityTimeline({ taskId, currentUserId, workspaceId, membe
             />
           </BlockNoteView>
         </div>
-        <Button onClick={handleSubmit} disabled={isEmpty} size="sm">
-          Comment
-        </Button>
+        <DraftAttachmentList attachments={attachments} />
+        <div className="flex items-center gap-2">
+          <AttachFilesButton
+            attachments={attachments}
+            disabled={!canAttach}
+            disabledReason="Attachments can only go on private notes"
+          />
+          {blockedAttachments && (
+            <p className="min-w-0 flex-1 text-xs text-muted-foreground">
+              Attachments stay in Ripple — switch to a private note to send them.
+            </p>
+          )}
+          <Button onClick={handleSubmit} disabled={!canSubmit} size="sm" className="ml-auto">
+            Comment
+          </Button>
+        </div>
       </div>
       </div>
     </div>
@@ -520,6 +548,7 @@ function CommentItem({
   editingCommentId,
   workspaceMembers,
   workspaceId,
+  canAttach,
   onEdit,
   onDelete,
   onSave,
@@ -530,6 +559,8 @@ function CommentItem({
   editingCommentId: Id<"taskComments"> | null;
   workspaceMembers: WorkspaceMemberSummary[];
   workspaceId: Id<"workspaces">;
+  /** Whether this comment may carry attachments — see the composer's rule. */
+  canAttach: boolean;
   onEdit: (id: Id<"taskComments"> | null) => void;
   onDelete: (id: Id<"taskComments">) => void;
   onSave: (id: Id<"taskComments">, body: string, bodyMarkdown: string) => void;
@@ -587,6 +618,7 @@ function CommentItem({
             initialBody={item.body ?? ""}
             workspaceMembers={workspaceMembers}
             workspaceId={workspaceId}
+            canAttach={canAttach}
             onSave={onSave}
             onCancel={onCancelEdit}
           />
@@ -631,14 +663,20 @@ function EditCommentEditor({
   commentId,
   initialBody,
   workspaceMembers,
+  workspaceId,
+  canAttach,
   onSave,
   onCancel,
-}: EditCommentEditorProps) {
+}: EditCommentEditorProps & { canAttach: boolean }) {
   const { resolvedTheme } = useTheme();
+  // The editor's schema has no media blocks, so the attachments are split off
+  // before the body is loaded and joined back on save.
+  const [initial] = useState(() => splitCommentBody(initialBody));
+  const attachments = useCommentAttachments(workspaceId, initial.attachments);
 
   const editEditor = useCreateBlockNote({
     schema: taskCommentSchema,
-    initialContent: parseCommentBody(initialBody),
+    initialContent: initial.blocks.length > 0 ? initial.blocks : undefined,
     });
 
   const getMemberItems = useMemberSuggestions({
@@ -647,8 +685,9 @@ function EditCommentEditor({
   });
 
   const handleSave = () => {
-    if (isBlocksEmpty(editEditor.document)) return;
-    const body = JSON.stringify(editEditor.document);
+    if (attachments.isUploading) return;
+    if (isBlocksEmpty(editEditor.document) && attachments.items.length === 0) return;
+    const body = joinCommentBody(editEditor.document, attachments.uploaded);
     const bodyMarkdown = editEditor.blocksToMarkdownLossy(editEditor.document);
     onSave(commentId, body, bodyMarkdown);
   };
@@ -669,8 +708,10 @@ function EditCommentEditor({
           />
         </BlockNoteView>
       </div>
-      <div className="flex gap-2">
-        <Button size="sm" onClick={handleSave}>
+      <DraftAttachmentList attachments={attachments} />
+      <div className="flex items-center gap-2">
+        {canAttach && <AttachFilesButton attachments={attachments} />}
+        <Button size="sm" onClick={handleSave} disabled={attachments.isUploading}>
           Save
         </Button>
         <Button size="sm" variant="outline" onClick={onCancel}>

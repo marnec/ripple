@@ -6,6 +6,8 @@ import { components, internal } from "./_generated/api";
 import { Triggers, writerWithTriggers } from "convex-helpers/server/triggers";
 import type { GenericMutationCtx } from "convex/server";
 import { extractMessageTargets, type MessageTargetType } from "./utils/blocknote";
+import { extractMediaTokens, type MediaOwnerType } from "./utils/mediaTokens";
+import { releaseOwnerRefs, syncOwnerRefs } from "./mediaRefs";
 import { getUserDisplayName } from "@ripple/shared/displayName";
 import { scheduleSubscriptionDrain } from "./subscriptionPool";
 import {
@@ -994,6 +996,56 @@ triggers.register("messages", async (ctx, change) => {
     await Promise.all(targets.map((t) => removeChannelMention(ctx, channelId, t.targetId)));
   }
 });
+
+// ── Media references ────────────────────────────────────────────────
+// Keeps `mediaRefs` in step with the content that embeds uploads, so an upload
+// lives exactly as long as something shows it (plus `storageGc`'s grace
+// period). Content rows restate their tokens on every write; a soft-deleted
+// row holds none — its content is no longer shown. Collaborative resources
+// sync from their snapshot in `snapshots.saveSnapshot` and only release here.
+
+/** Upload tokens a message or comment currently shows. */
+function shownMediaTokens(doc: { body: string; deleted: boolean } | null): string[] {
+  return doc && !doc.deleted ? extractMediaTokens(doc.body) : [];
+}
+
+triggers.register("messages", async (ctx, change) => {
+  if (
+    change.operation === "update" &&
+    change.oldDoc.body === change.newDoc.body &&
+    change.oldDoc.deleted === change.newDoc.deleted
+  ) {
+    return;
+  }
+  await syncOwnerRefs(ctx, { type: "message", id: change.id }, shownMediaTokens(change.newDoc));
+});
+
+triggers.register("taskComments", async (ctx, change) => {
+  if (
+    change.operation === "update" &&
+    change.oldDoc.body === change.newDoc.body &&
+    change.oldDoc.deleted === change.newDoc.deleted
+  ) {
+    return;
+  }
+  await syncOwnerRefs(ctx, { type: "taskComment", id: change.id }, shownMediaTokens(change.newDoc));
+});
+
+const SNAPSHOT_MEDIA_OWNERS = {
+  documents: "document",
+  tasks: "task",
+  diagrams: "diagram",
+  spreadsheets: "spreadsheet",
+} as const;
+
+for (const [table, ownerType] of Object.entries(SNAPSHOT_MEDIA_OWNERS) as Array<
+  [keyof typeof SNAPSHOT_MEDIA_OWNERS, MediaOwnerType]
+>) {
+  triggers.register(table, async (ctx, change) => {
+    if (change.operation !== "delete") return;
+    await releaseOwnerRefs(ctx, { type: ownerType, id: change.id });
+  });
+}
 
 // ── Workspace assistant ─────────────────────────────────────────────
 // A channel's assistant thread lives in the agent component, outside the
