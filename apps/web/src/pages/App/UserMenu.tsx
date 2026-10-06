@@ -42,12 +42,14 @@ import {
   ResponsiveDialogTitle,
   ResponsiveDialogDescription,
 } from "@/components/ui/responsive-dialog";
+import { useSidebar } from "@/components/ui/sidebar";
 
 
 export function NavUser() {
   const user = useContext(UserContext);
   const { signOut } = useAuthActions();
   const navigate = useNavigate();
+  const { isMobile, setOpen } = useSidebar();
   const [showInvites, setShowInvites] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [menuOpened, setMenuOpened] = useState(false);
@@ -130,7 +132,14 @@ export function NavUser() {
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
-              <DropdownMenuItem onSelect={() => void navigate("/profile")}>
+              <DropdownMenuItem
+                onSelect={() => {
+                  // Like every other sidebar link: on mobile the sidebar is an
+                  // overlay, so leaving it open would cover the page just opened.
+                  if (isMobile) setOpen(false);
+                  void navigate("/profile");
+                }}
+              >
                 <BadgeCheck />
                 Profile
               </DropdownMenuItem>
