@@ -25,6 +25,7 @@ import { CycleHeader } from "./CycleHeader";
 import { CloseCycleDialog } from "./CloseCycleDialog";
 import { TaskBulkActionBar } from "./TaskBulkActionBar";
 import { useTaskSelection } from "./useTaskSelection";
+import { SafeAreaSpacer } from "@/components/SafeAreaSpacer";
 
 export function CycleDetail() {
   const { workspaceId, projectId, cycleId } = useParams<QueryParams>();
@@ -218,6 +219,7 @@ function CycleDetailContent({
             )}
           </div>
         )}
+        <SafeAreaSpacer />
       </div>
 
       {/* Task detail sheet (desktop) */}

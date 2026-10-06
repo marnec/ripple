@@ -82,6 +82,27 @@ export function Layout() {
     if (pathname === "/" && isMobile) setOpen(true);
   }, [pathname, isMobile, setOpen]);
 
+  // The shell never scrolls the root — every pane owns its own scroller — but
+  // iOS Safari still scrolls it behind `overflow: hidden` (focusing an input to
+  // clear the keyboard, or an offset carried over from the root-scrolling auth
+  // pages). The header is sticky, so it stays put while the whole page slides up
+  // under it, and with the root unscrollable by touch the offset is permanent:
+  // the top of every page is clipped until reload. Snap it back.
+  useEffect(() => {
+    const resetRootScroll = () => {
+      if (window.scrollY !== 0 && !document.body.classList.contains("document-scroll")) {
+        window.scrollTo(0, 0);
+      }
+    };
+    resetRootScroll();
+    window.addEventListener("scroll", resetRootScroll);
+    window.visualViewport?.addEventListener("resize", resetRootScroll);
+    return () => {
+      window.removeEventListener("scroll", resetRootScroll);
+      window.visualViewport?.removeEventListener("resize", resetRootScroll);
+    };
+  }, []);
+
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === "k" && (e.metaKey || e.ctrlKey)) {

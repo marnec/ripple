@@ -39,6 +39,7 @@ import { JoinCallButton } from "./JoinCallButton";
 import { OccurrenceDetailPage } from "./OccurrenceDetailPage";
 import { RsvpResponseGroup } from "./RsvpResponseGroup";
 import { useSeriesRsvp } from "./use-series-rsvp";
+import { SafeAreaSpacer } from "@/components/SafeAreaSpacer";
 
 export function EventDetailPage() {
   const { workspaceId, eventId } = useParams<
@@ -320,6 +321,7 @@ function EventDetailPageContent({
             )}
           </div>
         </div>
+        <SafeAreaSpacer />
       </div>
       <ConfirmDialog
         open={confirmingCancel}

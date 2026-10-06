@@ -31,6 +31,7 @@ import { JoinCallButton } from "./JoinCallButton";
 import { OccurrenceDetailContent, OccurrenceDetailDialogs } from "./OccurrenceDetailContent";
 import { RsvpResponseGroup } from "./RsvpResponseGroup";
 import { useOccurrenceDetail } from "./occurrence-detail-data";
+import { SafeAreaSpacer } from "@/components/SafeAreaSpacer";
 
 export function OccurrenceDetailPage({
   workspaceId,
@@ -138,6 +139,7 @@ export function OccurrenceDetailPage({
             )}
           </div>
         </div>
+        <SafeAreaSpacer />
       </div>
       <OccurrenceDetailDialogs detail={{ ...detail, series }} />
     </div>

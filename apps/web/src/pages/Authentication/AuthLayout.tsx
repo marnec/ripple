@@ -15,7 +15,11 @@ export function AuthLayout({ children }: { children: React.ReactNode }) {
   // isn't needed on any real phone.
   useEffect(() => {
     document.body.classList.add("document-scroll");
-    return () => document.body.classList.remove("document-scroll");
+    return () => {
+      document.body.classList.remove("document-scroll");
+      // Don't hand a scrolled root to the app shell, which can't scroll it back.
+      window.scrollTo(0, 0);
+    };
   }, []);
 
   return (

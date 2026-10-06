@@ -39,6 +39,7 @@ const LazyWorkspaceGraph = React.lazy(() =>
 import { cn } from "@/lib/utils";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useTheme } from "next-themes";
+import { SafeAreaSpacer } from "@/components/SafeAreaSpacer";
 
 /** Keys of `api.workspaces.overview`'s return — the cards index it by these. */
 type CountKey =
@@ -319,6 +320,7 @@ export function WorkspaceDetails() {
             <div className="px-2 pb-4">
               <WorkspaceTimeline workspaceId={id} hiddenTypes={hiddenTypes} />
             </div>
+            <SafeAreaSpacer />
           </div>
         ) : (
           <ScrollArea className="flex-1 min-h-0">

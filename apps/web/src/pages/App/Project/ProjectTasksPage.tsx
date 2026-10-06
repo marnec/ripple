@@ -25,6 +25,7 @@ import { TaskToolbar, type TaskFilters, type TaskSort, type CompletionFilter } f
 import { ImportTasksButton } from "./ImportTasksButton";
 import { CycleSelector } from "./CycleSelector";
 import { scopeCreateCycle, scopeCycleArg, type TaskScope } from "./taskScope";
+import { SafeAreaSpacer } from "@/components/SafeAreaSpacer";
 
 /**
  * The project's task views. `cycles` (the Tasks tab) shows one cycle at a
@@ -264,6 +265,7 @@ function ProjectTasksContent({
 
             <TabsContent value="list" className="mt-0 overflow-auto animate-fade-in">
               <Tasks projectId={projectId} workspaceId={workspaceId} filters={filters} sort={sort} scope={scope} />
+              <SafeAreaSpacer />
             </TabsContent>
           </>
         )}

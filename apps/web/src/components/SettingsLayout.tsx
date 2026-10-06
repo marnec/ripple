@@ -3,6 +3,7 @@ import { cn } from "@/lib/utils";
 import type { LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { useSearchParams } from "react-router-dom";
+import { SafeAreaSpacer } from "@/components/SafeAreaSpacer";
 
 export interface SettingsSection {
   /** Stable id, persisted to the `?tab=` search param. */
@@ -128,6 +129,7 @@ export function SettingsLayout({
           </header>
           {children}
         </div>
+        <SafeAreaSpacer />
       </div>
     </div>
   );

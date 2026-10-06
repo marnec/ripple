@@ -12,6 +12,7 @@ import { useState } from "react";
 import type { Id } from "@convex/_generated/dataModel";
 import { SearchResults, type ResourceView } from "./SearchResults";
 import type { BrowsableResourceType as ResourceType } from "@ripple/shared/types/resources";
+import { SafeAreaSpacer } from "@/components/SafeAreaSpacer";
 
 type ResourceListPageProps = {
   resourceType: ResourceType;
@@ -157,6 +158,7 @@ export function ResourceListPage({
             view={view}
           />
         </div>
+        <SafeAreaSpacer />
       </div>
 
       {createDialog}

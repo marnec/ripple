@@ -33,6 +33,7 @@ import {
 } from "./TaskDetail";
 import { useTaskDetailContext } from "./taskDetailContext";
 import { TaskGithubActions } from "./TaskGithubActions";
+import { SafeAreaSpacer } from "@/components/SafeAreaSpacer";
 
 export function TaskDetailPage() {
   const { workspaceId, projectId, taskId } = useParams<QueryParams>();
@@ -214,6 +215,7 @@ function PageShell({
                 </div>
               )}
             </div>
+            <SafeAreaSpacer />
           </div>
         )}
       </div>

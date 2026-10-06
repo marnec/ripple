@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@ripple/ui/components/separator";
 import { RippleSpinner } from "@/components/RippleSpinner";
 import { BadgeCheck, CalendarDays, LogOut, Mail, Settings, ShieldAlert } from "lucide-react";
+import { SafeAreaSpacer } from "@/components/SafeAreaSpacer";
 
 function getInitials(name: string, email?: string) {
   const source = name.trim() || email?.trim() || "";
@@ -255,6 +256,7 @@ export function UserProfilePage() {
       </section>
 
       <UserSettingsDialog open={showSettings} onOpenChange={setShowSettings} />
+      <SafeAreaSpacer />
     </div>
   );
 }

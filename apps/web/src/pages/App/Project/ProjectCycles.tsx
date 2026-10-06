@@ -24,6 +24,7 @@ import { DatePickerField } from "./DatePickerField";
 import { EditCycleDialog } from "./EditCycleDialog";
 import { cycleBadge, formatDateRange } from "./cycleUtils";
 import type { CycleStatus } from "@ripple/shared/types/cycles";
+import { SafeAreaSpacer } from "@/components/SafeAreaSpacer";
 
 type CycleDoc = {
   _id: Id<"cycles">;
@@ -139,6 +140,7 @@ function ProjectCyclesContent({
           onOpenChange={(open) => { if (!open) setEditingCycle(null); }}
         />
       )}
+      <SafeAreaSpacer />
     </div>
   );
 }
