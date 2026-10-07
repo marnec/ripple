@@ -21,11 +21,22 @@ import { CalendarDays, CalendarRange, Plus } from "lucide-react";
 
 import { Button } from "@ripple/ui/components/button";
 
+import { useShortcut } from "@/contexts/ShortcutsContext";
+
 import { MemberCalendarFilter } from "./MemberCalendarFilter";
 import { CalendarHeaderContext } from "./calendar-header-context";
 
 export function CalendarHeader() {
   const ctx = useContext(CalendarHeaderContext);
+  const createRef = useShortcut("create", () => ctx?.onCreateEvent(), {
+    enabled: Boolean(ctx),
+    label: "New event",
+  });
+  const viewSwitchRef = useShortcut(
+    "toggleView",
+    () => ctx?.setView(ctx.view === "week" ? "month-grid" : "week"),
+    { enabled: Boolean(ctx) },
+  );
   if (!ctx) return null;
   const {
     view,
@@ -67,7 +78,7 @@ export function CalendarHeader() {
           and pairs the action with empty-state CTAs sitting below. */}
       <div className="flex items-center gap-2">
         {/* Week / Month switcher */}
-        <div className="flex items-center rounded-md border p-0.5 text-xs font-medium">
+        <div ref={viewSwitchRef} className="flex items-center rounded-md border p-0.5 text-xs font-medium">
           <button
             className={`flex items-center gap-1.5 px-2 py-1 rounded transition-colors ${
               view === "week"
@@ -96,6 +107,7 @@ export function CalendarHeader() {
 
         <Button
           size="sm"
+          ref={createRef}
           className="hidden md:inline-flex h-7"
           onClick={onCreateEvent}
         >

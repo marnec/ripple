@@ -232,6 +232,9 @@ export function ExcalidrawEditor({
   return (
     <div
       ref={rootRef}
+      // App shortcuts stand aside while the canvas has focus: Excalidraw binds
+      // most of Mod+letter itself (Mod+D duplicates, Mod+G groups).
+      data-owns-keyboard
       className={`relative h-full w-full overflow-hidden transition-opacity duration-200 ${
         isReady ? "opacity-100" : "opacity-0"
       }`}

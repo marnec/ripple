@@ -1,6 +1,6 @@
 import { Pencil, X } from "lucide-react";
 import { Button } from "@ripple/ui/components/button";
-import { Kbd } from "@/components/ui/kbd";
+import { Kbd } from "@ripple/ui/components/kbd";
 
 type EditingBannerProps = {
   onCancel: () => void;

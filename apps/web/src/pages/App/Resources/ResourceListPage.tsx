@@ -5,6 +5,7 @@ import { RippleSpinner } from "@/components/RippleSpinner";
 import { Button } from "@ripple/ui/components/button";
 import { Tabs, TabsList, TabsTrigger } from "@ripple/ui/components/tabs";
 import { HeaderSlot } from "@/contexts/HeaderSlotContext";
+import { useShortcut } from "@/contexts/ShortcutsContext";
 import { favoriteFilterToBoolean, useDebouncedSearch } from "@/hooks/use-debounced-search";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Filter, LayoutGrid, LayoutList, Plus } from "lucide-react";
@@ -68,8 +69,18 @@ export function ResourceListPage({
   const showFilterStrip =
     !isMobile || showFavorites || resourceType === "channel" || tags.length > 0;
 
+  const createRef = useShortcut("create", () => onCreate?.(), {
+    enabled: Boolean(onCreate),
+    label: createLabel ?? `New ${resourceType}`,
+  });
+  const viewSwitchRef = useShortcut(
+    "toggleView",
+    () => setView(view === "cards" ? "list" : "cards"),
+    { enabled: !isMobile },
+  );
+
   const createButton = onCreate ? (
-    <Button onClick={onCreate} size="sm">
+    <Button ref={createRef} onClick={onCreate} size="sm">
       <Plus className="h-4 w-4 sm:mr-1.5" />
       <span className="hidden sm:inline">{createLabel ?? `New ${resourceType}`}</span>
     </Button>
@@ -106,7 +117,7 @@ export function ResourceListPage({
               <div className="flex flex-wrap items-center gap-2">
                 {!isMobile && (
                   <Tabs value={view} onValueChange={(v) => handleViewChange(v as ResourceView)}>
-                    <TabsList className="h-10">
+                    <TabsList ref={viewSwitchRef} className="h-10">
                       <TabsTrigger value="cards" className="flex items-center gap-2">
                         <LayoutGrid className="h-4 w-4" />
                         Cards

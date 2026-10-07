@@ -17,6 +17,7 @@ import { HeaderSlot, MobileHeaderTitle } from "@/contexts/HeaderSlotContext";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useRecordVisit } from "@/hooks/use-record-visit";
 import { useFocusMode } from "@/contexts/FocusModeContext";
+import { useShortcut } from "@/contexts/ShortcutsContext";
 
 interface SurfaceHeaderProps<TMeta extends SurfaceMeta> {
   /** The open room, from the sequence this header is a child of. */
@@ -85,7 +86,11 @@ export function SurfaceHeader<TMeta extends SurfaceMeta>({
   focusable = false,
 }: SurfaceHeaderProps<TMeta>) {
   const isMobile = useIsMobile();
-  const { isFocused, isFocusAvailable, enterFocus } = useFocusMode();
+  const { isFocused, isFocusAvailable, enterFocus, toggleFocus } = useFocusMode();
+  // Re-binds Layout's global focus-mode chord so its hint sits on this
+  // surface's button. Toggle, not enter: it stays bound once focused, when it
+  // is the way back out.
+  const focusRef = useShortcut("focusMode", toggleFocus, { enabled: focusable && isFocusAvailable });
   const { doc, meta, isLive, sync } = surface;
   const named = NAMED[resourceType];
 
@@ -109,6 +114,7 @@ export function SurfaceHeader<TMeta extends SurfaceMeta>({
           {isLive && meta && (
             <>
               <FavoriteButton
+                shortcut
                 resourceType={named}
                 resourceId={resourceId}
                 workspaceId={workspaceId}
@@ -141,6 +147,7 @@ export function SurfaceHeader<TMeta extends SurfaceMeta>({
             // Not gated on `isLive`: hiding the chrome is a local view change,
             // so it keeps working with no server — same rule as the tools slot.
             <button
+              ref={focusRef}
               type="button"
               onClick={enterFocus}
               className="inline-flex items-center justify-center rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"

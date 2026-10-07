@@ -52,6 +52,7 @@ function ProjectLayoutContent({
       <div className="flex items-center justify-between gap-4 px-4 border-b min-h-11">
         <div className="flex items-center gap-2 min-w-0">
           <FavoriteButton
+            shortcut
             resourceType="project"
             resourceId={projectId}
             workspaceId={workspaceId}

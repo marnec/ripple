@@ -1,4 +1,5 @@
 import { RippleSpinner } from "@/components/RippleSpinner";
+import { useShortcut } from "@/contexts/ShortcutsContext";
 import { buildSearchString, parseSearchInput, type ParsedSearch } from "@/lib/search-utils";
 import { useQuery } from "convex-helpers/react/cache";
 import { Check, Search, Tag as TagIcon, X } from "lucide-react";
@@ -32,6 +33,10 @@ export function ResourceSearchInput({
   const [internalValue, setInternalValue] = useState("");
   const [showSuggestions, setShowSuggestions] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const searchRef = useShortcut("searchList", () => {
+    inputRef.current?.focus();
+    inputRef.current?.select();
+  });
 
   const value = controlledValue ?? internalValue;
   const setValue = (v: string) => {
@@ -72,7 +77,7 @@ export function ResourceSearchInput({
 
   return (
     <div className="relative w-full">
-      <div className="flex h-9 items-center gap-2 rounded-md border border-input bg-background px-3 text-sm ring-offset-background focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2">
+      <div ref={searchRef} className="flex h-9 items-center gap-2 rounded-md border border-input bg-background px-3 text-sm ring-offset-background focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2">
         <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
         <input
           ref={inputRef}

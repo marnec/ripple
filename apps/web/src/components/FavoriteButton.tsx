@@ -5,6 +5,7 @@ import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 import { Button } from "@ripple/ui/components/button";
 import { cn } from "@/lib/utils";
+import { useShortcut } from "@/contexts/ShortcutsContext";
 import type { FavoritableResourceType as ResourceType } from "@ripple/shared/types/resources";
 
 type FavoriteButtonProps = {
@@ -13,6 +14,12 @@ type FavoriteButtonProps = {
   workspaceId: Id<"workspaces">;
   variant?: "icon" | "ghost";
   className?: string;
+  /**
+   * Bind Mod+⇧S to this button. Only for the one star that stands for the
+   * page's own resource (a surface or project header) — never for the stars
+   * on a list, where the chord could not say which row it meant.
+   */
+  shortcut?: boolean;
 };
 
 export function FavoriteButton({
@@ -21,18 +28,23 @@ export function FavoriteButton({
   workspaceId,
   variant = "ghost",
   className,
+  shortcut = false,
 }: FavoriteButtonProps) {
   const isFavorited = useQuery(api.favorites.isFavorited, { resourceId }) ?? false;
   const toggle = useMutation(api.favorites.toggle);
 
+  const toggleFavorite = () => void toggle({ workspaceId, resourceType, resourceId });
+  const shortcutRef = useShortcut("favorite", toggleFavorite, { enabled: shortcut });
+
   const handleToggle = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    void toggle({ workspaceId, resourceType, resourceId });
+    toggleFavorite();
   };
 
   return (
     <Button
+      ref={shortcutRef}
       variant="ghost"
       size={variant === "icon" ? "icon" : "sm"}
       onClick={handleToggle}

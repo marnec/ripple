@@ -56,7 +56,8 @@ import {
   MissingDiagramSnapshotError,
 } from "@/lib/exporters/diagram-snapshot";
 import { FormattingToolbar } from "./FormattingToolbar";
-import { Kbd } from "../../../components/ui/kbd";
+import { Kbd } from "@ripple/ui/components/kbd";
+import { useShortcut } from "@/contexts/ShortcutsContext";
 
 // Heavy (pulls Excalidraw for the frame thumbnails) — load only when a user
 // actually picks a diagram to snapshot, keeping it out of the chat entry chunk.
@@ -198,6 +199,9 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
   } | null>(null);
 
   const editor = useCreateBlockNote(editorConfig);
+  // Inert while the composer itself has focus (it is an editor, and Mod+I is
+  // italic there) — this is the way back to it from anywhere else on the page.
+  const composerRef = useShortcut("create", () => editor.focus(), { label: "Write a message" });
 
   // Reset image state synchronously when the edit target changes — keeps
   // image fields in lockstep with `editingMessage` without an effect.
@@ -766,6 +770,7 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
             when `renderEditor` is left on; DocumentEditor passes false, which is
             why it never showed the artifact.) */}
         <div
+          ref={composerRef}
           className={cn(
             // `message-composer-frame` scopes message-composer.css's BlockNote
             // padding override to this editor — see the comment on that rule.

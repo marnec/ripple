@@ -20,6 +20,7 @@ import { FollowModeProvider } from "../../contexts/FollowModeContext";
 import { FocusModeProvider } from "../../contexts/FocusModeContext";
 import { WorkspacePresenceProvider } from "../../contexts/WorkspacePresenceContext";
 import { SidebarProvider } from "../../components/ui/sidebar";
+import { ShortcutsProvider } from "../../contexts/ShortcutsContext";
 import { TooltipProvider } from "@ripple/ui/components/tooltip";
 import { UserContext } from "./UserContext";
 
@@ -87,12 +88,14 @@ export default function App() {
             <WorkspacePresenceProvider>
               <FollowModeProvider>
                 <FocusModeProvider>
+                <ShortcutsProvider>
                 <SidebarProvider>
                 <Layout />
                 <Suspense fallback={null}>
                   <LazyFloatingCallWindow />
                 </Suspense>
                 </SidebarProvider>
+                </ShortcutsProvider>
                 </FocusModeProvider>
               </FollowModeProvider>
             </WorkspacePresenceProvider>

@@ -10,6 +10,7 @@ import { Button } from "@ripple/ui/components/button";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useScrollbarWidth } from "@/hooks/use-scrollbar-width";
 import { HeaderSlot } from "@/contexts/HeaderSlotContext";
+import { useShortcut } from "@/contexts/ShortcutsContext";
 import SomethingWentWrong from "@/pages/SomethingWentWrong";
 import type { QueryParams } from "@convex/types/routes";
 import { useQuery } from "convex-helpers/react/cache";
@@ -110,6 +111,13 @@ function ProjectTasksContent({
   // status columns.
   const effectiveView = isMobile || mode === "backlog" ? "list" : view;
   const [dialogOpen, setDialogOpen] = useState(false);
+  const canSwitchView = !isMobile && mode === "cycles";
+  const newTaskRef = useShortcut("create", () => setDialogOpen(true), { label: "New task" });
+  const viewSwitchRef = useShortcut(
+    "toggleView",
+    () => setView(effectiveView === "board" ? "list" : "board"),
+    { enabled: canSwitchView },
+  );
 
   const [filters, setFilters] = useState<TaskFilters>({
     completionFilter: initialCompletionFilter,
@@ -162,8 +170,8 @@ function ProjectTasksContent({
       <Tabs value={effectiveView} onValueChange={(v) => setView(v as "list" | "board")} className="flex-1 flex flex-col min-h-0">
         <div className="flex items-start justify-between mb-2 px-4">
           <div className="flex items-center gap-3">
-            {!isMobile && mode === "cycles" && (
-              <TabsList>
+            {canSwitchView && (
+              <TabsList ref={viewSwitchRef}>
                 <TabsTrigger value="board" className="flex items-center gap-2">
                   <Kanban className="h-4 w-4" />
                   Board
@@ -182,7 +190,7 @@ function ProjectTasksContent({
               {mode === "backlog" && (
                 <ImportTasksButton projectId={projectId} workspaceId={workspaceId} />
               )}
-              <Button size="sm" onClick={() => setDialogOpen(true)}>
+              <Button ref={newTaskRef} size="sm" onClick={() => setDialogOpen(true)}>
                 <Plus  />
                 New task
               </Button>

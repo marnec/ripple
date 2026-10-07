@@ -17,6 +17,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { useSidebarSections } from "@/hooks/use-sidebar-sections";
 import type { QueryParams } from "@convex/types/routes";
 import { useWorkspaceSidebar } from "@/contexts/WorkspaceSidebarContext";
+import { useShortcut } from "@/contexts/ShortcutsContext";
 import { useCachedQuery } from "@/hooks/use-cached-query";
 import { LayoutGroup, m } from "framer-motion";
 import { CalendarDays, LayoutDashboard, ListTodo, MessageCircle, MessageSquare } from "lucide-react";
@@ -112,6 +113,8 @@ export function AppSidebar() {
     if (isMobile) setOpen(false);
     void navigate(`/workspaces/${workspaceId}/dashboard`);
   };
+
+  const dashboardRef = useShortcut("dashboard", handleDashboardClick, { enabled: Boolean(workspaceId) });
 
   const handleTasksClick = () => {
     if (!workspaceId) return;
@@ -233,6 +236,7 @@ export function AppSidebar() {
                 <SidebarMenu>
                   <SidebarMenuItem onMouseEnter={handleDashboardHover} onFocus={handleDashboardHover}>
                     <SidebarMenuButton
+                      ref={dashboardRef}
                       onClick={handleDashboardClick}
                       isActive={isDashboardActive}
                       tooltip="My Dashboard"

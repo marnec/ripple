@@ -26,6 +26,7 @@ import {
 } from "@ripple/ui/components/tooltip";
 import { AppSidebar } from "@/pages/App/AppSidebar";
 import { useFocusMode } from "../contexts/FocusModeContext";
+import { useShortcut } from "../contexts/ShortcutsContext";
 import { cn } from "@/lib/utils";
 import { Button } from "@ripple/ui/components/button";
 
@@ -71,7 +72,7 @@ function CallIndicator() {
 export function Layout() {
   const { pathname } = useLocation();
   const { workspaceId } = useParams<QueryParams>();
-  const { isMobile, setOpen } = useSidebar();
+  const { isMobile, setOpen, toggleSidebar } = useSidebar();
   const { isFollowing, followColor } = useFollowMode();
   const { isFocused, exitFocus, toggleFocus } = useFocusMode();
   const [commandOpen, setCommandOpen] = useState(false);
@@ -103,27 +104,13 @@ export function Layout() {
     };
   }, []);
 
-  useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "k" && (e.metaKey || e.ctrlKey)) {
-        e.preventDefault();
-        setCommandOpen((prev) => !prev);
-      }
-      // Focus mode. Not Escape: on a diagram Escape cancels the active tool and
-      // clears the selection, and stealing it would make focus mode cost the
-      // user a canvas shortcut they use constantly. The visible exit control is
-      // the discoverable way out; this is the shortcut for people who want one.
-      if ((e.key === "f" || e.key === "F") && e.shiftKey && (e.metaKey || e.ctrlKey)) {
-        e.preventDefault();
-        toggleFocus();
-      }
-    };
-    // Capture phase: editors that own their container (Excalidraw, BlockNote)
-    // stop propagation of key events, so a bubble-phase listener never sees
-    // them while the surface has focus.
-    document.addEventListener("keydown", onKeyDown, true);
-    return () => document.removeEventListener("keydown", onKeyDown, true);
-  }, [toggleFocus]);
+  useShortcut("search", () => setCommandOpen((prev) => !prev), { enabled: Boolean(workspaceId) });
+  // Focus mode. Not Escape: on a diagram Escape cancels the active tool and
+  // clears the selection, and stealing it would make focus mode cost the
+  // user a canvas shortcut they use constantly. The visible exit control is
+  // the discoverable way out; this is the shortcut for people who want one.
+  useShortcut("focusMode", toggleFocus);
+  const sidebarToggleRef = useShortcut("toggleSidebar", toggleSidebar);
 
   const inner = (
     <>
@@ -161,7 +148,7 @@ export function Layout() {
           ) : (
             <>
               <div className="flex items-center gap-4">
-                <SidebarTrigger className="-ml-1" />
+                <SidebarTrigger ref={sidebarToggleRef} className="-ml-1" />
                 <DynamicBreadcrumb />
               </div>
               <div className="flex items-center gap-2">
