@@ -7,10 +7,11 @@ import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { MobileHeaderTitle } from "@/contexts/HeaderSlotContext";
 import { useQuery } from "convex-helpers/react/cache";
-import { useParams, NavLink, Outlet } from "react-router-dom";
+import { useParams, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 import { useRecordVisit } from "@/hooks/use-record-visit";
+import { useShortcut } from "@/contexts/ShortcutsContext";
 import { ImportActiveBanner } from "./ImportActiveBanner";
 import { PROJECT_TABS as tabs } from "./project-tabs";
 
@@ -38,6 +39,23 @@ function ProjectLayoutContent({
 }) {
   const project = useQuery(api.projects.get, { id: projectId });
   const isMobile = useIsMobile();
+  const navigate = useNavigate();
+  const { pathname } = useLocation();
+
+  // Mod+⇧←/→ step through the tabs, wrapping at the ends. Each chord's hint
+  // sits on the tab it would land on.
+  const base = `/workspaces/${workspaceId}/projects/${projectId}`;
+  const rest = pathname.startsWith(base) ? pathname.slice(base.length).replace(/^\/|\/$/g, "") : null;
+  const activeIndex =
+    rest === null
+      ? -1
+      : tabs.findIndex((tab) => (tab.end ? rest === "" : rest === tab.to || rest.startsWith(`${tab.to}/`)));
+  const prevIndex = (activeIndex - 1 + tabs.length) % tabs.length;
+  const nextIndex = (activeIndex + 1) % tabs.length;
+  const goToTab = (index: number) => void navigate(tabs[index].end ? base : `${base}/${tabs[index].to}`);
+  const prevTabRef = useShortcut("prevTab", () => goToTab(prevIndex), { enabled: activeIndex >= 0 });
+  const nextTabRef = useShortcut("nextTab", () => goToTab(nextIndex), { enabled: activeIndex >= 0 });
+
   useRecordVisit(workspaceId, "project", projectId, project?.name);
 
   if (project === null) {
@@ -66,9 +84,10 @@ function ProjectLayoutContent({
         </div>
 
         <div className="inline-flex h-8 items-center justify-center rounded-lg bg-muted p-1 shrink-0">
-          {tabs.map((tab) => (
+          {tabs.map((tab, index) => (
             <NavLink
               key={tab.to}
+              ref={index === prevIndex ? prevTabRef : index === nextIndex ? nextTabRef : undefined}
               to={tab.to}
               end={tab.end}
               className={({ isActive }) =>

@@ -15,7 +15,7 @@ type FavoriteButtonProps = {
   variant?: "icon" | "ghost";
   className?: string;
   /**
-   * Bind Mod+⇧S to this button. Only for the one star that stands for the
+   * Bind Mod+⇧G to this button. Only for the one star that stands for the
    * page's own resource (a surface or project header) — never for the stars
    * on a list, where the chord could not say which row it meant.
    */

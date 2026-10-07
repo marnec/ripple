@@ -21,6 +21,7 @@ import { TaskCode } from "@/components/TaskCode";
 import { InlineTitleField } from "@/components/InlineTitleField";
 import { TagInlineStrip, TagPickerButton } from "@/components/TagPickerButton";
 import { cn } from "@/lib/utils";
+import { useShortcut } from "@/contexts/ShortcutsContext";
 import { TaskActivityTimeline } from "./TaskActivityTimeline";
 import { TaskDeleteDialog } from "./TaskDeleteDialog";
 import { TaskDescriptionEditor } from "./TaskDescriptionEditor";
@@ -173,22 +174,32 @@ export function TaskTitleInline({ className, fill }: { className?: string; fill?
  */
 export function TaskActionsMenu({ size = "icon-sm" }: { size?: "icon" | "icon-sm" }) {
   const detail = useLoadedTask();
-  if (!detail) return null;
-  const { task, taskId, workspaceId } = detail;
 
   const copyLink = () => {
-    const url = `${window.location.origin}/workspaces/${workspaceId}/projects/${task.projectId}/tasks/${taskId}`;
+    if (!detail) return;
+    const url = `${window.location.origin}/workspaces/${detail.workspaceId}/projects/${detail.task.projectId}/tasks/${detail.taskId}`;
     void navigator.clipboard.writeText(url).then(
       () => toast.success("Link copied"),
       () => toast.error("Could not copy the link"),
     );
   };
+  // The hint sits on the overflow button, where the menu item lives.
+  const copyLinkRef = useShortcut("copyLink", copyLink, { enabled: Boolean(detail) });
+
+  if (!detail) return null;
+  const { task, taskId } = detail;
 
   return (
     <ResponsiveDropdownMenu>
       <ResponsiveDropdownMenuTrigger
         render={
-          <Button variant="ghost" size={size} title="More actions" aria-label="More actions" />
+          <Button
+            ref={copyLinkRef}
+            variant="ghost"
+            size={size}
+            title="More actions"
+            aria-label="More actions"
+          />
         }
       >
         <MoreHorizontal className="h-4 w-4" />
@@ -404,6 +415,7 @@ export function TaskDescriptionSection({
   editorScrollRef,
   readOnly,
   toolbarTrailing,
+  onReveal,
 }: {
   heading: ReactNode;
   className?: string;
@@ -420,8 +432,21 @@ export function TaskDescriptionSection({
   readOnly?: boolean;
   /** Appended to the toolbar, after the presence avatars. */
   toolbarTrailing?: ReactNode;
+  /**
+   * Called before the edit shortcut focuses the editor — a shell that can
+   * collapse the description (the sheet's split) shows it here first.
+   */
+  onReveal?: () => void;
 }) {
   const detail = useLoadedTask();
+  const editRef = useShortcut(
+    "edit",
+    () => {
+      onReveal?.();
+      detail?.editor?.focus();
+    },
+    { enabled: Boolean(detail?.editor && detail.descriptionReady) && !readOnly && !detail?.unavailableOffline },
+  );
   if (!detail) return null;
 
   const editor = (
@@ -440,7 +465,7 @@ export function TaskDescriptionSection({
 
   return (
     <div className={className} style={style}>
-      <div className={cn("flex items-center justify-between", headerClassName)}>
+      <div ref={editRef} className={cn("flex items-center justify-between", headerClassName)}>
         {heading}
         <div className={toolbarClassName}>
           <TaskDescriptionToolbar

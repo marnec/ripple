@@ -4,11 +4,38 @@ import type * as React from "react"
 import { Dialog as SheetPrimitive } from "@base-ui/react/dialog"
 
 import { cn } from "@/lib/utils"
+import { isKeyboardOwned } from "@/lib/shortcuts"
 import { Button } from "@ripple/ui/components/button"
 import { XIcon } from "lucide-react"
 
-function Sheet({ ...props }: SheetPrimitive.Root.Props) {
-  return <SheetPrimitive.Root data-slot="sheet" {...props} />
+// LOCAL PATCH: Escape inside a text field or editor leaves the field, not the
+// sheet. Base UI dismisses on a document-level keydown and ignores
+// `defaultPrevented`, so without this an Escape meant for the field — to drop
+// focus from a BlockNote description, or to close its `/` menu — threw away
+// the whole sheet. Now: an Escape something inside already handled is left
+// alone; one pressed in a field blurs it; the next one closes the sheet.
+function Sheet({ onOpenChange, ...props }: SheetPrimitive.Root.Props) {
+  return (
+    <SheetPrimitive.Root
+      data-slot="sheet"
+      onOpenChange={(open, details) => {
+        if (!open && details.reason === "escape-key") {
+          const target = details.event.target
+          if (details.event.defaultPrevented) {
+            details.cancel()
+            return
+          }
+          if (target instanceof HTMLElement && isKeyboardOwned(target)) {
+            details.cancel()
+            target.blur()
+            return
+          }
+        }
+        onOpenChange?.(open, details)
+      }}
+      {...props}
+    />
+  )
 }
 
 function SheetTrigger({ ...props }: SheetPrimitive.Trigger.Props) {

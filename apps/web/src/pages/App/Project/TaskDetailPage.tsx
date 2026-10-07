@@ -1,6 +1,7 @@
 import { RippleSpinner } from "@/components/RippleSpinner";
 import { Button } from "@ripple/ui/components/button";
 import { cn } from "@/lib/utils";
+import { useShortcut } from "@/contexts/ShortcutsContext";
 import { HeaderSlot, MobileHeaderTitle } from "@/contexts/HeaderSlotContext";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { LG_MEDIA_QUERY, useMediaQuery } from "@/hooks/use-media-query";
@@ -109,6 +110,29 @@ function PageShell({
   // Thumb shows while the description scrolls, as in the document editor.
   const descriptionScrollRef = useAutoHideScrollbar<HTMLDivElement>();
 
+  const ready = detail.loadState === "ready";
+  // The sheet's "expand" in reverse: back to the surface it was expanded from
+  // (or the project's tasks), this task open in its sheet.
+  const openInSheet = () =>
+    void navigate(
+      sheetReturnHref({
+        returnTo: (location.state as TaskPageLocationState | null)?.sheetReturnTo,
+        workspaceId,
+        projectId,
+        taskId,
+      }),
+    );
+  const sheetRef = useShortcut("expand", openInSheet, {
+    enabled: ready && !isMobile,
+    label: "Open in side sheet",
+  });
+  // The sheet's Mod+⇧V, where this page also shows one panel at a time.
+  useShortcut(
+    "toggleView",
+    () => setMobilePanel((p) => (p === "description" ? "activity" : "description")),
+    { enabled: ready && isMobile && Boolean(detail.currentUser), label: "Description / activity" },
+  );
+
   if (detail.loadState === "loading") {
     return (
       <div className="flex items-center justify-center h-full">
@@ -194,22 +218,11 @@ function PageShell({
             projectId={projectId}
             workspaceId={workspaceId}
           />
-          {/* The sheet's "expand" in reverse: back to the surface it was
-              expanded from (or the project's tasks), this task open in its
-              sheet. */}
           <Button
+            ref={sheetRef}
             variant="ghost"
             size="icon-sm"
-            onClick={() =>
-              void navigate(
-                sheetReturnHref({
-                  returnTo: (location.state as TaskPageLocationState | null)?.sheetReturnTo,
-                  workspaceId,
-                  projectId,
-                  taskId,
-                }),
-              )
-            }
+            onClick={openInSheet}
             title="Open in side sheet"
             aria-label="Open in side sheet"
           >

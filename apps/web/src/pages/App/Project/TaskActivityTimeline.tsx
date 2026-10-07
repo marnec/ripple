@@ -49,6 +49,7 @@ import { AttachFilesButton, DraftAttachmentList } from "./CommentAttachments";
 import { useCommentAttachments } from "./useCommentAttachments";
 import { GithubMark } from "@/components/GithubMark";
 import { GitlabMark } from "@/components/GitlabMark";
+import { useShortcut } from "@/contexts/ShortcutsContext";
 import { cn } from "@/lib/utils";
 import type { EditCommentEditorProps, WorkspaceMemberSummary } from "./comment-types";
 import { BODY_PORTAL_ELEMENTS } from "@/lib/blocknote/portal";
@@ -262,6 +263,17 @@ export function TaskActivityTimeline({ taskId, currentUserId, workspaceId, membe
     schema: taskCommentSchema,
   });
 
+  // Mod+I is the page's "New …": on a task, a new comment. A collapsed
+  // timeline (the sheet's split) is opened first so the caret is visible.
+  const composerRef = useShortcut(
+    "create",
+    () => {
+      if (collapsed) onToggle?.();
+      editor.focus();
+    },
+    { label: "Comment" },
+  );
+
   const getMemberItems = useMemberSuggestions({
     members: workspaceMembers,
     editor,
@@ -474,7 +486,10 @@ export function TaskActivityTimeline({ taskId, currentUserId, workspaceId, membe
             of its own above the box — a full row on a phone, for a choice
             between two values — so it is a toggle chip in the action row now,
             and the send button names what it will do. */}
-        <div className="task-comment-editor rounded-md border transition-colors focus-within:border-foreground/25">
+        <div
+          ref={composerRef}
+          className="task-comment-editor rounded-md border transition-colors focus-within:border-foreground/25"
+        >
           <div className="px-2 pt-2">
             <BlockNoteView
               editor={editor}

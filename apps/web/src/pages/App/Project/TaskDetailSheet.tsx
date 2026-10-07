@@ -8,6 +8,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
+import { useShortcut } from "@/contexts/ShortcutsContext";
 import { Maximize2, Minimize2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -141,6 +142,29 @@ function SheetShell({
 
   const { task, loadState } = detail;
 
+  // The page's "back to sheet" returns here, sheet open.
+  const expandToPage = () => {
+    const state: TaskPageLocationState = {
+      sheetReturnTo: location.pathname + location.search,
+    };
+    void navigate(`/workspaces/${workspaceId}/projects/${projectId}/tasks/${taskId}`, {
+      state,
+    });
+  };
+
+  // Bound here rather than beside each control so they register only once the
+  // sheet is up: registered later than the board's, they win its Mod+⇧V (and
+  // the timeline's comment wins its Mod+I) for as long as the sheet is open.
+  const ready = open && loadState === "ready";
+  const expandRef = useShortcut("expand", expandToPage, {
+    enabled: ready,
+    label: "Open full page",
+  });
+  const panelSwitchRef = useShortcut("toggleView", toggleDescription, {
+    enabled: ready && showActivity && Boolean(detail.currentUser),
+    label: "Description / activity",
+  });
+
   return (
     <>
       <Sheet open={open} onOpenChange={onOpenChange}>
@@ -187,17 +211,10 @@ function SheetShell({
                       workspaceId={workspaceId}
                     />
                     <Button
+                      ref={expandRef}
                       variant="ghost"
                       size="icon-sm"
-                      // The page's "back to sheet" returns here, sheet open.
-                      onClick={() => {
-                        const state: TaskPageLocationState = {
-                          sheetReturnTo: location.pathname + location.search,
-                        };
-                        void navigate(`/workspaces/${workspaceId}/projects/${projectId}/tasks/${taskId}`, {
-                          state,
-                        });
-                      }}
+                      onClick={expandToPage}
                       title="Expand to full page"
                     >
                       <Maximize2 className="h-4 w-4" />
@@ -243,8 +260,10 @@ function SheetShell({
                       flexBasis: 0,
                     }}
                     headerClassName="gap-2 shrink-0"
+                    onReveal={() => setPanelState((s) => (s === "activity" ? "shared" : s))}
                     heading={
                       <button
+                        ref={panelSwitchRef}
                         type="button"
                         onClick={toggleDescription}
                         title={

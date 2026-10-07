@@ -6,7 +6,10 @@
  */
 
 export interface ShortcutDef {
-  /** A single letter, lowercase. Pressed together with Mod. */
+  /**
+   * A single letter, lowercase, or an arrow key (`ArrowLeft`/`ArrowRight`, as
+   * `KeyboardEvent.key` names it). Pressed together with Mod.
+   */
   key: string;
   shift?: boolean;
   label: string;
@@ -34,8 +37,20 @@ export const SHORTCUTS = {
   create: { key: "i", label: "New", scope: "page" },
   /** ⇧K beside K: search everywhere, or search the list in front of you. */
   searchList: { key: "k", shift: true, label: "Search this list", scope: "page" },
-  toggleView: { key: "l", shift: true, label: "Switch view", scope: "page" },
-  favorite: { key: "s", shift: true, label: "Favorite", scope: "page" },
+  toggleView: { key: "v", shift: true, label: "Switch view", scope: "page" },
+  favorite: { key: "g", shift: true, label: "Favorite", scope: "page" },
+  /** Put the caret in the page's main text — a task's description. */
+  edit: { key: "e", label: "Edit description", scope: "page" },
+  /** ⇧E beside E: the same item in its other shell — sheet ↔ full page. */
+  expand: { key: "e", shift: true, label: "Expand", scope: "page" },
+  copyLink: { key: "u", label: "Copy link", scope: "page" },
+  /**
+   * Step through the page's tabs. Arrows, not letters: a direction reads as
+   * one, and outside a text field Mod+⇧←/→ does nothing in any browser. Not
+   * Mod+1…9, which is how people switch browser tabs.
+   */
+  prevTab: { key: "ArrowLeft", shift: true, label: "Previous tab", scope: "page" },
+  nextTab: { key: "ArrowRight", shift: true, label: "Next tab", scope: "page" },
 } as const satisfies Record<string, ShortcutDef>;
 
 export type ShortcutId = keyof typeof SHORTCUTS;
@@ -52,8 +67,18 @@ export const RESERVED_KEYS: ReadonlySet<string> = new Set([
   "f", "p", "r", "l", "s",
 ]);
 
-/** Shift unlocks a reserved letter only where the browser leaves it free. */
-export const RESERVED_WITH_SHIFT: ReadonlySet<string> = new Set(["n", "t", "w", "q", "z", "c", "i", "j"]);
+/**
+ * Shift unlocks a reserved letter only where the browser leaves it free — and
+ * where no common extension has claimed it. Extensions register their chords
+ * with the browser, so the page never sees the keydown: the shortcut simply
+ * does nothing for anyone who has the extension installed.
+ */
+export const RESERVED_WITH_SHIFT: ReadonlySet<string> = new Set([
+  "n", "t", "w", "q", "z", "c", "i", "j",
+  "s", // Zotero Connector: save to Zotero
+  "l", "u", "y", // Bitwarden: autofill login, autofill card, open vault
+  "x", // 1Password: fill
+]);
 
 export const isMacPlatform = (): boolean =>
   typeof navigator !== "undefined" && /Mac|iPhone|iPad|iPod/i.test(navigator.userAgent);
@@ -69,6 +94,8 @@ export const modKeyName = (isMac: boolean) => (isMac ? "Meta" : "Control");
 export function matchesShortcut(def: ShortcutDef, event: KeyboardEvent): boolean {
   if (!(event.metaKey || event.ctrlKey) || event.altKey) return false;
   if (event.shiftKey !== Boolean(def.shift)) return false;
+  // Named keys are the same on every layout.
+  if (def.key.length > 1) return event.key === def.key;
   const key = event.key.toLowerCase();
   if (/^[a-z]$/.test(key)) return key === def.key;
   return event.code === `Key${def.key.toUpperCase()}`;
@@ -92,4 +119,7 @@ export function isKeyboardOwned(element: Element | null): boolean {
 }
 
 /** The badge text shown while Mod is held — Mod itself is implied. */
-export const formatHint = (def: ShortcutDef) => `${def.shift ? "⇧" : ""}${def.key.toUpperCase()}`;
+const KEY_GLYPHS: Record<string, string> = { ArrowLeft: "←", ArrowRight: "→" };
+
+export const formatHint = (def: ShortcutDef) =>
+  `${def.shift ? "⇧" : ""}${KEY_GLYPHS[def.key] ?? def.key.toUpperCase()}`;

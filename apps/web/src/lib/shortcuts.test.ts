@@ -31,8 +31,8 @@ describe("shortcut catalog", () => {
     }
   });
 
-  it("uses single lowercase letters", () => {
-    for (const [, def] of defs) expect(def.key).toMatch(/^[a-z]$/);
+  it("uses single lowercase letters or left/right arrows", () => {
+    for (const [, def] of defs) expect(def.key).toMatch(/^([a-z]|ArrowLeft|ArrowRight)$/);
   });
 });
 
@@ -59,6 +59,20 @@ describe("matchesShortcut", () => {
     expect(matchesShortcut({ key: "a", label: "", scope: "page" }, press({ key: "a", code: "KeyQ", ctrlKey: true }))).toBe(true);
     // Russian layout: "л" is on the K position.
     expect(matchesShortcut(def, press({ key: "л", code: "KeyK", ctrlKey: true }))).toBe(true);
+  });
+});
+
+describe("arrow-key shortcuts", () => {
+  const def: ShortcutDef = { key: "ArrowRight", shift: true, label: "Next tab", scope: "page" };
+
+  it("matches the named key with Mod and Shift", () => {
+    expect(matchesShortcut(def, press({ key: "ArrowRight", ctrlKey: true, shiftKey: true }))).toBe(true);
+    expect(matchesShortcut(def, press({ key: "ArrowRight", ctrlKey: true }))).toBe(false);
+    expect(matchesShortcut(def, press({ key: "ArrowLeft", ctrlKey: true, shiftKey: true }))).toBe(false);
+  });
+
+  it("shows an arrow glyph in the hint", () => {
+    expect(formatHint(def)).toBe("⇧→");
   });
 });
 
