@@ -1,4 +1,11 @@
+import { PRIORITIES } from "@/lib/task-utils";
 import type { TaskFilters, TaskSort } from "./TaskToolbar";
+
+// PRIORITIES runs urgent → low; invert so a higher priority ranks higher and
+// "desc" (the toolbar's default direction) puts urgent first.
+const PRIORITY_RANK: Record<string, number> = Object.fromEntries(
+  PRIORITIES.map((p, i) => [p.value, PRIORITIES.length - i]),
+);
 
 type FilterableTask = {
   _id: string;
@@ -80,6 +87,9 @@ export function useFilteredTasks<T extends FilterableTask>(
           else cmp = aDate.localeCompare(bDate);
           break;
         }
+        case "priority":
+          cmp = PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority];
+          break;
       }
       return sort.direction === "asc" ? cmp : -cmp;
     });

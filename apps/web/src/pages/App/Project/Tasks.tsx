@@ -6,7 +6,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { useLongPress } from "@/hooks/use-long-press";
 import { useMutation } from "convex/react";
 import { useQuery } from "convex-helpers/react/cache";
-import { CheckSquare, ArrowRight } from "lucide-react";
+import { CheckSquare, ArrowRight, CircleDashed } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
@@ -20,6 +20,8 @@ import type { TaskFilters, TaskSort } from "./TaskToolbar";
 import { useFilteredTasks } from "./useTaskFilters";
 import { scopeCycleArg, type TaskScope } from "./taskScope";
 import { useTaskSelection } from "./useTaskSelection";
+import { groupTasksByAssignee, type TaskGroupBy } from "./groupTasks";
+import { UserAvatar } from "@/components/UserAvatar";
 
 type TasksProps = {
   projectId: Id<"projects">;
@@ -27,9 +29,10 @@ type TasksProps = {
   filters: TaskFilters;
   sort: TaskSort;
   scope: TaskScope;
+  groupBy?: TaskGroupBy | null;
 };
 
-export function Tasks({ projectId, workspaceId, filters, sort, scope }: TasksProps) {
+export function Tasks({ projectId, workspaceId, filters, sort, scope, groupBy }: TasksProps) {
   const [selectedTaskId, setSelectedTaskId] = useState<Id<"tasks"> | null>(
     null
   );
@@ -60,8 +63,11 @@ export function Tasks({ projectId, workspaceId, filters, sort, scope }: TasksPro
     setAllTasks(liveTasks);
   }
   const tasks = useFilteredTasks(allTasks, filters, sort);
+  const groups = groupBy === "assignee" && tasks ? groupTasksByAssignee(tasks) : null;
 
-  const selection = useTaskSelection(tasks);
+  // Selection ranges follow the rendered order, so shift-click spans what
+  // you see between the two rows — across group headers when grouped.
+  const selection = useTaskSelection(groups ? groups.flatMap((g) => g.tasks) : tasks);
 
   // Mobile has no hover or shift-click: a long-press selects the row and turns
   // selection mode on, after which a tap toggles (TaskRow's own click path).
@@ -105,6 +111,76 @@ export function Tasks({ projectId, workspaceId, filters, sort, scope }: TasksPro
       return statuses[(idx + 1) % statuses.length];
     };
 
+  type ListTask = NonNullable<typeof tasks>[number];
+  const renderTask = (task: ListTask) => {
+    const nextStatus = getNextStatus(task.statusId);
+    return (
+      <m.div
+        key={task._id}
+        {...(isMobile ? longPress(task._id) : {})}
+        // No text selection or iOS callout on the hold.
+        className={cn(isMobile && "select-none [-webkit-touch-callout:none]")}
+        layout="position"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+      >
+        <SwipeToReveal
+          // A swipe would fight the taps that toggle rows.
+          enabled={isMobile && !selection.active}
+          open={swipeOpenId === task._id}
+          onOpenChange={(open) => setSwipeOpenId(open ? task._id : null)}
+          onSwipeStart={closeAllSwipes}
+          action={
+            nextStatus ? (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  advanceStatus(task._id, task.statusId);
+                }}
+                className={cn(
+                  "flex flex-col items-center justify-center w-full h-full gap-0.5 text-white px-1",
+                  nextStatus.color,
+                )}
+              >
+                <ArrowRight className="h-4 w-4" />
+                <span className="text-[10px] font-medium leading-tight text-center truncate w-full">
+                  {nextStatus.name}
+                </span>
+              </button>
+            ) : null
+          }
+        >
+          <TaskRow
+            task={task}
+            statuses={statuses ?? undefined}
+            hideStatusMenu={isMobile}
+            // Flush only inside the swipe wrapper, which rounds the
+            // corners itself; with swipe off for selection the row
+            // keeps them.
+            flush={isMobile && !selection.active}
+            assignable
+            selected={selection.isSelected(task._id)}
+            selectionActive={selection.active}
+            touchSelection={isMobile}
+            onSelectedChange={(selected, shiftKey) => selection.toggle(task._id, selected, shiftKey)}
+            onStatusChange={(statusId) => {
+              void updateTask({ taskId: task._id, statusId: statusId as Id<"taskStatuses"> });
+            }}
+            onClick={() => {
+              if (isMobile) {
+                void navigate(`/workspaces/${workspaceId}/projects/${projectId}/tasks/${task._id}`);
+              } else {
+                setSelectedTaskId(task._id);
+              }
+            }}
+          />
+        </SwipeToReveal>
+      </m.div>
+    );
+  };
+
   if (allTasks === undefined || tasks === undefined) {
     return null;
   }
@@ -128,74 +204,35 @@ export function Tasks({ projectId, workspaceId, filters, sort, scope }: TasksPro
       ) : (
         <div ref={listRef} className="flex flex-col gap-1.5">
           <AnimatePresence initial={false}>
-            {tasks.map((task) => {
-              const nextStatus = getNextStatus(task.statusId);
-              return (
-                <m.div
-                  key={task._id}
-                  {...(isMobile ? longPress(task._id) : {})}
-                  // No text selection or iOS callout on the hold.
-                  className={cn(isMobile && "select-none [-webkit-touch-callout:none]")}
-                  layout="position"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
-                >
-                  <SwipeToReveal
-                    // A swipe would fight the taps that toggle rows.
-                    enabled={isMobile && !selection.active}
-                    open={swipeOpenId === task._id}
-                    onOpenChange={(open) => setSwipeOpenId(open ? task._id : null)}
-                    onSwipeStart={closeAllSwipes}
-                    action={
-                      nextStatus ? (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            advanceStatus(task._id, task.statusId);
-                          }}
-                          className={cn(
-                            "flex flex-col items-center justify-center w-full h-full gap-0.5 text-white px-1",
-                            nextStatus.color,
-                          )}
-                        >
-                          <ArrowRight className="h-4 w-4" />
-                          <span className="text-[10px] font-medium leading-tight text-center truncate w-full">
-                            {nextStatus.name}
-                          </span>
-                        </button>
-                      ) : null
-                    }
+            {groups
+              ? groups.flatMap((group) => [
+                  <m.div
+                    key={`group:${group.assigneeId ?? "unassigned"}`}
+                    layout="position"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+                    className="flex items-center gap-2 px-1 pt-3 pb-0.5 first:pt-0 text-xs font-medium text-muted-foreground"
                   >
-                    <TaskRow
-                      task={task}
-                      statuses={statuses ?? undefined}
-                      hideStatusMenu={isMobile}
-                      // Flush only inside the swipe wrapper, which rounds the
-                      // corners itself; with swipe off for selection the row
-                      // keeps them.
-                      flush={isMobile && !selection.active}
-                      assignable
-                      selected={selection.isSelected(task._id)}
-                      selectionActive={selection.active}
-                      touchSelection={isMobile}
-                      onSelectedChange={(selected, shiftKey) => selection.toggle(task._id, selected, shiftKey)}
-                      onStatusChange={(statusId) => {
-                        void updateTask({ taskId: task._id, statusId: statusId as Id<"taskStatuses"> });
-                      }}
-                      onClick={() => {
-                        if (isMobile) {
-                          void navigate(`/workspaces/${workspaceId}/projects/${projectId}/tasks/${task._id}`);
-                        } else {
-                          setSelectedTaskId(task._id);
-                        }
-                      }}
-                    />
-                  </SwipeToReveal>
-                </m.div>
-              );
-            })}
+                    {group.assignee ? (
+                      <UserAvatar
+                        name={group.assignee.name}
+                        image={group.assignee.image}
+                        className="size-5"
+                        fallbackClassName="text-[9px]"
+                      />
+                    ) : (
+                      <CircleDashed className="size-5" />
+                    )}
+                    <span className="truncate text-foreground">
+                      {group.assignee ? (group.assignee.name ?? "Unknown") : "Unassigned"}
+                    </span>
+                    <span className="tabular-nums">{group.tasks.length}</span>
+                  </m.div>,
+                  ...group.tasks.map(renderTask),
+                ])
+              : tasks.map(renderTask)}
           </AnimatePresence>
           {selection.active && (
             <TaskBulkActionBar

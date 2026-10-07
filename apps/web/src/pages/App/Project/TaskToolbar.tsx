@@ -26,14 +26,16 @@ import {
   Check,
   Filter,
   Tag as TagIcon,
+  UsersRound,
   X,
 } from "lucide-react";
 import { useState } from "react";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
+import type { TaskGroupBy } from "./groupTasks";
 
 export type { TaskPriority } from "@/lib/task-utils";
-export type SortField = "created" | "dueDate" | "startDate";
+export type SortField = "created" | "dueDate" | "startDate" | "priority";
 export type SortDirection = "asc" | "desc";
 
 // Binary view toggle. The legacy "all" mode mixed bounded (active) and
@@ -81,6 +83,9 @@ type TaskToolbarProps = {
    * silently under-report.
    */
   singleSelectTags?: boolean;
+  /** Shows the group-by toggle. Pass only where grouping applies. */
+  group?: TaskGroupBy | null;
+  onGroupChange?: (group: TaskGroupBy | null) => void;
 };
 
 const priorities = PRIORITIES.map((p) => ({
@@ -92,6 +97,7 @@ const sortOptions: { value: SortField; label: string }[] = [
   { value: "created", label: "Created" },
   { value: "dueDate", label: "Due date" },
   { value: "startDate", label: "Start date" },
+  { value: "priority", label: "Priority" },
 ];
 
 export function TaskToolbar({
@@ -104,6 +110,8 @@ export function TaskToolbar({
   sortBlocked,
   hideAssigneeFilter,
   singleSelectTags,
+  group,
+  onGroupChange,
 }: TaskToolbarProps) {
   const isMobile = useIsMobile();
   const [completionOpen, setCompletionOpen] = useState(false);
@@ -413,7 +421,8 @@ export function TaskToolbar({
       )}
       </div>
 
-      {/* Sort */}
+      {/* Sort + group: one row, also when the toolbar stacks on mobile */}
+      <div className="flex items-center gap-2">
       <div
         className={cn(
           "relative inline-flex items-center gap-1.5 rounded-md pr-1.5 transition-colors h-7",
@@ -482,6 +491,23 @@ export function TaskToolbar({
             </button>
           </>
         )}
+      </div>
+      {onGroupChange && (
+        <button
+          type="button"
+          aria-pressed={group === "assignee"}
+          onClick={() => onGroupChange(group === "assignee" ? null : "assignee")}
+          className={cn(
+            "inline-flex items-center gap-1.5 rounded-md border px-2.5 h-7 text-xs font-medium transition-colors cursor-pointer",
+            group === "assignee"
+              ? "border-primary/50 bg-primary/10 text-primary"
+              : "border-input bg-transparent text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+          )}
+        >
+          <UsersRound className="w-3.5 h-3.5" />
+          Group by assignee
+        </button>
+      )}
       </div>
     </div>
   );

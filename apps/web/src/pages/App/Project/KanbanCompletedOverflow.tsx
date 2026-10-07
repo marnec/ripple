@@ -1,6 +1,7 @@
 import { ArrowRight } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import type { Id } from "@convex/_generated/dataModel";
+import { taskViewSearch } from "./taskViewParams";
 
 type KanbanCompletedOverflowProps = {
   workspaceId: Id<"workspaces">;
@@ -27,9 +28,12 @@ export function KanbanCompletedOverflow({
     <button
       type="button"
       onClick={() =>
-        void navigate(`/workspaces/${workspaceId}/projects/${projectId}/tasks`, {
-          state: { initialCompletionFilter: "completed" },
-        })
+        void navigate(
+          `/workspaces/${workspaceId}/projects/${projectId}/tasks${taskViewSearch({
+            filters: { completionFilter: "completed" },
+            view: "list",
+          })}`,
+        )
       }
       className="group flex w-full items-center justify-between gap-2 rounded-md border border-dashed border-border/70 bg-transparent px-2.5 py-2 text-xs text-muted-foreground transition-colors hover:border-border hover:bg-accent/40 hover:text-foreground cursor-pointer"
     >

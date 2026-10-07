@@ -24,6 +24,7 @@ import { TaskRow } from "./TaskRow";
 import { TaskToolbar, type TaskFilters, type TaskSort } from "./TaskToolbar";
 import { useFilteredTasks } from "./useTaskFilters";
 import { MY_TASKS_CAP, useDualAssigneeTasks } from "./useDualAssigneeTasks";
+import { taskViewSearch } from "./taskViewParams";
 
 // Minimal label naming each dashboard section — present, not loud.
 const SECTION_HEADING = "mb-3 text-xs font-medium uppercase tracking-wide text-muted-foreground";
@@ -185,12 +186,14 @@ export function MyTasks() {
   // can — it paginates. Land there with the viewer already in the assignee
   // filter and the same completion axis.
   const openInProject = (projectId: Id<"projects">) => {
-    void navigate(`/workspaces/${workspaceId}/projects/${projectId}/tasks`, {
-      state: {
-        initialCompletionFilter: filters.completionFilter,
-        initialAssigneeIds: viewer ? [viewer._id] : [],
+    const search = taskViewSearch({
+      filters: {
+        completionFilter: filters.completionFilter,
+        assigneeIds: viewer ? [viewer._id] : [],
       },
+      view: "list",
     });
+    void navigate(`/workspaces/${workspaceId}/projects/${projectId}/tasks${search}`);
   };
 
   // Close swipe when tapping anywhere outside the task list

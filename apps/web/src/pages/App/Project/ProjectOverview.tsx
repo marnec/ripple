@@ -22,6 +22,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 import { formatDateRange } from "./cycleUtils";
+import { taskViewSearch } from "./taskViewParams";
 import {
   DAY_MS,
   attentionSignals,
@@ -732,7 +733,7 @@ function Workload({ tasks }: { tasks: OverviewTask[] }) {
               disabled={row.assigneeId === null}
               onClick={() =>
                 row.assigneeId &&
-                void navigate("tasks", { state: { initialAssigneeIds: [row.assigneeId] } })
+                void navigate(`tasks${taskViewSearch({ filters: { assigneeIds: [row.assigneeId] }, view: "list" })}`)
               }
               className="group flex w-full items-center gap-2.5 px-4 py-1.5 text-left transition-colors enabled:hover:bg-accent/50"
             >

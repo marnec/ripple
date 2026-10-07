@@ -17,13 +17,20 @@ import { useQuery } from "convex-helpers/react/cache";
 import { useMutation } from "convex/react";
 import { LayoutList, Kanban, Plus, RefreshCw } from "lucide-react";
 import { useRef, useState } from "react";
-import { Link, useLocation, useParams } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 import { KanbanBoard } from "./KanbanBoard";
 import { CreateTaskDialog } from "./CreateTaskDialog";
 import { Tasks } from "./Tasks";
-import { TaskToolbar, type TaskFilters, type TaskSort, type CompletionFilter } from "./TaskToolbar";
+import { TaskToolbar, type TaskFilters, type TaskSort } from "./TaskToolbar";
+import {
+  parseTaskViewParams,
+  serializeTaskViewParams,
+  type TaskView,
+  type TaskViewState,
+} from "./taskViewParams";
+import type { TaskGroupBy } from "./groupTasks";
 import { ImportTasksButton } from "./ImportTasksButton";
 import { scopeCreateCycle, scopeCycleArg, type TaskScope } from "./taskScope";
 import { SafeAreaSpacer } from "@/components/SafeAreaSpacer";
@@ -82,34 +89,32 @@ function ProjectTasksContent({
   const scope = useTaskScope(projectId, mode);
   const [listScrollRef, scrollbarWidth] = useScrollbarWidth<HTMLDivElement>();
   const isMobile = useIsMobile();
-  const location = useLocation();
-  const routeState = location.state as {
-    initialCompletionFilter?: "uncompleted" | "completed" | "all";
-    initialAssigneeIds?: string[];
-  } | null;
-  const rawInitial = routeState?.initialCompletionFilter;
-  // The legacy "all" mode no longer exists — coerce any stale link/state to
-  // "completed" since that's the more useful landing for someone clicking
-  // through from a completed-task affordance (e.g. the kanban overflow pill).
-  const initialCompletionFilter: CompletionFilter =
-    rawInitial === "completed" || rawInitial === "all" ? "completed" : "uncompleted";
-  // My Tasks' "all my tasks in <project>" link seeds the viewer here when its
-  // own capped view overflowed.
-  const initialAssigneeIds = routeState?.initialAssigneeIds ?? [];
-
-  // Affordances that navigate here with a preset filter (the kanban overflow
-  // pill, My Tasks' per-project link) want the list view — it's the surface
-  // built for scanning many, and the only paginated one.
-  const [view, setView] = useState<"list" | "board">(
-    isMobile || initialCompletionFilter !== "uncompleted" || initialAssigneeIds.length > 0
-      ? "list"
-      : "board",
-  );
+  // Filters, sort and view live in the URL (see `taskViewParams`), so they
+  // survive a refresh and a filtered view is a shareable link. Affordances
+  // that land here with a preset filter (the kanban overflow pill, My Tasks'
+  // per-project link, the overview's "Who's on what") build that URL with
+  // `taskViewSearch`. Updates replace the history entry: back leaves the
+  // page rather than stepping through every filter click.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const { filters, sort, view, group } = parseTaskViewParams(searchParams);
+  const updateViewState = (patch: Partial<TaskViewState>) =>
+    setSearchParams(
+      (prev) => serializeTaskViewParams({ ...parseTaskViewParams(prev), ...patch }),
+      { replace: true },
+    );
+  const setView = (next: TaskView) => updateViewState({ view: next });
+  const setFilters = (next: TaskFilters) => updateViewState({ filters: next });
+  const setSort = (next: TaskSort) => updateViewState({ sort: next });
+  const setGroup = (next: TaskGroupBy | null) => updateViewState({ group: next });
 
   // Force list view on mobile — kanban doesn't work on small screens. The
   // backlog is a list by nature: it is ranked and triaged, not worked through
   // status columns.
   const effectiveView = isMobile || mode === "backlog" ? "list" : view;
+  // Grouping is a list-of-active-tasks affordance: the board already has its
+  // columns, and the completed list is paginated — grouping a partial page
+  // would show sections that are wrong about their own size.
+  const canGroup = effectiveView === "list" && filters.completionFilter === "uncompleted";
   const [dialogOpen, setDialogOpen] = useState(false);
   const canSwitchView = !isMobile && mode === "cycles";
   const newTaskRef = useShortcut("create", () => setDialogOpen(true), { label: "New task" });
@@ -119,13 +124,6 @@ function ProjectTasksContent({
     { enabled: canSwitchView },
   );
 
-  const [filters, setFilters] = useState<TaskFilters>({
-    completionFilter: initialCompletionFilter,
-    assigneeIds: initialAssigneeIds,
-    priorities: [],
-    tags: [],
-  });
-  const [sort, setSort] = useState<TaskSort>(null);
   const [sortBlocked, setSortBlocked] = useState(false);
   const sortBlockedTimer = useRef<ReturnType<typeof setTimeout>>(null);
 
@@ -167,7 +165,7 @@ function ProjectTasksContent({
     // scrollbar sits at the window edge — the same shape as every other list
     // page (scroll container outside, padding inside).
     <div className="flex-1 flex flex-col min-h-0 pt-4">
-      <Tabs value={effectiveView} onValueChange={(v) => setView(v as "list" | "board")} className="flex-1 flex flex-col min-h-0">
+      <Tabs value={effectiveView} onValueChange={(v) => setView(v as TaskView)} className="flex-1 flex flex-col min-h-0">
         <div className="flex items-start justify-between mb-2 px-4">
           <div className="flex items-center gap-3">
             {canSwitchView && (
@@ -216,6 +214,8 @@ function ProjectTasksContent({
             onSortChange={setSort}
             members={members ?? []}
             sortBlocked={sortBlocked}
+            group={group}
+            onGroupChange={canGroup ? setGroup : undefined}
           />
         </div>
 
@@ -232,7 +232,14 @@ function ProjectTasksContent({
                 className="pl-4 pb-4"
                 style={{ paddingRight: `max(0px, calc(1rem - ${scrollbarWidth}px))` }}
               >
-                <Tasks projectId={projectId} workspaceId={workspaceId} filters={filters} sort={sort} scope={scope} />
+                <Tasks
+                  projectId={projectId}
+                  workspaceId={workspaceId}
+                  filters={filters}
+                  sort={sort}
+                  scope={scope}
+                  groupBy={canGroup ? group : null}
+                />
               </div>
               <SafeAreaSpacer />
             </TabsContent>
