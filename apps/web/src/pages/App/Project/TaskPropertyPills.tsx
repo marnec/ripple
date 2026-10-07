@@ -32,8 +32,15 @@ import { api } from "@convex/_generated/api";
 
 type Priority = "urgent" | "high" | "medium" | "low";
 
+/**
+ * The app's button shape (`rounded-md`, as `Button size="sm"`), borderless
+ * like the desktop property triggers (`PROPERTY_TRIGGER_CLASS`). Unlike those
+ * it keeps a soft fill at rest: a phone has no hover, and without the row
+ * labels and chevrons the desktop list leans on, a transparent "Medium"
+ * would read as text rather than as a control.
+ */
 const PILL_CLASS =
-  "inline-flex h-8 max-w-full items-center gap-1.5 rounded-full border px-3 text-sm outline-none transition-colors hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring data-popup-open:bg-muted/60";
+  "inline-flex h-8 max-w-full items-center gap-1.5 rounded-md bg-muted/40 px-2.5 text-sm outline-none transition-colors hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring data-popup-open:bg-muted/60";
 
 /**
  * The time row is quieter than the pills: the same borderless "+ Planned
@@ -98,7 +105,7 @@ export function TaskPropertyPills({
 }) {
   return (
     <div className="space-y-2">
-      <div className="flex flex-wrap items-center justify-between">
+      <div className="flex flex-wrap items-center gap-2">
         <div className="flex items-center gap-1.5">
           <ResponsiveDropdownMenu>
             {/* The avatar alone: whose task it is reads from the face, and
@@ -117,7 +124,7 @@ export function TaskPropertyPills({
                   fallbackClassName="text-xs"
                 />
               ) : (
-                <span className="flex h-8 w-8 items-center justify-center rounded-full border border-dashed text-muted-foreground">
+                <span className="flex h-8 w-8 items-center justify-center rounded-full border border-dotted border-muted-foreground/60 text-muted-foreground">
                   <UserRound className="h-4 w-4" />
                 </span>
               )}
