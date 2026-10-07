@@ -7,6 +7,7 @@ import {
   Calendar,
   CircleDot,
   Clock,
+  CornerDownRight,
   FileText,
   Folder,
   Gauge,
@@ -18,6 +19,7 @@ import {
   Minus,
   Pencil,
   PenTool,
+  Play,
   Plus,
   Send,
   Share2,
@@ -106,6 +108,8 @@ function getActionIcon(action: string) {
     case "updated": return <Pencil className={iconClass} />;
     case "task_added": return <Plus className={iconClass} />;
     case "task_removed": return <Minus className={iconClass} />;
+    case "became_current": return <Play className={iconClass} />;
+    case "carried_in": return <CornerDownRight className={iconClass} />;
     case "closed": return <Flag className={iconClass} />;
     case "reopened": return <RotateCcw className={iconClass} />;
     case "share_created":
@@ -269,6 +273,10 @@ function formatAction(entry: TimelineEntry): React.ReactNode {
       return <>{actor} added a task to {label} {name}</>;
     case "task_removed":
       return <>{actor} removed a task from {label} {name}</>;
+    case "became_current":
+      return <>{actor} made {label} {name} current</>;
+    case "carried_in":
+      return <>{actor} carried {newValue} into {label} {name}</>;
     case "closed":
       return newValue
         ? <>{actor} closed {label} {name} <span className="text-muted-foreground">— {newValue}</span></>

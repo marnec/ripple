@@ -19,10 +19,17 @@ type ResourceType =
   | "calendarEvents"
   | "shares";
 
+/**
+ * An actor that is not a signed-in user — a scheduled job or a trigger that
+ * fired outside an authenticated mutation. Same `system:` prefix the
+ * workspace timeline already resolves to a display name.
+ */
+export type SystemActor = `system:${string}`;
+
 export async function logActivity(
   ctx: MutationCtx,
   args: {
-    userId: Id<"users">;
+    userId: Id<"users"> | SystemActor;
     resourceType: ResourceType;
     resourceId: string;
     action: string;
@@ -40,6 +47,13 @@ export async function logActivity(
      * to change.
      */
     source?: "local" | "integration";
+    /**
+     * The tasks this entry is about, by id. Set on every entry that moves a
+     * task into or out of a cycle, so a cycle's membership over time can be
+     * rebuilt without matching on `oldValue`/`newValue`, which carry titles
+     * for display and change when a task is renamed.
+     */
+    taskIds?: Id<"tasks">[];
   },
 ) {
   // Failure isolation: audit logging must never abort a user-facing
@@ -59,6 +73,7 @@ export async function logActivity(
         oldValue: args.oldValue,
         newValue: args.newValue,
         source: args.source,
+        taskIds: args.taskIds,
       },
       scope: args.scope,
     });

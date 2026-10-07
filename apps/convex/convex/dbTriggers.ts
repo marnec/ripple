@@ -17,6 +17,8 @@ import {
 } from "./notificationSubscriptionSync";
 
 import { isDirectMessage, isPublicChannel } from "@ripple/shared/channel";
+import { getAuthUserId } from "@convex-dev/auth/server";
+import { logActivity } from "./auditLog";
 // ── Aggregate definitions ───────────────────────────────────────────
 // Each aggregate counts documents by workspaceId using O(log n) B-tree lookups.
 
@@ -285,6 +287,28 @@ triggers.register("projects", async (ctx, change) => {
     if (node) await ctx.db.patch(node._id, { name: change.newDoc.name });
   }
   // delete: node + edge cleanup handled by cascade rules
+});
+
+// ── Cycle start ─────────────────────────────────────────────────────
+// A cycle starts when it becomes its project's current one — that moment, not
+// the informational `startDate`, is the baseline cycle reports measure scope
+// change against. `currentCycleId` moves on create, close, reopen, delete and
+// `setCurrent`, so it is logged here rather than at each of them. Losing the
+// current cycle (closed with no successor) is not logged: the close is.
+triggers.register("projects", async (ctx, change) => {
+  if (change.operation === "delete") return;
+  const next = change.newDoc.currentCycleId;
+  const previous = change.operation === "update" ? change.oldDoc.currentCycleId : undefined;
+  if (!next || next === previous) return;
+  const cycle = await ctx.db.get(next);
+  if (!cycle) return;
+  const userId = await getAuthUserId(ctx);
+  await logActivity(ctx, {
+    userId: userId ?? "system:cycles",
+    resourceType: "cycles", resourceId: cycle._id,
+    action: "became_current",
+    resourceName: cycle.name, scope: cycle.workspaceId,
+  });
 });
 
 triggers.register("channels", async (ctx, change) => {

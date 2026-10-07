@@ -5,7 +5,7 @@ import { internal } from "./_generated/api";
 import { mutation } from "./functions";
 import { generateKeyBetween } from "fractional-indexing";
 import { getUserDisplayName } from "@ripple/shared/displayName";
-import { auditLog, logTaskActivity } from "./auditLog";
+import { auditLog, logActivity, logTaskActivity } from "./auditLog";
 import { cascadeDelete, logCascadeSummary } from "./cascadeDelete";
 
 import { priorityValidator, taskStatusValidator, userValidator, projectValidator } from "./validators";
@@ -285,9 +285,9 @@ export const create = mutation({
       await assertAssigneeInWorkspace(ctx, project.workspaceId, args.assigneeId);
     }
 
-    if (args.cycleId) {
-      await assertOpenCycleInProject(ctx, args.cycleId, args.projectId);
-    }
+    const cycle = args.cycleId
+      ? await assertOpenCycleInProject(ctx, args.cycleId, args.projectId)
+      : null;
 
     // Calculate position if not provided
     let position = args.position;
@@ -357,6 +357,15 @@ export const create = mutation({
 
     // Log task creation activity
     await logTaskActivity(ctx, { taskId, userId, workspaceId: project.workspaceId, type: "created", taskTitle: args.title });
+    // Created straight into a cycle: the same cycle-side entry a move writes,
+    // so the cycle's history doesn't miss tasks that never sat in the backlog.
+    if (cycle) {
+      await logActivity(ctx, {
+        userId, resourceType: "cycles", resourceId: cycle._id,
+        action: "task_added", newValue: args.title, taskIds: [taskId],
+        resourceName: cycle.name, scope: cycle.workspaceId,
+      });
+    }
 
     // Schedule notifications after database write
     const user = await ctx.db.get(userId);

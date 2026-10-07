@@ -314,7 +314,9 @@ export const close = mutation({
     }
 
     // One entry for the whole close rather than one per moved task: a close is
-    // a single decision, and per-task entries would bury it.
+    // a single decision, and per-task entries would bury it. The moved ids
+    // ride along in `taskIds`, so the carry-over is still traceable per task.
+    const movedIds = unfinished.map((task) => task._id);
     await logActivity(ctx, {
       userId, resourceType: "cycles", resourceId: cycleId,
       action: "closed",
@@ -322,7 +324,20 @@ export const close = mutation({
         ? undefined
         : `${unfinished.length} unfinished → ${destination?.name ?? "Backlog"}`,
       resourceName: cycle.name, scope: cycle.workspaceId,
+      taskIds: movedIds,
     });
+    // The receiving cycle's own record of the same move — without it, that
+    // cycle's history could only be rebuilt by scanning every other cycle's
+    // close entries for its id.
+    if (destination && unfinished.length > 0) {
+      await logActivity(ctx, {
+        userId, resourceType: "cycles", resourceId: destination._id,
+        action: "carried_in",
+        newValue: `${unfinished.length} from ${cycle.name}`,
+        resourceName: destination.name, scope: destination.workspaceId,
+        taskIds: movedIds,
+      });
+    }
 
     return { moved: unfinished.length, destinationCycleId: destination?._id ?? null };
   },
@@ -418,6 +433,8 @@ export const remove = mutation({
     await logActivity(ctx, {
       userId, resourceType: "cycles", resourceId: cycleId,
       action: "deleted", oldValue: cycle.name, resourceName: cycle.name, scope: cycle.workspaceId,
+      // Everything it held went back to the backlog.
+      taskIds: tasks.map((task) => task._id),
     });
 
     await ctx.db.delete(cycleId);

@@ -72,14 +72,14 @@ export async function moveTaskToCycle(
   if (source) {
     await logActivity(ctx, {
       userId, resourceType: "cycles", resourceId: source._id,
-      action: "task_removed", oldValue: task.title,
+      action: "task_removed", oldValue: task.title, taskIds: [task._id],
       resourceName: source.name, scope: source.workspaceId,
     });
   }
   if (target) {
     await logActivity(ctx, {
       userId, resourceType: "cycles", resourceId: target._id,
-      action: "task_added", newValue: task.title,
+      action: "task_added", newValue: task.title, taskIds: [task._id],
       resourceName: target.name, scope: target.workspaceId,
     });
   }
