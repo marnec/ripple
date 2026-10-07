@@ -164,10 +164,6 @@ function Pipeline({ cycles, backlogOpen }: { cycles: Cycle[]; backlogOpen: numbe
 
         {current ? (
           <PipelineStage to="tasks" highlight>
-            <span className="relative flex size-2">
-              <span className="absolute inline-flex size-full animate-ping rounded-full bg-emerald-500/60 animation-duration-[2.5s]" />
-              <span className="relative inline-flex size-2 rounded-full bg-emerald-500" />
-            </span>
             <span className="max-w-48 truncate text-sm font-semibold">{current.name}</span>
             <MiniProgress value={current.progressPercent} />
             <span className="text-xs tabular-nums text-muted-foreground">
@@ -218,7 +214,7 @@ function PipelineStage({
         to={to}
         className={cn(
           "flex h-10 items-center gap-2 rounded-lg border px-3 transition-colors hover:bg-accent",
-          highlight && "border-emerald-500/40 bg-emerald-500/5 hover:bg-emerald-500/10",
+          highlight && "border-foreground/20 bg-accent/60",
           muted && "border-dashed",
         )}
       >
@@ -240,7 +236,7 @@ function MiniProgress({ value }: { value: number }) {
   return (
     <span className="h-1 w-12 overflow-hidden rounded-full bg-muted">
       <span
-        className="block h-full rounded-full bg-emerald-500 transition-[width] duration-500"
+        className="block h-full rounded-full bg-foreground/70 transition-[width] duration-500"
         style={{ width: `${value}%` }}
       />
     </span>
@@ -270,7 +266,7 @@ function CurrentCycle({
     <section className="rounded-xl border bg-card">
       <header className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3 px-5 pt-5">
         <div className="min-w-0">
-          <p className="text-[11px] font-medium uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
+          <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
             Current cycle
           </p>
           <Link
@@ -345,10 +341,9 @@ function PaceLine({ burnup }: { burnup: Burnup }) {
   const f = burnup.forecast;
   if (burnup.total === 0) return null;
 
-  let tone: "good" | "warn" | "neutral" = "neutral";
+  let warn = false;
   let text: ReactNode;
   if (f.kind === "complete") {
-    tone = "good";
     text = "Everything here is done — ready to close.";
   } else if (f.kind === "unknown") {
     text = "Not enough finished yet to forecast a finish.";
@@ -359,7 +354,6 @@ function PaceLine({ burnup }: { burnup: Burnup }) {
       </>
     );
   } else if (f.slipDays <= 0) {
-    tone = "good";
     text = (
       <>
         On pace to finish <strong className="font-medium text-foreground">{fmtDay(f.finish)}</strong>
@@ -367,7 +361,7 @@ function PaceLine({ burnup }: { burnup: Burnup }) {
       </>
     );
   } else {
-    tone = "warn";
+    warn = true;
     text = (
       <>
         At this pace, done <strong className="font-medium text-foreground">{fmtDay(f.finish)}</strong> —{" "}
@@ -378,14 +372,7 @@ function PaceLine({ burnup }: { burnup: Burnup }) {
 
   return (
     <p className="flex items-center gap-2 text-sm text-muted-foreground">
-      <span
-        className={cn(
-          "size-1.5 shrink-0 rounded-full",
-          tone === "good" && "bg-emerald-500",
-          tone === "warn" && "bg-amber-500",
-          tone === "neutral" && "bg-muted-foreground/40",
-        )}
-      />
+      {warn && <span className="size-1.5 shrink-0 rounded-full bg-amber-500" />}
       <span>{text}</span>
     </p>
   );
@@ -427,11 +414,11 @@ function BurnupChart({ burnup }: { burnup: Burnup }) {
   return (
     <div className="relative">
       <div className="mb-1 flex justify-end gap-3 text-[11px] text-muted-foreground">
-        <LegendSwatch className="bg-emerald-500">Done</LegendSwatch>
+        <LegendSwatch className="bg-foreground/70">Done</LegendSwatch>
         {target !== null && <LegendSwatch dotted>Even pace</LegendSwatch>}
         {forecast.kind === "projected" && <LegendSwatch dashed>Forecast</LegendSwatch>}
       </div>
-      <div className="relative h-40">
+      <div className="relative h-40 text-foreground">
       <svg
         viewBox={`0 0 ${CHART_W} ${CHART_H}`}
         preserveAspectRatio="none"
@@ -448,8 +435,8 @@ function BurnupChart({ burnup }: { burnup: Burnup }) {
       >
         <defs>
           <linearGradient id="burnup-fill" x1="0" x2="0" y1="0" y2="1">
-            <stop offset="0%" stopColor="rgb(16 185 129)" stopOpacity="0.25" />
-            <stop offset="100%" stopColor="rgb(16 185 129)" stopOpacity="0" />
+            <stop offset="0%" stopColor="currentColor" stopOpacity="0.08" />
+            <stop offset="100%" stopColor="currentColor" stopOpacity="0" />
           </linearGradient>
           <clipPath id="burnup-clip">
             <rect x="0" y="0" width={CHART_W} height={CHART_H} />
@@ -509,7 +496,8 @@ function BurnupChart({ burnup }: { burnup: Burnup }) {
           <path
             d={line}
             fill="none"
-            stroke="rgb(16 185 129)"
+            stroke="currentColor"
+            strokeOpacity={0.7}
             strokeWidth={2}
             strokeLinejoin="round"
             vectorEffect="non-scaling-stroke"
@@ -521,8 +509,8 @@ function BurnupChart({ burnup }: { burnup: Burnup }) {
               y1={y(last.done)}
               x2={x(endOf(forecast.finish))}
               y2={y(total)}
-              stroke="rgb(16 185 129)"
-              strokeOpacity={0.6}
+              stroke="currentColor"
+              strokeOpacity={0.35}
               strokeWidth={1.5}
               strokeDasharray="5 4"
               vectorEffect="non-scaling-stroke"
@@ -545,7 +533,7 @@ function BurnupChart({ burnup }: { burnup: Burnup }) {
 
       {/* Today's point — HTML so it stays round under preserveAspectRatio="none". */}
       <span
-        className="pointer-events-none absolute size-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-card bg-emerald-500 shadow-[0_0_0_4px_rgb(16_185_129/0.15)]"
+        className="pointer-events-none absolute size-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-card bg-foreground"
         style={{ left: pct(x(endOf(today)), CHART_W), top: pct(y(last.done), CHART_H) }}
       />
 
@@ -594,7 +582,7 @@ function LegendSwatch({
           className={cn(
             "w-3 border-t-2",
             dotted && "border-dotted border-muted-foreground/50",
-            dashed && "border-dashed border-emerald-500/70",
+            dashed && "border-dashed border-foreground/35",
           )}
         />
       ) : (
@@ -613,17 +601,7 @@ function StatusMix({ tasks, statuses }: { tasks: OverviewTask[]; statuses: Statu
 
   return (
     <div>
-      <div className="flex h-2 gap-0.5 overflow-hidden rounded-full">
-        {mix.map(({ status, count }) => (
-          <span
-            key={status._id}
-            className={cn("h-full", status.color)}
-            style={{ flexGrow: count, flexBasis: 0 }}
-            title={`${status.name}: ${count}`}
-          />
-        ))}
-      </div>
-      <ul className="mt-3 flex flex-wrap gap-x-5 gap-y-1.5">
+      <ul className="flex flex-wrap gap-x-5 gap-y-1.5">
         {mix.map(({ status, count }) => (
           <li key={status._id} className="flex items-center gap-1.5 text-xs">
             <span className={cn("size-2 rounded-full", status.color)} />
@@ -643,9 +621,9 @@ function StatusMix({ tasks, statuses }: { tasks: OverviewTask[]; statuses: Statu
 
 const SIGNALS: Record<SignalKey, { label: string; icon: typeof Ban; tone: string }> = {
   overdue: { label: "Overdue", icon: CalendarClock, tone: "text-destructive" },
-  blocked: { label: "Blocked", icon: Ban, tone: "text-orange-500" },
-  unowned: { label: "Urgent, no owner", icon: UserRoundX, tone: "text-amber-500" },
-  stalled: { label: "Stalled in progress", icon: Hourglass, tone: "text-sky-500" },
+  blocked: { label: "Blocked", icon: Ban, tone: "text-muted-foreground" },
+  unowned: { label: "Urgent, no owner", icon: UserRoundX, tone: "text-muted-foreground" },
+  stalled: { label: "Stalled in progress", icon: Hourglass, tone: "text-muted-foreground" },
 };
 
 /** Tasks listed under an expanded signal before "and N more". */
@@ -667,7 +645,7 @@ function NeedsAttention({
       <h2 className="px-4 pt-4 pb-2 text-sm font-semibold">Needs attention</h2>
       {signals.length === 0 ? (
         <p className="flex items-center gap-2 px-4 pb-4 text-sm text-muted-foreground">
-          <CircleCheck className="size-4 text-emerald-500" />
+          <CircleCheck className="size-4" />
           Nothing is overdue, blocked or stuck.
         </p>
       ) : (
@@ -765,9 +743,9 @@ function Workload({ tasks }: { tasks: OverviewTask[] }) {
               )}
               <span className="w-24 shrink-0 truncate text-sm">{row.assigneeId ? row.name : "Unassigned"}</span>
               <span className="flex h-1.5 flex-1 overflow-hidden rounded-full bg-muted/60">
-                <span className="h-full bg-emerald-500" style={{ width: `${(row.done / widest) * 100}%` }} />
+                <span className="h-full bg-foreground/15" style={{ width: `${(row.done / widest) * 100}%` }} />
                 <span
-                  className="h-full bg-foreground/25"
+                  className="h-full bg-foreground/60"
                   style={{ width: `${(row.open / widest) * 100}%` }}
                 />
               </span>
