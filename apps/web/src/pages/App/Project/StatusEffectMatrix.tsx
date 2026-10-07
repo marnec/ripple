@@ -7,6 +7,7 @@ import {
   TooltipTrigger,
 } from "@ripple/ui/components/tooltip";
 import { cn } from "@/lib/utils";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { useMutation } from "convex/react";
 import { useQuery } from "convex-helpers/react/cache";
 import { ChevronDown, ChevronUp, Inbox, Plus } from "lucide-react";
@@ -15,6 +16,15 @@ import { toast } from "sonner";
 import { api } from "@convex/_generated/api";
 import type { Doc, Id } from "@convex/_generated/dataModel";
 import { AddColumnDialog } from "./AddColumnDialog";
+import { CloseReasonToggle } from "./CloseReasonToggle";
+import { useStatusEffectWriters } from "./useStatusEffectWriters";
+import { StatusEffectList } from "./StatusEffectList";
+import {
+  effectDisabledReason,
+  hasEffect,
+  STATUS_EFFECTS,
+  type StatusEffect,
+} from "./statusEffectRules";
 
 type Status = Doc<"taskStatuses">;
 
@@ -28,6 +38,9 @@ type Status = Doc<"taskStatuses">;
  *
  * Triage is optional in general, but is a prerequisite for connecting a
  * GitHub repo — hence the helper line + anchor id consumed by the GitHub card.
+ *
+ * Below the mobile breakpoint the grid doesn't fit, so it renders the
+ * transposed `StatusEffectList` instead; both share `statusEffectRules`.
  */
 export function StatusEffectMatrix({
   projectId,
@@ -37,6 +50,7 @@ export function StatusEffectMatrix({
   const statuses = useQuery(api.taskStatuses.listByProject, { projectId });
   const reorder = useMutation(api.taskStatuses.reorderColumns);
   const [addOpen, setAddOpen] = useState(false);
+  const isMobile = useIsMobile();
 
   if (statuses === undefined) {
     // Reserve space; no skeleton per UX guidelines.
@@ -59,6 +73,27 @@ export function StatusEffectMatrix({
     );
   };
 
+  const addDialog = (
+    <AddColumnDialog
+      projectId={projectId}
+      open={addOpen}
+      onOpenChange={setAddOpen}
+    />
+  );
+
+  if (isMobile) {
+    return (
+      <>
+        <StatusEffectList
+          statuses={ordered}
+          onMove={move}
+          onAddStatus={() => setAddOpen(true)}
+        />
+        {addDialog}
+      </>
+    );
+  }
+
   return (
     <>
     <section className="mb-8 scroll-mt-20" id="status-effects">
@@ -72,22 +107,9 @@ export function StatusEffectMatrix({
           <thead>
             <tr className="border-b bg-muted/30 text-left">
               <th className="py-2.5 pl-4 pr-2 font-medium">Status</th>
-              <EffectHeader
-                label="Default"
-                hint="New tasks land here. Exactly one status is the default."
-              />
-              <EffectHeader
-                label="Issue inbox"
-                hint="Imported GitHub issues land here. Required to connect a repo."
-              />
-              <EffectHeader
-                label="Starts work"
-                hint="Entering this status auto-sets the task's start date."
-              />
-              <EffectHeader
-                label="Completed"
-                hint="Tasks in this status count as done."
-              />
+              {STATUS_EFFECTS.map(({ effect, label, hint }) => (
+                <EffectHeader key={effect} label={label} hint={hint} />
+              ))}
             </tr>
           </thead>
           <tbody>
@@ -132,11 +154,7 @@ export function StatusEffectMatrix({
         </Button>
       </div>
 
-      <AddColumnDialog
-        projectId={projectId}
-        open={addOpen}
-        onOpenChange={setAddOpen}
-      />
+      {addDialog}
     </section>
 
     {completed.length > 0 && <GithubCloseReasonTable statuses={completed} />}
@@ -151,7 +169,7 @@ export function StatusEffectMatrix({
  * effect, not an effect you assign per se.
  */
 function GithubCloseReasonTable({ statuses }: { statuses: Status[] }) {
-  const update = useMutation(api.taskStatuses.update);
+  const { setCloseReason } = useStatusEffectWriters();
 
   return (
     <section className="mb-8">
@@ -186,17 +204,7 @@ function GithubCloseReasonTable({ statuses }: { statuses: Status[] }) {
                   <div className="flex justify-end">
                     <CloseReasonToggle
                       value={status.externalCloseReason ?? "completed"}
-                      onChange={(reason) =>
-                        void update({
-                          statusId: status._id,
-                          externalCloseReason: reason,
-                        }).catch((err: unknown) =>
-                          toast.error("Couldn't update close reason", {
-                            description:
-                              err instanceof Error ? err.message : "Please try again",
-                          }),
-                        )
-                      }
+                      onChange={(reason) => setCloseReason(status, reason)}
                     />
                   </div>
                 </td>
@@ -257,18 +265,7 @@ function StatusRow({
   onMoveUp: () => void;
   onMoveDown: () => void;
 }) {
-  const setSingleton = useMutation(api.taskStatuses.setSingletonEffect);
-  const update = useMutation(api.taskStatuses.update);
-
-  const isTriage = status.isTriage === true;
-  const setsStartDate = status.setsStartDate === true;
-
-  const run = (p: Promise<unknown>) =>
-    void p.catch((err: unknown) =>
-      toast.error("Couldn't update status", {
-        description: err instanceof Error ? err.message : "Please try again",
-      }),
-    );
+  const { setEffect } = useStatusEffectWriters();
 
   return (
     <>
@@ -300,61 +297,47 @@ function StatusRow({
           </span>
         </td>
 
-        {/* Default — radio, exactly one, required */}
-        <RadioCell
-          selected={status.isDefault}
-          disabledReason={isTriage ? "The issue inbox can't be the default" : undefined}
-          onSelect={() =>
-            status.isDefault
-              ? undefined
-              : run(setSingleton({ statusId: status._id, effect: "default", value: true }))
-          }
-        />
-
-        {/* Issue inbox — radio, at most one, optional (click selected to clear) */}
-        <RadioCell
-          selected={isTriage}
-          disabledReason={
-            status.isDefault
-              ? "The default status can't be the inbox"
-              : status.isCompleted
-                ? "A completed status can't be the inbox"
-                : undefined
-          }
-          onSelect={() =>
-            run(
-              setSingleton({
-                statusId: status._id,
-                effect: "triage",
-                value: !isTriage,
-              }),
-            )
-          }
-        />
-
-        {/* Starts work — checkbox */}
-        <CheckCell
-          checked={setsStartDate}
-          disabledReason={
-            status.isCompleted ? "A completed status can't also start work" : undefined
-          }
-          onToggle={(v) => run(update({ statusId: status._id, setsStartDate: v }))}
-        />
-
-        {/* Completed — checkbox */}
-        <CheckCell
-          checked={status.isCompleted}
-          disabledReason={
-            isTriage
-              ? "The issue inbox can't be completed"
-              : setsStartDate
-                ? "A status can't both start work and complete it"
-                : undefined
-          }
-          onToggle={(v) => run(update({ statusId: status._id, isCompleted: v }))}
-        />
+        {STATUS_EFFECTS.map(({ effect, singleton }) => (
+          <EffectCell
+            key={effect}
+            status={status}
+            effect={effect}
+            singleton={singleton}
+            onChange={(value) => setEffect(status, effect, value)}
+          />
+        ))}
       </tr>
     </>
+  );
+}
+
+function EffectCell({
+  status,
+  effect,
+  singleton,
+  onChange,
+}: {
+  status: Status;
+  effect: StatusEffect;
+  singleton: boolean;
+  onChange: (value: boolean) => void;
+}) {
+  const selected = hasEffect(status, effect);
+  const disabledReason = effectDisabledReason(status, effect);
+  if (!singleton) {
+    return <CheckCell checked={selected} disabledReason={disabledReason} onToggle={onChange} />;
+  }
+  return (
+    <RadioCell
+      selected={selected}
+      disabledReason={disabledReason}
+      // Default is required (re-selecting is a no-op); the inbox is optional,
+      // so clicking the holder clears it.
+      onSelect={() => {
+        if (effect === "default" && selected) return;
+        onChange(!selected);
+      }}
+    />
   );
 }
 
@@ -427,39 +410,5 @@ function CellTooltip({ hint, children }: { hint: string; children: React.ReactNo
         <TooltipContent className="max-w-56 text-center">{hint}</TooltipContent>
       </Tooltip>
     </TooltipProvider>
-  );
-}
-
-function CloseReasonToggle({
-  value,
-  onChange,
-}: {
-  value: "completed" | "not_planned";
-  onChange: (value: "completed" | "not_planned") => void;
-}) {
-  return (
-    <span className="mx-auto flex w-fit overflow-hidden rounded-md border">
-      {(
-        [
-          ["completed", "Completed"],
-          ["not_planned", "Not planned"],
-        ] as const
-      ).map(([reason, label]) => (
-        <button
-          key={reason}
-          type="button"
-          onClick={() => value !== reason && onChange(reason)}
-          aria-pressed={value === reason}
-          className={cn(
-            "px-2 py-0.5 text-xs leading-5 transition-colors",
-            value === reason
-              ? "bg-primary text-primary-foreground"
-              : "text-muted-foreground hover:bg-accent hover:text-foreground",
-          )}
-        >
-          {label}
-        </button>
-      ))}
-    </span>
   );
 }
