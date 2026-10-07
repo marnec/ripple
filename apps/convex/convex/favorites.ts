@@ -142,6 +142,47 @@ export const listPinned = query({
   },
 });
 
+/**
+ * The viewer's favorited projects, with what the dashboard needs to render a
+ * chip (name + colour). Separate from `listPinned` because that one is capped
+ * at five across every type, so favorited documents would push projects out
+ * of the dashboard strip.
+ */
+export const listFavoriteProjects = query({
+  args: { workspaceId: v.id("workspaces") },
+  returns: v.array(
+    v.object({
+      projectId: v.id("projects"),
+      name: v.string(),
+      color: v.string(),
+    }),
+  ),
+  handler: async (ctx, { workspaceId }) => {
+    const { userId } = await requireWorkspaceMember(ctx, workspaceId);
+
+    const favorites = await ctx.db
+      .query("favorites")
+      .withIndex("by_workspace_user_type", (q) =>
+        q.eq("workspaceId", workspaceId).eq("userId", userId).eq("resourceType", "project"),
+      )
+      .order("desc")
+      .take(20);
+
+    const projects = await Promise.all(
+      favorites.map(async (fav) => {
+        // Same workspace predicate as `resolveResource`: `resourceId` is a
+        // stored `v.string()`, so a row must not resolve a foreign project.
+        const id = ctx.db.normalizeId("projects", fav.resourceId);
+        const project = id === null ? null : await ctx.db.get(id);
+        if (!project || project.workspaceId !== workspaceId) return null;
+        return { projectId: project._id, name: project.name, color: project.color };
+      }),
+    );
+
+    return projects.filter((p): p is NonNullable<typeof p> => p !== null);
+  },
+});
+
 export const listByType = query({
   args: {
     workspaceId: v.id("workspaces"),

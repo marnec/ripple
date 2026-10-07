@@ -3,7 +3,7 @@ import { useState } from "react";
 const COOKIE_NAME = "sidebar:sections";
 const COOKIE_MAX_AGE = 60 * 60 * 24 * 7; // 7 days
 
-type SectionKey = "channels" | "dms" | "projects" | "documents" | "diagrams" | "spreadsheets" | "recents";
+type SectionKey = "channels" | "dms" | "projects" | "documents" | "diagrams" | "spreadsheets" | "favorites" | "recents";
 
 function readCookie(): Record<SectionKey, boolean> {
   const defaults: Record<SectionKey, boolean> = {
@@ -13,6 +13,7 @@ function readCookie(): Record<SectionKey, boolean> {
     documents: false,
     diagrams: false,
     spreadsheets: false,
+    favorites: true,
     recents: true,
   };
   try {

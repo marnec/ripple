@@ -8,6 +8,7 @@ import {
 } from "@ripple/ui/components/tabs";
 import { Button } from "@ripple/ui/components/button";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useScrollbarWidth } from "@/hooks/use-scrollbar-width";
 import { HeaderSlot } from "@/contexts/HeaderSlotContext";
 import SomethingWentWrong from "@/pages/SomethingWentWrong";
 import type { QueryParams } from "@convex/types/routes";
@@ -78,6 +79,7 @@ function ProjectTasksContent({
   mode: "cycles" | "backlog";
 }) {
   const scope = useTaskScope(projectId, mode);
+  const [listScrollRef, scrollbarWidth] = useScrollbarWidth<HTMLDivElement>();
   const isMobile = useIsMobile();
   const location = useLocation();
   const routeState = location.state as {
@@ -152,9 +154,13 @@ function ProjectTasksContent({
   }
 
   return (
-    <div className="flex-1 flex flex-col min-h-0 p-4">
+    // Horizontal padding lives on each row of the page rather than on this
+    // wrapper, so the list's scroll container spans the full width and its
+    // scrollbar sits at the window edge — the same shape as every other list
+    // page (scroll container outside, padding inside).
+    <div className="flex-1 flex flex-col min-h-0 pt-4">
       <Tabs value={effectiveView} onValueChange={(v) => setView(v as "list" | "board")} className="flex-1 flex flex-col min-h-0">
-        <div className="flex items-start justify-between mb-2">
+        <div className="flex items-start justify-between mb-2 px-4">
           <div className="flex items-center gap-3">
             {!isMobile && mode === "cycles" && (
               <TabsList>
@@ -193,24 +199,33 @@ function ProjectTasksContent({
         )}
 
         {/* Shared toolbar — stable across views */}
-        <TaskToolbar
-          workspaceId={workspaceId}
-          filters={filters}
-          onFiltersChange={setFilters}
-          sort={sort}
-          onSortChange={setSort}
-          members={members ?? []}
-          sortBlocked={sortBlocked}
-        />
+        <div className="px-4">
+          <TaskToolbar
+            workspaceId={workspaceId}
+            filters={filters}
+            onFiltersChange={setFilters}
+            sort={sort}
+            onSortChange={setSort}
+            members={members ?? []}
+            sortBlocked={sortBlocked}
+          />
+        </div>
 
         {scope && (
           <>
-            <TabsContent value="board" className="mt-0 flex-1 flex flex-col min-h-0">
+            <TabsContent value="board" className="mt-0 flex-1 flex flex-col min-h-0 px-4 pb-4">
               <KanbanBoard projectId={projectId} workspaceId={workspaceId} filters={filters} sort={sort} scope={scope} onSortBlocked={handleSortBlocked} />
             </TabsContent>
 
-            <TabsContent value="list" className="mt-0 overflow-auto animate-fade-in">
-              <Tasks projectId={projectId} workspaceId={workspaceId} filters={filters} sort={sort} scope={scope} />
+            <TabsContent ref={listScrollRef} value="list" className="mt-0 overflow-auto animate-fade-in">
+              {/* Right padding gives back what the scrollbar gutter takes, so
+                  rows end flush with the toolbar above either way. */}
+              <div
+                className="pl-4 pb-4"
+                style={{ paddingRight: `max(0px, calc(1rem - ${scrollbarWidth}px))` }}
+              >
+                <Tasks projectId={projectId} workspaceId={workspaceId} filters={filters} sort={sort} scope={scope} />
+              </div>
               <SafeAreaSpacer />
             </TabsContent>
           </>

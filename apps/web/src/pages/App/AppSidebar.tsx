@@ -33,6 +33,7 @@ import { ProjectSelectorList } from "./Project/ProjectSelectorList";
 import { SpreadsheetSelectorList } from "./Spreadsheet/SpreadsheetSelectorList";
 import { NavUser } from "@/pages/App/UserMenu";
 import { NotificationDrawer } from "@/components/NotificationDrawer";
+import { FavoritesSidebarSection } from "./Favorites/FavoritesSidebarSection";
 import { RecentsSidebarSection } from "./Recents/RecentsSidebarSection";
 import { preloadMyCalendarTab, preloadMyTasksTab } from "./preload";
 
@@ -137,6 +138,7 @@ export function AppSidebar() {
 
   const toggleChannels = () => toggle("channels");
   const toggleDms = () => toggle("dms");
+  const toggleFavorites = () => toggle("favorites");
   const toggleRecents = () => toggle("recents");
 
   return (
@@ -312,10 +314,15 @@ export function AppSidebar() {
               <SidebarSeparator />
             </m.div>
 
-            {/* Recents */}
+            {/* Favorites + Recents */}
             <m.div layout="position" transition={{ duration: 0.2, ease: "easeOut" }}>
               <SidebarGroup className="py-0">
                 <SidebarMenu>
+                  <FavoritesSidebarSection
+                    workspaceId={workspaceId}
+                    isOpen={isOpen("favorites")}
+                    onToggle={toggleFavorites}
+                  />
                   <RecentsSidebarSection
                     workspaceId={workspaceId}
                     isOpen={isOpen("recents")}

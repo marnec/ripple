@@ -17,6 +17,10 @@ type T = ReturnType<typeof createTestContext>;
 
 beforeEach(() => {
   vi.useFakeTimers();
+  // Pinned before every fixture below. Left on the real clock, these tests
+  // started failing once September 2026 passed: a bounded series' guest link
+  // expires shortly after its last occurrence, so it was issued already dead.
+  vi.setSystemTime(Date.parse("2026-08-25T00:00:00Z"));
   resetDeliveredPushes();
 });
 afterEach(() => {

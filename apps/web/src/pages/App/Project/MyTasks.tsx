@@ -7,9 +7,11 @@ import { AnimatePresence, m } from "framer-motion";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 import { useMutation } from "convex/react";
-import { useQuery } from "convex-helpers/react/cache";;
+import { useQuery } from "convex-helpers/react/cache";
 import { CheckSquare, ChevronDown, ChevronRight, ArrowRight } from "lucide-react";
-import { useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
+import { Separator } from "@ripple/ui/components/separator";
+import { FavoriteProjects } from "../Dashboard/FavoriteProjects";
 import { HeaderSlot } from "@/contexts/HeaderSlotContext";
 import { useViewer } from "@/pages/App/UserContext";
 import { api } from "@convex/_generated/api";
@@ -22,6 +24,9 @@ import { TaskRow } from "./TaskRow";
 import { TaskToolbar, type TaskFilters, type TaskSort } from "./TaskToolbar";
 import { useFilteredTasks } from "./useTaskFilters";
 import { MY_TASKS_CAP, useDualAssigneeTasks } from "./useDualAssigneeTasks";
+
+// Minimal label naming each dashboard section — present, not loud.
+const SECTION_HEADING = "mb-3 text-xs font-medium uppercase tracking-wide text-muted-foreground";
 
 type MyTask = {
   _id: string;
@@ -163,6 +168,14 @@ export function MyTasks() {
   const navigate = useNavigate();
   const viewer = useViewer();
 
+  // Favorited projects, shown as a strip above the list: someone who runs
+  // projects rather than works tasks in them (a PM) otherwise lands on an
+  // empty dashboard with no way into the projects they care about.
+  const favoriteProjects = useQuery(
+    api.favorites.listFavoriteProjects,
+    workspaceId ? { workspaceId: workspaceId as Id<"workspaces"> } : "skip",
+  );
+
   const { tasks, truncated } = useDualAssigneeTasks(
     workspaceId ? (workspaceId as Id<"workspaces">) : undefined,
     filters,
@@ -244,6 +257,20 @@ export function MyTasks() {
 
   return (
     <div className="container mx-auto p-4 animate-fade-in">
+      {favoriteProjects && favoriteProjects.length > 0 && (
+        <>
+          <section aria-labelledby="favorite-projects-heading" className="animate-fade-in">
+            <h2 id="favorite-projects-heading" className={SECTION_HEADING}>
+              Favorite projects
+            </h2>
+            <FavoriteProjects workspaceId={workspaceId!} projects={favoriteProjects} />
+          </section>
+          <Separator className="my-6" />
+        </>
+      )}
+
+      <h2 className={SECTION_HEADING}>My tasks</h2>
+
       {/* Toolbar */}
       <div className="mb-4 flex items-start gap-2">
         <div className="flex-1 min-w-0">
@@ -280,6 +307,11 @@ export function MyTasks() {
           <p className="text-sm font-medium text-muted-foreground">
             {tasks.length === 0 ? "No tasks assigned to you" : "No tasks match your filters"}
           </p>
+          {tasks.length === 0 && favoriteProjects?.length === 0 && (
+            <p className="mt-1 text-xs text-muted-foreground">
+              Star a project to keep it one click away here.
+            </p>
+          )}
         </div>
       ) : (
         <div className="space-y-3" ref={listRef}>
@@ -300,22 +332,35 @@ export function MyTasks() {
                   onOpenChange={() => toggleGroup(group.projectId)}
                 >
                   <div className="border rounded-lg overflow-hidden">
-                    <CollapsibleTrigger nativeButton className="w-full">
-                      <div className="flex items-center gap-2.5 px-3 py-2.5 bg-muted/40 hover:bg-muted/70 transition-colors">
-                        {isOpen ? (
-                          <ChevronDown className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                        ) : (
-                          <ChevronRight className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                        )}
-                        <ProjectColorTag color={group.projectColor} />
-                        <span className="text-sm font-medium text-left flex-1 truncate">
-                          {group.projectName}
-                        </span>
-                        <span className="text-xs text-muted-foreground tabular-nums shrink-0">
-                          {group.tasks.length}
-                        </span>
-                      </div>
-                    </CollapsibleTrigger>
+                    {/* The trigger and the open-project link are siblings:
+                        a link nested in the trigger button is invalid HTML
+                        and would toggle the group on every click. */}
+                    <div className="flex items-center bg-muted/40">
+                      <CollapsibleTrigger nativeButton className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2.5 px-3 py-2.5 hover:bg-muted/70 transition-colors">
+                          {isOpen ? (
+                            <ChevronDown className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                          ) : (
+                            <ChevronRight className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                          )}
+                          <ProjectColorTag color={group.projectColor} />
+                          <span className="text-sm font-medium text-left flex-1 truncate">
+                            {group.projectName}
+                          </span>
+                          <span className="text-xs text-muted-foreground tabular-nums shrink-0">
+                            {group.tasks.length}
+                          </span>
+                        </div>
+                      </CollapsibleTrigger>
+                      <Link
+                        to={`/workspaces/${workspaceId}/projects/${group.projectId}/tasks`}
+                        title={`Open ${group.projectName}`}
+                        className="self-stretch flex items-center px-3 text-muted-foreground hover:bg-muted/70 hover:text-foreground transition-colors"
+                      >
+                        <ArrowRight className="w-3.5 h-3.5" />
+                        <span className="sr-only">Open {group.projectName}</span>
+                      </Link>
+                    </div>
 
                     <CollapsibleContent>
                       <div>

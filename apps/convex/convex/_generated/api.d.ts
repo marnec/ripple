@@ -1806,6 +1806,12 @@ export declare const api: {
         splitCursor?: string | null;
       }
     >;
+    listFavoriteProjects: FunctionReference<
+      "query",
+      "public",
+      { workspaceId: Id<"workspaces"> },
+      Array<{ color: string; name: string; projectId: Id<"projects"> }>
+    >;
     listPinned: FunctionReference<
       "query",
       "public",

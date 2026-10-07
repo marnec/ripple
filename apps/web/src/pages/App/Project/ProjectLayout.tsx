@@ -7,12 +7,12 @@ import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { MobileHeaderTitle } from "@/contexts/HeaderSlotContext";
 import { useQuery } from "convex-helpers/react/cache";
-import { CalendarDays, Inbox, LayoutDashboard, ListTodo, RefreshCw, Settings } from "lucide-react";
 import { useParams, NavLink, Outlet } from "react-router-dom";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 import { useRecordVisit } from "@/hooks/use-record-visit";
 import { ImportActiveBanner } from "./ImportActiveBanner";
+import { PROJECT_TABS as tabs } from "./project-tabs";
 
 export function ProjectLayout() {
   const { workspaceId, projectId } = useParams<QueryParams>();
@@ -28,15 +28,6 @@ export function ProjectLayout() {
     />
   );
 }
-
-const tabs = [
-  { label: "Overview", icon: LayoutDashboard, to: ".", end: true },
-  { label: "Tasks", icon: ListTodo, to: "tasks", end: false },
-  { label: "Backlog", icon: Inbox, to: "backlog", end: false },
-  { label: "Cycles", icon: RefreshCw, to: "cycles", end: false },
-  { label: "Schedule", icon: CalendarDays, to: "calendar", end: false },
-  { label: "Settings", icon: Settings, to: "settings", end: false },
-];
 
 function ProjectLayoutContent({
   workspaceId,
