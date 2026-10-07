@@ -144,7 +144,8 @@ function PageShell({
     <div className="space-y-5">
       <TaskPropertiesSection collapsible hideTags />
       <TaskGithubSection />
-      <TaskDependenciesSection collapsible />
+      {/* On a phone dependencies are a chip among the property pills. */}
+      {!isMobile && <TaskDependenciesSection collapsible />}
     </div>
   );
 

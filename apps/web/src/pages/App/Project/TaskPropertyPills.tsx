@@ -25,6 +25,7 @@ import {
 } from "@/lib/task-utils";
 import { cn } from "@/lib/utils";
 import { ExternalAssigneeAvatars, type ExternalAssignee } from "./ExternalAssignees";
+import { TaskDependenciesPill } from "./TaskDependenciesPill";
 import { BacklinksDrawer } from "@/components/BacklinksDrawer";
 import { TagPickerButton } from "@/components/TagPickerButton";
 import { useQuery } from "convex-helpers/react/cache";
@@ -58,7 +59,7 @@ const TIME_CHIP_CLASS =
  * Two rows, both always visible: who / how urgent / where it stands as
  * pills, followed by tag and reference counts as pills too (on a phone they
  * would otherwise crowd the header); then quieter chips (`TIME_CHIP_CLASS`) for
- * when and how big.
+ * when, how big, and what it depends on.
  * An unset chip reads "+ Label", so it is its own "add" control and there is
  * nothing to fold away.
  *
@@ -266,6 +267,7 @@ export function TaskPropertyPills({
             ))}
           </ResponsiveDropdownMenuContent>
         </ResponsiveDropdownMenu>
+        <TaskDependenciesPill taskId={task._id} workspaceId={task.workspaceId} className={TIME_CHIP_CLASS} />
       </div>
     </div>
   );

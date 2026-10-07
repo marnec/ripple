@@ -55,9 +55,10 @@ export function HeaderTitleSlot({ children }: { children: React.ReactNode }) {
  * styling. Renders nothing when the title slot isn't mounted (desktop) or
  * when no name is provided yet.
  *
- * With `onRename`, the title is the rename control: a tap opens
- * `RenameSheet`. A small pencil marks it, since a phone has no hover to
- * reveal one. This is how a phone renames a resource — the page body no
+ * With `onRename`, the title is the rename control: a tap anywhere from the
+ * start of the name to the pencil opens `RenameSheet`. The pencil sits at
+ * the far end, sized and spaced like the header's icon buttons, so it reads
+ * as one more control in that row — a phone has no hover to reveal it. This is how a phone renames a resource — the page body no
  * longer repeats the title in an editable field of its own.
  */
 export function MobileHeaderTitle({
@@ -79,14 +80,18 @@ export function MobileHeaderTitle({
       {accent}
       {onRename ? (
         <>
+          {/* `-mr-2` cancels the title area's right padding, so the pencil
+              sits one `gap-2` from the next control like its siblings. */}
           <button
             type="button"
             onClick={() => setRenaming(true)}
             aria-label={`Rename ${resourceLabel}: ${name}`}
-            className="ml-2 flex min-w-0 items-center gap-1.5 rounded-md text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="-mr-2 ml-2 flex min-w-0 flex-1 items-center gap-2 rounded-md text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
-            <span className="truncate text-base font-semibold">{name}</span>
-            <Pencil aria-hidden className="h-3 w-3 shrink-0 text-muted-foreground" />
+            <span className="min-w-0 flex-1 truncate text-base font-semibold">{name}</span>
+            <span aria-hidden className="flex size-8 shrink-0 items-center justify-center">
+              <Pencil className="size-4" />
+            </span>
           </button>
           <RenameSheet
             open={renaming}

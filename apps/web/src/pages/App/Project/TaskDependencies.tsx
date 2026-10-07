@@ -22,11 +22,11 @@ import {
 import { formatTaskId } from "@/lib/task-utils";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
-import { useMutation } from "convex/react";
 import { useQuery } from "convex-helpers/react/cache";;
 import { Ban, ChevronRight, Link2, Plus, X } from "lucide-react";
 import { useState } from "react";
 import { api } from "@convex/_generated/api";
+import { type DependencyType, useTaskDependencies } from "./useTaskDependencies";
 import type { Id } from "@convex/_generated/dataModel";
 
 type TaskDependenciesProps = {
@@ -48,37 +48,20 @@ type DependencyItem = {
 };
 
 export function TaskDependencies({ taskId, workspaceId, collapsible = false }: TaskDependenciesProps) {
-  const deps = useQuery(api.edges.listByTask, { taskId });
-  const createDep = useMutation(api.edges.createEdge);
-  const removeDep = useMutation(api.edges.removeEdge);
+  const { loaded, blocks, blockedBy, relatesTo, totalCount, existingTaskIds, add, remove } =
+    useTaskDependencies(taskId);
 
   const [addOpen, setAddOpen] = useState(false);
   const [open, setOpen] = useState(false);
 
-  const { blocks, blockedBy, relatesTo } = (deps ?? { blocks: [], blockedBy: [], relatesTo: [] });
-
-  const totalCount = blocks.length + blockedBy.length + relatesTo.length;
   const hasDeps = totalCount > 0;
   // Non-collapsible (full page) always shows its body; the sheet starts collapsed.
   const expanded = !collapsible || open;
 
-  const handleRemove = (edgeId: Id<"edges">) => {
-    void removeDep({ edgeId });
-  };
+  const handleRemove = remove;
 
-  const handleAdd = async (selectedTaskId: Id<"tasks">, uiType: "blocks" | "is_blocked_by" | "relates_to") => {
-    if (uiType === "is_blocked_by") {
-      // "this task is blocked by selected" → selectedTask blocks thisTask
-      // Storage: {taskId: selected, dependsOnTaskId: this, type: "blocks"}
-      await createDep({ taskId: selectedTaskId, dependsOnTaskId: taskId, type: "blocks" });
-    } else if (uiType === "blocks") {
-      // "this task blocks selected"
-      // Storage: {taskId: this, dependsOnTaskId: selected, type: "blocks"}
-      await createDep({ taskId, dependsOnTaskId: selectedTaskId, type: "blocks" });
-    } else {
-      // relates_to — direction doesn't matter semantically
-      await createDep({ taskId, dependsOnTaskId: selectedTaskId, type: "relates_to" });
-    }
+  const handleAdd = async (selectedTaskId: Id<"tasks">, uiType: DependencyType) => {
+    await add(selectedTaskId, uiType);
     setAddOpen(false);
   };
 
@@ -130,12 +113,7 @@ export function TaskDependencies({ taskId, workspaceId, collapsible = false }: T
             open={addOpen}
             onOpenChange={setAddOpen}
             workspaceId={workspaceId}
-            existingTaskIds={new Set([
-              taskId,
-              ...blocks.map((d) => d.task._id),
-              ...blockedBy.map((d) => d.task._id),
-              ...relatesTo.map((d) => d.task._id),
-            ])}
+            existingTaskIds={existingTaskIds}
             onAdd={handleAdd}
           />
         </div>
@@ -153,11 +131,11 @@ export function TaskDependencies({ taskId, workspaceId, collapsible = false }: T
           transition: "max-height 250ms cubic-bezier(0.16, 1, 0.3, 1)",
         }}
       >
-        {deps !== undefined && !hasDeps ? (
+        {loaded && !hasDeps ? (
           <p className="text-xs text-muted-foreground py-1 animate-fade-in">No dependencies</p>
         ) : (
         <ScrollArea className="h-28">
-          <div className={cn("space-y-3 pr-3", deps !== undefined && "animate-fade-in")}>
+          <div className={cn("space-y-3 pr-3", loaded && "animate-fade-in")}>
             {blockedBy.length > 0 && (
               <DependencyGroup
                 label="Blocked by"
@@ -192,7 +170,7 @@ export function TaskDependencies({ taskId, workspaceId, collapsible = false }: T
   );
 }
 
-function DependencyGroup({
+export function DependencyGroup({
   label,
   icon,
   items,
@@ -255,9 +233,9 @@ function AddDependencyPopover({
   onOpenChange: (open: boolean) => void;
   workspaceId: Id<"workspaces">;
   existingTaskIds: Set<string>;
-  onAdd: (selectedTaskId: Id<"tasks">, type: "blocks" | "is_blocked_by" | "relates_to") => Promise<void>;
+  onAdd: (selectedTaskId: Id<"tasks">, type: DependencyType) => Promise<void>;
 }) {
-  const [depType, setDepType] = useState<"blocks" | "is_blocked_by" | "relates_to">("blocks");
+  const [depType, setDepType] = useState<DependencyType>("blocks");
   // Server-side search over the workspace's tasks. This used to subscribe to
   // both completion halves of `listByWorkspace` — i.e. every task in the
   // workspace, enriched, just to client-filter it down to a popover list.

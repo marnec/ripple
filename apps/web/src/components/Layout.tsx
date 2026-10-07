@@ -133,7 +133,9 @@ export function Layout() {
               <div className="flex-1 min-w-0 flex items-center justify-start px-2">
                 <div
                   ref={headerTitleSlotCallbackRef}
-                  className="peer flex items-center gap-2 min-w-0 empty:hidden"
+                  // flex-1: a renamable title fills the gap up to the
+                  // controls, so all of it is one tap target.
+                  className="peer flex flex-1 items-center gap-2 min-w-0 empty:hidden"
                 />
                 <div className="hidden peer-empty:flex items-center gap-2 min-w-0">
                   <DynamicBreadcrumb />
