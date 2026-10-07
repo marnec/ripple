@@ -104,6 +104,8 @@ const frameEmbedValidator = v.object({
 
 const enrichedDepTaskValidator = v.object({
   _id: v.id("tasks"),
+  // For the link to the dependency (task routes are under their project).
+  projectId: v.id("projects"),
   title: v.string(),
   number: v.optional(v.number()),
   projectKey: v.optional(v.string()),
@@ -661,6 +663,7 @@ export const listByTask = query({
       if (!t || t.workspaceId !== task.workspaceId) return null;
       return {
         _id: t._id,
+        projectId: t.projectId,
         title: t.title,
         number: t.number,
         projectKey: projectById.get(t.projectId)?.key,

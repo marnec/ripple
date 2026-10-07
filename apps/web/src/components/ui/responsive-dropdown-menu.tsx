@@ -147,6 +147,15 @@ function ResponsiveDropdownMenuSeparator({
   return <DropdownMenuSeparator className={className} {...props} />;
 }
 
+/**
+ * Whether a label sits inside a `ResponsiveDropdownMenuGroup`. Base UI's
+ * `Menu.GroupLabel` throws outside a `Menu.Group` — but only on desktop, since
+ * the drawer renders plain elements — so a label written straight into the
+ * content worked on a phone and crashed the menu on desktop. The label reads
+ * this to fall back to a plain heading instead.
+ */
+const InMenuGroupContext = React.createContext(false);
+
 function ResponsiveDropdownMenuGroup({
   children,
   ...props
@@ -155,7 +164,11 @@ function ResponsiveDropdownMenuGroup({
   if (isMobile) {
     return <div>{children}</div>;
   }
-  return <DropdownMenuGroup {...props}>{children}</DropdownMenuGroup>;
+  return (
+    <DropdownMenuGroup {...props}>
+      <InMenuGroupContext.Provider value={true}>{children}</InMenuGroupContext.Provider>
+    </DropdownMenuGroup>
+  );
 }
 
 function ResponsiveDropdownMenuLabel({
@@ -164,9 +177,22 @@ function ResponsiveDropdownMenuLabel({
   ...props
 }: React.ComponentProps<typeof DropdownMenuLabel>) {
   const { isMobile } = React.useContext(ResponsiveDropdownMenuContext);
+  const inGroup = React.useContext(InMenuGroupContext);
   if (isMobile) {
     return (
       <div className={cn("px-3 py-2 text-xs text-muted-foreground", className)}>
+        {children}
+      </div>
+    );
+  }
+  if (!inGroup) {
+    // A heading for the whole menu, not a group's label: same look as
+    // `DropdownMenuLabel`, none of the group wiring it would throw without.
+    return (
+      <div
+        data-slot="dropdown-menu-label"
+        className={cn("px-1.5 py-1 text-xs font-medium text-muted-foreground", className)}
+      >
         {children}
       </div>
     );

@@ -8,9 +8,9 @@ import { useAutoHideScrollbar } from "@/hooks/use-autohide-scrollbar";
 import { ResourceDeleted } from "@/pages/ResourceDeleted";
 import SomethingWentWrong from "@/pages/SomethingWentWrong";
 import type { QueryParams } from "@convex/types/routes";
-import { Eye, FileText, MessageSquare, Pencil } from "lucide-react";
+import { Eye, FileText, MessageSquare, Minimize2, Pencil } from "lucide-react";
 import { type ReactNode, useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { useDefaultLayout } from "react-resizable-panels";
 import {
   ResizableHandle,
@@ -22,7 +22,6 @@ import {
   TaskActionsMenu,
   TaskActivitySection,
   TaskDeleteDialogSection,
-  TaskDependenciesSection,
   TaskDescriptionSection,
   TaskDetailProvider,
   TaskGithubSection,
@@ -35,6 +34,7 @@ import {
 import { useTaskDetailContext } from "./taskDetailContext";
 import { TaskContext } from "./TaskContext";
 import { TaskGithubActions } from "./TaskGithubActions";
+import { sheetReturnHref, type TaskPageLocationState } from "./taskSheetParam";
 import { SafeAreaSpacer } from "@/components/SafeAreaSpacer";
 
 export function TaskDetailPage() {
@@ -97,6 +97,7 @@ function PageShell({
 }) {
   const detail = useTaskDetailContext();
   const navigate = useNavigate();
+  const location = useLocation();
   const isMobile = useIsMobile();
   const isWide = useMediaQuery(LG_MEDIA_QUERY);
   // A phone shows the description or the activity, never both stacked: the
@@ -124,31 +125,37 @@ function PageShell({
     <h3 className="text-sm font-semibold text-muted-foreground">Description</h3>
   );
   // `bounded` (wide layout, where the panel is the page's height): the box
-  // grows with its content from the same minimum as below lg until it reaches
-  // the bottom of the panel, then scrolls inside itself — `min-h-0` lets the
-  // section shrink to the space left under the title, while the box's own
-  // min-height stops it shrinking past the minimum. Unbounded, it flows in
-  // the single scrolling column.
+  // takes every pixel left under the context section and scrolls inside
+  // itself — `contain: size` keeps BlockNote's intrinsic height out of the
+  // column's min-content, so flex alone sizes it (as on a phone). Unbounded,
+  // it flows in the single scrolling column.
   const description = (bounded: boolean) => (
     <TaskDescriptionSection
       className={cn(
         "space-y-2 animate-fade-in",
-        bounded && "flex min-h-0 flex-col",
+        bounded && "flex min-h-75 flex-1 flex-col",
       )}
       headerClassName={bounded ? "shrink-0" : undefined}
       heading={descriptionHeading}
-      editorClassName={cn("min-h-50 md:min-h-75", bounded && "scrollbar-autohide")}
+      editorWrapper={
+        bounded
+          ? (editor) => (
+              <div className="min-h-0 flex-1 overflow-hidden" style={{ contain: "size" }}>
+                {editor}
+              </div>
+            )
+          : undefined
+      }
+      editorClassName={bounded ? "h-full overflow-y-auto scrollbar-autohide" : "min-h-50 md:min-h-75"}
       editorScrollRef={bounded ? descriptionScrollRef : undefined}
     />
   );
-  // Folded to the essentials in both layouts: below lg so the description
-  // stays above the fold, from lg so the activity under it keeps its height.
+  // Status, priority and assignee rows, then one line of time and dependency
+  // chips — nothing folded. On a phone the whole block is pills.
   const details = (
     <div className="space-y-5">
-      <TaskPropertiesSection collapsible hideTags />
+      <TaskPropertiesSection layout="page" />
       <TaskGithubSection />
-      {/* On a phone dependencies are a chip among the property pills. */}
-      {!isMobile && <TaskDependenciesSection collapsible />}
     </div>
   );
 
@@ -187,6 +194,27 @@ function PageShell({
             projectId={projectId}
             workspaceId={workspaceId}
           />
+          {/* The sheet's "expand" in reverse: back to the surface it was
+              expanded from (or the project's tasks), this task open in its
+              sheet. */}
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={() =>
+              void navigate(
+                sheetReturnHref({
+                  returnTo: (location.state as TaskPageLocationState | null)?.sheetReturnTo,
+                  workspaceId,
+                  projectId,
+                  taskId,
+                }),
+              )
+            }
+            title="Open in side sheet"
+            aria-label="Open in side sheet"
+          >
+            <Minimize2 className="h-4 w-4" />
+          </Button>
           <TaskActionsMenu />
         </div>
       )}
@@ -226,7 +254,9 @@ function PageShell({
         {isWide ? (
           <WideLayout
             main={
-              <div className="mx-auto flex h-full w-full max-w-3xl flex-col gap-8 px-8 py-6">
+              // `pb-4` is the side panel's: the description box and the
+              // comment composer end on one line.
+              <div className="mx-auto flex h-full w-full max-w-6xl flex-col gap-6 px-8 pt-6 pb-4">
                 {context}
                 {description(true)}
               </div>
@@ -307,9 +337,10 @@ function PageShell({
 }
 
 /**
- * The phone layout: the page is the viewport's height, never a scroller. Title
- * and details sit on top (capped, scrolling on their own past the cap, so an
- * expanded "More details" cannot squeeze the body out); below, one panel takes
+ * The phone layout: the page is the viewport's height, never a scroller. The
+ * property pills sit on top (capped, scrolling on their own past the cap, so
+ * a wrapped pill row or a long GitHub note cannot squeeze the body out);
+ * below, one panel takes
  * every pixel left. The description editor scrolls inside its box; the
  * activity scrolls its list and keeps the composer pinned to the bottom.
  *
@@ -380,8 +411,8 @@ function WideLayout({
           which needs a width in px, not a share of the window. */}
       <ResizablePanel id="side" defaultSize={384} minSize={320} maxSize="60%">
         <div className="flex h-full flex-col">
-          {/* Capped so an expanded "More details" can't squeeze the activity
-              out; past the cap the details scroll on their own. */}
+          {/* Capped so a long GitHub note or wrapped chip rows can't squeeze
+              the activity out; past the cap the details scroll on their own. */}
           <div className="max-h-[50%] shrink-0 overflow-y-auto border-b px-5 pt-5 pb-4">
             {details}
           </div>

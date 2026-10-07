@@ -22,6 +22,7 @@ import { scopeCycleArg, type TaskScope } from "./taskScope";
 import { useTaskSelection } from "./useTaskSelection";
 import { groupTasksByAssignee, type TaskGroupBy } from "./groupTasks";
 import { UserAvatar } from "@/components/UserAvatar";
+import { useTaskSheetParam } from "./taskSheetParam";
 
 type TasksProps = {
   projectId: Id<"projects">;
@@ -33,9 +34,8 @@ type TasksProps = {
 };
 
 export function Tasks({ projectId, workspaceId, filters, sort, scope, groupBy }: TasksProps) {
-  const [selectedTaskId, setSelectedTaskId] = useState<Id<"tasks"> | null>(
-    null
-  );
+  // In the URL (`?task=`), so the task page can send you back here.
+  const [selectedTaskId, setSelectedTaskId] = useTaskSheetParam();
   const sheetOpen = selectedTaskId !== null;
   const isMobile = useIsMobile();
   const navigate = useNavigate();

@@ -12,10 +12,12 @@ import { cn } from "@/lib/utils";
 import { DependencyGroup } from "./TaskDependencies";
 import { type DependencyType, useTaskDependencies } from "./useTaskDependencies";
 
-const RELATIONS: Array<{ value: DependencyType; label: string }> = [
-  { value: "is_blocked_by", label: "Blocked by" },
-  { value: "blocks", label: "Blocks" },
-  { value: "relates_to", label: "Related" },
+// Same icon and colour per relation as the groups the dependencies are
+// listed under, so the tab you pick is the group the task lands in.
+const RELATIONS: Array<{ value: DependencyType; label: string; icon: ReactNode }> = [
+  { value: "is_blocked_by", label: "Blocked by", icon: <Ban className="h-3 w-3 text-red-500" /> },
+  { value: "blocks", label: "Blocks", icon: <Ban className="h-3 w-3 text-orange-500" /> },
+  { value: "relates_to", label: "Related", icon: <Link2 className="h-3 w-3 text-muted-foreground" /> },
 ];
 
 /**
@@ -158,12 +160,13 @@ export function TaskDependenciesPill({
 }
 
 /**
- * The sheet's second view: pick the relation, then the task. Server-side
+ * Pick the relation, then the task: the dependencies chip's second view, and
+ * the Context section's "+ Dependency" popover on the full page. Server-side
  * search (`tasks.suggest`), completed tasks included so "blocked by the
  * finished migration" stays reachable — the same query the section's popover
  * uses.
  */
-function AddDependency({
+export function AddDependency({
   workspaceId,
   existingTaskIds,
   onBack,
@@ -200,12 +203,13 @@ function AddDependency({
               aria-checked={type === r.value}
               onClick={() => setType(r.value)}
               className={cn(
-                "flex-1 rounded px-2 py-1 text-xs transition-colors pointer-coarse:py-2",
+                "flex flex-1 items-center justify-center gap-1 rounded px-2 py-1 text-xs transition-colors pointer-coarse:py-2",
                 type === r.value
                   ? "bg-background font-medium text-foreground shadow-sm"
                   : "text-muted-foreground hover:text-foreground",
               )}
             >
+              {r.icon}
               {r.label}
             </button>
           ))}

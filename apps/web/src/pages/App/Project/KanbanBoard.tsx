@@ -37,6 +37,7 @@ const LazyTaskDetailSheet = React.lazy(() =>
 import type { TaskFilters, TaskSort } from "./TaskToolbar";
 import { scopeCycleArg, type TaskScope } from "./taskScope";
 import { useFilteredTasks } from "./useTaskFilters";
+import { useTaskSheetParam } from "./taskSheetParam";
 
 const ANIMATION_DURATION_MS = 80;
 const KANBAN_COMPLETED_CAP = 20;
@@ -71,7 +72,8 @@ const collisionDetection: CollisionDetection = (args) => {
 };
 
 export function KanbanBoard({ projectId, workspaceId, filters, sort, scope, onSortBlocked }: KanbanBoardProps) {
-  const [selectedTaskId, setSelectedTaskId] = useState<Id<"tasks"> | null>(null);
+  // In the URL (`?task=`), so the task page can send you back here.
+  const [selectedTaskId, setSelectedTaskId] = useTaskSheetParam();
   const [activeDragId, setActiveDragId] = useState<Id<"tasks"> | null>(null);
   const isMobile = useIsMobile();
   const navigate = useNavigate();

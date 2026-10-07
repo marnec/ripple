@@ -34,6 +34,7 @@ import type { TaskGroupBy } from "./groupTasks";
 import { ImportTasksButton } from "./ImportTasksButton";
 import { scopeCreateCycle, scopeCycleArg, type TaskScope } from "./taskScope";
 import { SafeAreaSpacer } from "@/components/SafeAreaSpacer";
+import { TASK_SHEET_PARAM } from "./taskSheetParam";
 
 /**
  * The project's task views. `cycles` (the Tasks tab) shows the current
@@ -99,7 +100,13 @@ function ProjectTasksContent({
   const { filters, sort, view, group } = parseTaskViewParams(searchParams);
   const updateViewState = (patch: Partial<TaskViewState>) =>
     setSearchParams(
-      (prev) => serializeTaskViewParams({ ...parseTaskViewParams(prev), ...patch }),
+      (prev) => {
+        const next = serializeTaskViewParams({ ...parseTaskViewParams(prev), ...patch });
+        // The open sheet is not view state, but must survive a filter click.
+        const sheetTask = prev.get(TASK_SHEET_PARAM);
+        if (sheetTask) next.set(TASK_SHEET_PARAM, sheetTask);
+        return next;
+      },
       { replace: true },
     );
   const setView = (next: TaskView) => updateViewState({ view: next });

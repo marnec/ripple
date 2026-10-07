@@ -10,22 +10,24 @@ import {
 import { cn } from "@/lib/utils";
 import { Maximize2, Minimize2 } from "lucide-react";
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import type { Id } from "@convex/_generated/dataModel";
 import {
   TaskActionsMenu,
   TaskActivitySection,
+  TaskAssigneePicker,
   TaskDeleteDialogSection,
-  TaskDependenciesSection,
   TaskDescriptionSection,
   TaskDetailProvider,
   TaskGithubSection,
   TaskIdentity,
   TaskPropertiesSection,
+  TaskTagsRow,
   TaskTitleField,
 } from "./TaskDetail";
 import { useTaskDetailContext } from "./taskDetailContext";
 import { TaskGithubActions } from "./TaskGithubActions";
+import type { TaskPageLocationState } from "./taskSheetParam";
 
 // CSS-driven layout swap: animating `flex-grow` lets the two panels redistribute
 // space without the scale/projection distortion framer-motion's `layout` causes
@@ -97,6 +99,7 @@ function SheetShell({
 }: TaskDetailSheetProps & { editorDeferred: boolean }) {
   const detail = useTaskDetailContext();
   const navigate = useNavigate();
+  const location = useLocation();
 
   // Description and Activity share the remaining vertical space in three states:
   // "shared" (default — both visible, splitting the space) and two solo states
@@ -186,11 +189,15 @@ function SheetShell({
                     <Button
                       variant="ghost"
                       size="icon-sm"
-                      onClick={() =>
-                        void navigate(
-                          `/workspaces/${workspaceId}/projects/${projectId}/tasks/${taskId}`
-                        )
-                      }
+                      // The page's "back to sheet" returns here, sheet open.
+                      onClick={() => {
+                        const state: TaskPageLocationState = {
+                          sheetReturnTo: location.pathname + location.search,
+                        };
+                        void navigate(`/workspaces/${workspaceId}/projects/${projectId}/tasks/${taskId}`, {
+                          state,
+                        });
+                      }}
                       title="Expand to full page"
                     >
                       <Maximize2 className="h-4 w-4" />
@@ -198,19 +205,26 @@ function SheetShell({
                     <TaskActionsMenu />
                   </div>
                 </div>
-                <TaskTitleField className="text-lg font-semibold leading-snug" />
+                {/* Who, then what: the assignee's avatar picker leads the
+                    title (top-aligned, so a wrapping title flows under
+                    nothing), and the tags sit right under it — the mobile
+                    page's moves, so the body starts at status. */}
+                <div className="flex items-start gap-2">
+                  <div className="pt-0.5">
+                    <TaskAssigneePicker />
+                  </div>
+                  <TaskTitleField className="mx-0 w-auto min-w-0 flex-1 text-lg font-semibold leading-snug" />
+                </div>
+                <TaskTagsRow />
               </SheetHeader>
 
               <div className="flex-1 min-h-0 flex flex-col gap-3 px-4 pb-4">
-                {/* Fixed top region — task properties + GitHub info never scroll. */}
+                {/* Fixed top region — status and priority, then one row of
+                    time and dependency chips, then GitHub info; never
+                    scrolls. */}
                 <div className="shrink-0 space-y-5">
-                  <TaskPropertiesSection />
+                  <TaskPropertiesSection layout="sheet" />
                   <TaskGithubSection />
-                </div>
-
-                {/* Dependencies — collapsed by default to free vertical space. */}
-                <div className="shrink-0">
-                  <TaskDependenciesSection collapsible />
                 </div>
 
                 {/* Description / Activity arena — three layout states:

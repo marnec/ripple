@@ -107,59 +107,7 @@ export function TaskPropertyPills({
   return (
     <div className="space-y-2">
       <div className="flex flex-wrap items-center gap-2">
-        <div className="flex items-center gap-1.5">
-          <ResponsiveDropdownMenu>
-            {/* The avatar alone: whose task it is reads from the face, and
-                the name is one tap away in the menu. */}
-            <ResponsiveDropdownMenuTrigger
-              className="rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              aria-label={task.assignee ? `Assignee: ${task.assignee.name ?? "member"}` : "Assign"}
-              title={task.assignee?.name ?? "Unassigned"}
-            >
-              {task.assignee ? (
-                <UserAvatar
-                  className="h-8 w-8"
-                  name={task.assignee.name}
-                  image={task.assignee.image}
-                  alt={task.assignee.name ?? "Assignee"}
-                  fallbackClassName="text-xs"
-                />
-              ) : (
-                <span className="flex h-8 w-8 items-center justify-center rounded-full border border-dotted border-muted-foreground/60 text-muted-foreground">
-                  <UserRound className="h-4 w-4" />
-                </span>
-              )}
-            </ResponsiveDropdownMenuTrigger>
-            <ResponsiveDropdownMenuContent align="start" className="w-56">
-              <ResponsiveDropdownMenuLabel>Assignee</ResponsiveDropdownMenuLabel>
-              <Option selected={!task.assigneeId} onSelect={() => onAssigneeChange("unassigned")}>
-                <span className="text-muted-foreground">Unassigned</span>
-              </Option>
-              {members.map((member) => (
-                <Option
-                  key={member.userId}
-                  selected={member.userId === task.assigneeId}
-                  onSelect={() => onAssigneeChange(member.userId)}
-                >
-                  <UserAvatar
-                    className="h-5 w-5"
-                    name={member.name}
-                    image={member.image}
-                    alt={member.name ?? "Member"}
-                    fallbackClassName="text-xs"
-                  />
-                  <span className="truncate">{member.name}</span>
-                </Option>
-              ))}
-            </ResponsiveDropdownMenuContent>
-          </ResponsiveDropdownMenu>
-          <ExternalAssigneeAvatars
-            assignees={task.externalAssignees}
-            side="right"
-            size="sm"
-            className="shrink-0"
-          />
-        </div>
+        <AssigneePicker task={task} members={members} onAssigneeChange={onAssigneeChange} />
 
         <ResponsiveDropdownMenu>
           <ResponsiveDropdownMenuTrigger
@@ -218,57 +166,174 @@ export function TaskPropertyPills({
         <ReferencesChip taskId={task._id} workspaceId={task.workspaceId} />
       </div>
 
-      <div className="-ml-2 flex flex-wrap items-center gap-1">
-        <DatePill
-          label="Due date"
-          icon={<CalendarIcon className="h-3 w-3" />}
-          value={task.dueDate}
-          onChange={onDueDateChange}
-          overdue={task.dueDate ? isOverdue(task.dueDate) : false}
-        />
-        <DatePill
-          label="Planned start"
-          icon={<Play className="h-3 w-3" />}
-          value={task.plannedStartDate}
-          onChange={onStartDateChange}
-        />
-        <ResponsiveDropdownMenu>
-          <ResponsiveDropdownMenuTrigger
-            className={cn(TIME_CHIP_CLASS, task.estimate != null && "text-foreground")}
-            aria-label={
-              task.estimate != null ? `Estimate: ${formatEstimate(task.estimate)}` : "Set estimate"
-            }
-          >
-            {task.estimate != null ? (
-              <>
-                <Clock className="h-3 w-3" />
-                {formatEstimate(task.estimate)}
-              </>
-            ) : (
-              <>
-                <Plus className="h-3 w-3" />
-                Estimate
-              </>
-            )}
-          </ResponsiveDropdownMenuTrigger>
-          <ResponsiveDropdownMenuContent align="start" className="w-40">
-            <ResponsiveDropdownMenuLabel>Estimate</ResponsiveDropdownMenuLabel>
-            <Option selected={task.estimate == null} onSelect={() => onEstimateChange(null)}>
-              <span className="text-muted-foreground">No estimate</span>
+      <TimeChips
+        task={task}
+        onDueDateChange={onDueDateChange}
+        onStartDateChange={onStartDateChange}
+        onEstimateChange={onEstimateChange}
+      />
+    </div>
+  );
+}
+
+/**
+ * The assignee as an avatar that opens the member list — a dotted circle
+ * when nobody is assigned — with any provider-side assignees beside it. The
+ * mobile pill row leads with it; the task sheet puts it left of the title.
+ */
+export function AssigneePicker({
+  task,
+  members,
+  onAssigneeChange,
+}: {
+  task: {
+    assigneeId?: Id<"users"> | null;
+    assignee: { name?: string | null; image?: string } | null;
+    externalAssignees?: ExternalAssignee[];
+  };
+  members: Array<{ userId: Id<"users">; name?: string | null; image?: string }>;
+  /** A member's id, or `"unassigned"`. */
+  onAssigneeChange: (value: string) => void;
+}) {
+  return (
+    <div className="flex items-center gap-1.5">
+      <ResponsiveDropdownMenu>
+        {/* The avatar alone: whose task it is reads from the face, and
+            the name is one tap away in the menu. */}
+        <ResponsiveDropdownMenuTrigger
+          className="rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          aria-label={task.assignee ? `Assignee: ${task.assignee.name ?? "member"}` : "Assign"}
+          title={task.assignee?.name ?? "Unassigned"}
+        >
+          {task.assignee ? (
+            <UserAvatar
+              className="h-8 w-8"
+              name={task.assignee.name}
+              image={task.assignee.image}
+              alt={task.assignee.name ?? "Assignee"}
+              fallbackClassName="text-xs"
+            />
+          ) : (
+            <span className="flex h-8 w-8 items-center justify-center rounded-full border border-dotted border-muted-foreground/60 text-muted-foreground">
+              <UserRound className="h-4 w-4" />
+            </span>
+          )}
+        </ResponsiveDropdownMenuTrigger>
+        <ResponsiveDropdownMenuContent align="start" className="w-56">
+          <ResponsiveDropdownMenuLabel>Assignee</ResponsiveDropdownMenuLabel>
+          <Option selected={!task.assigneeId} onSelect={() => onAssigneeChange("unassigned")}>
+            <span className="text-muted-foreground">Unassigned</span>
+          </Option>
+          {members.map((member) => (
+            <Option
+              key={member.userId}
+              selected={member.userId === task.assigneeId}
+              onSelect={() => onAssigneeChange(member.userId)}
+            >
+              <UserAvatar
+                className="h-5 w-5"
+                name={member.name}
+                image={member.image}
+                alt={member.name ?? "Member"}
+                fallbackClassName="text-xs"
+              />
+              <span className="truncate">{member.name}</span>
             </Option>
-            {ESTIMATE_PRESETS.map((hours) => (
-              <Option
-                key={hours}
-                selected={task.estimate === hours}
-                onSelect={() => onEstimateChange(hours)}
-              >
-                {formatEstimate(hours)}
-              </Option>
-            ))}
-          </ResponsiveDropdownMenuContent>
-        </ResponsiveDropdownMenu>
+          ))}
+        </ResponsiveDropdownMenuContent>
+      </ResponsiveDropdownMenu>
+      <ExternalAssigneeAvatars
+        assignees={task.externalAssignees}
+        side="right"
+        size="sm"
+        className="shrink-0"
+      />
+    </div>
+  );
+}
+
+/**
+ * When and how big, and what it depends on: due date, planned start,
+ * estimate and the dependencies chip, as quiet "+ Label" chips. Shared by the
+ * mobile pill rows and the task sheet, where it replaces the date and
+ * estimate rows and the collapsible dependencies section.
+ */
+export function TimeChips({
+  task,
+  onDueDateChange,
+  onStartDateChange,
+  onEstimateChange,
+  withDependencies = true,
+}: {
+  /**
+   * The dependencies chip. Off on the desktop page, where dependencies are a
+   * section of Context (they are links to other tasks, like the rest of it).
+   */
+  withDependencies?: boolean;
+  task: {
+    _id: Id<"tasks">;
+    workspaceId: Id<"workspaces">;
+    dueDate?: string;
+    plannedStartDate?: string;
+    estimate?: number;
+  };
+  onDueDateChange: (date: string | null) => void;
+  onStartDateChange: (date: string | null) => void;
+  onEstimateChange: (value: number | null) => void;
+}) {
+  return (
+    <div className="-ml-2 flex flex-wrap items-center gap-1">
+      <DatePill
+        label="Due date"
+        icon={<CalendarIcon className="h-3 w-3" />}
+        value={task.dueDate}
+        onChange={onDueDateChange}
+        overdue={task.dueDate ? isOverdue(task.dueDate) : false}
+      />
+      <DatePill
+        label="Planned start"
+        icon={<Play className="h-3 w-3" />}
+        value={task.plannedStartDate}
+        onChange={onStartDateChange}
+      />
+      <ResponsiveDropdownMenu>
+        <ResponsiveDropdownMenuTrigger
+          className={cn(TIME_CHIP_CLASS, task.estimate != null && "text-foreground")}
+          aria-label={
+            task.estimate != null ? `Estimate: ${formatEstimate(task.estimate)}` : "Set estimate"
+          }
+        >
+          {task.estimate != null ? (
+            <>
+              <Clock className="h-3 w-3" />
+              {formatEstimate(task.estimate)}
+            </>
+          ) : (
+            <>
+              <Plus className="h-3 w-3" />
+              Estimate
+            </>
+          )}
+        </ResponsiveDropdownMenuTrigger>
+        <ResponsiveDropdownMenuContent align="start" className="w-40">
+          <ResponsiveDropdownMenuLabel>Estimate</ResponsiveDropdownMenuLabel>
+          <Option selected={task.estimate == null} onSelect={() => onEstimateChange(null)}>
+            <span className="text-muted-foreground">No estimate</span>
+          </Option>
+          {ESTIMATE_PRESETS.map((hours) => (
+            <Option
+              key={hours}
+              selected={task.estimate === hours}
+              onSelect={() => onEstimateChange(hours)}
+            >
+              {formatEstimate(hours)}
+            </Option>
+          ))}
+        </ResponsiveDropdownMenuContent>
+      </ResponsiveDropdownMenu>
+      {withDependencies && (
         <TaskDependenciesPill taskId={task._id} workspaceId={task.workspaceId} className={TIME_CHIP_CLASS} />
-      </div>
+      )}
     </div>
   );
 }

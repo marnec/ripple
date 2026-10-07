@@ -35,6 +35,7 @@ import {
   type Signal,
   type SignalKey,
 } from "./projectOverviewModel";
+import { useTaskSheetParam } from "./taskSheetParam";
 
 const LazyTaskDetailSheet = React.lazy(() =>
   import("./TaskDetailSheet").then((m) => ({ default: m.TaskDetailSheet })),
@@ -76,7 +77,8 @@ function ProjectOverviewContent({
     api.cycles.listCycleTasks,
     current ? { cycleId: current._id } : "skip",
   );
-  const [selectedTaskId, setSelectedTaskId] = useState<Id<"tasks"> | null>(null);
+  // In the URL (`?task=`), so the task page can send you back here.
+  const [selectedTaskId, setSelectedTaskId] = useTaskSheetParam();
   // Pinned at mount: the overview is a snapshot of "today", and a clock that
   // ticks every render would re-derive the chart on each keystroke elsewhere.
   const [now] = useState(() => Date.now());

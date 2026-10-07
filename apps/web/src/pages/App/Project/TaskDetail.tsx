@@ -1,5 +1,5 @@
 import { type CSSProperties, type ReactNode } from "react";
-import { Inbox, Link2, MoreHorizontal, RefreshCw, Trash2 } from "lucide-react";
+import { Inbox, Link2, MoreHorizontal, RefreshCw, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { useQuery } from "convex-helpers/react/cache";
 import { useMutation } from "convex/react";
@@ -23,12 +23,13 @@ import { TagInlineStrip, TagPickerButton } from "@/components/TagPickerButton";
 import { cn } from "@/lib/utils";
 import { TaskActivityTimeline } from "./TaskActivityTimeline";
 import { TaskDeleteDialog } from "./TaskDeleteDialog";
-import { TaskDependencies } from "./TaskDependencies";
 import { TaskDescriptionEditor } from "./TaskDescriptionEditor";
 import { TaskDescriptionToolbar } from "./TaskDescriptionToolbar";
 import { TaskGithubExternalInfo } from "./TaskGithubExternalInfo";
 import { TaskIssueRef } from "./TaskIssueRef";
 import { TaskProperties } from "./TaskProperties";
+import { AssigneePicker } from "./TaskPropertyPills";
+import { Badge } from "@ripple/ui/components/badge";
 import { TaskSyncIndicator } from "./TaskSyncIndicator";
 import { useTaskDetail } from "./useTaskDetail";
 
@@ -268,25 +269,18 @@ function TaskCycleMenuItems({
  * through the module's single `patch`, so a failure in any of them surfaces
  * the same way.
  */
-export function TaskPropertiesSection({
-  collapsible,
-  hideTags,
-}: {
-  collapsible?: boolean;
-  hideTags?: boolean;
-}) {
+export function TaskPropertiesSection({ layout }: { layout: "page" | "sheet" }) {
   const detail = useLoadedTask();
   if (!detail || !detail.statuses || !detail.members) return null;
   const { task, patch } = detail;
 
   return (
     <TaskProperties
-      // Keyed so view-local state (which optional rows the user added, the
-      // details fold) resets when the sheet switches task.
+      // Keyed so an open picker (a date popover, the dependencies sheet)
+      // closes rather than carrying over when the sheet switches task.
       key={task._id}
       task={task}
-      collapsible={collapsible}
-      hideTags={hideTags}
+      layout={layout}
       statuses={detail.statuses}
       members={detail.members}
       onStatusChange={(statusId) => void patch({ statusId })}
@@ -297,13 +291,64 @@ export function TaskPropertiesSection({
         })
       }
       onSetTags={(tags) => void patch({ tags })}
-      onRemoveTag={(tag) =>
-        void patch({ tags: (task.tags ?? []).filter((t) => t !== tag) })
-      }
       onDueDateChange={(dueDate) => void patch({ dueDate })}
       onStartDateChange={(plannedStartDate) => void patch({ plannedStartDate })}
       onEstimateChange={(estimate) => void patch({ estimate })}
     />
+  );
+}
+
+/**
+ * The assignee as an avatar picker, for beside the title (the task sheet).
+ * Same control the mobile pill row leads with.
+ */
+export function TaskAssigneePicker() {
+  const detail = useLoadedTask();
+  if (!detail || !detail.members) return null;
+  const { task, patch } = detail;
+  return (
+    <AssigneePicker
+      task={task}
+      members={detail.members}
+      onAssigneeChange={(value) =>
+        void patch({ assigneeId: value === "unassigned" ? null : (value as Id<"users">) })
+      }
+    />
+  );
+}
+
+/**
+ * The tags under the title (the task sheet): each removable, then the
+ * picker's "Add tag" pill. Always rendered, so adding the first tag does not
+ * shift the content below.
+ */
+export function TaskTagsRow({ className }: { className?: string }) {
+  const detail = useLoadedTask();
+  if (!detail) return null;
+  const { task, patch } = detail;
+  const tags = task.tags ?? [];
+  return (
+    <div className={cn("flex flex-wrap items-center gap-1", className)}>
+      {tags.map((tag) => (
+        <Badge key={tag} variant="secondary" className="flex items-center gap-0.5 pr-0.5">
+          #{tag}
+          <button
+            type="button"
+            onClick={() => void patch({ tags: tags.filter((t) => t !== tag) })}
+            aria-label={`Remove tag ${tag}`}
+            className="rounded-sm p-0.5 hover:text-destructive pointer-coarse:p-1.5"
+          >
+            <X className="h-3 w-3" />
+          </button>
+        </Badge>
+      ))}
+      <TagPickerButton
+        workspaceId={task.workspaceId}
+        value={tags}
+        onChange={(next) => void patch({ tags: next })}
+        triggerVariant="pill"
+      />
+    </div>
   );
 }
 
@@ -338,19 +383,6 @@ export function TaskGithubSection() {
   const detail = useLoadedTask();
   if (!detail) return null;
   return <TaskGithubExternalInfo taskId={detail.taskId} />;
-}
-
-/** Blocked-by / blocks edges. */
-export function TaskDependenciesSection({ collapsible }: { collapsible?: boolean }) {
-  const detail = useLoadedTask();
-  if (!detail) return null;
-  return (
-    <TaskDependencies
-      taskId={detail.taskId}
-      workspaceId={detail.workspaceId}
-      collapsible={collapsible}
-    />
-  );
 }
 
 /**

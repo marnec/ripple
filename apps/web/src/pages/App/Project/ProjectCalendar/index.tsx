@@ -56,6 +56,7 @@ import {
 } from "./ScheduleHeader";
 import { GanttView, type GanttApi } from "./GanttView";
 import "../project-calendar.css";
+import { useTaskSheetParam } from "../taskSheetParam";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Visible month
@@ -154,7 +155,8 @@ function ProjectCalendarContent({
     );
 
   // Task detail sheet (opened from a calendar event / gantt bar click).
-  const [selectedTaskId, setSelectedTaskId] = useState<Id<"tasks"> | null>(null);
+  // In the URL (`?task=`), so the task page can send you back here.
+  const [selectedTaskId, setSelectedTaskId] = useTaskSheetParam();
 
   const [ganttViewMode, setGanttViewMode] = useState<GanttViewMode>("Week");
   // Gantt's unscheduled sidebar starts closed (like the calendar's).

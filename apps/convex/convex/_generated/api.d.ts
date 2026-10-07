@@ -1385,6 +1385,7 @@ export declare const api: {
             _id: Id<"tasks">;
             completed: boolean;
             number?: number;
+            projectId: Id<"projects">;
             projectKey?: string;
             title: string;
           };
@@ -1395,6 +1396,7 @@ export declare const api: {
             _id: Id<"tasks">;
             completed: boolean;
             number?: number;
+            projectId: Id<"projects">;
             projectKey?: string;
             title: string;
           };
@@ -1405,6 +1407,7 @@ export declare const api: {
             _id: Id<"tasks">;
             completed: boolean;
             number?: number;
+            projectId: Id<"projects">;
             projectKey?: string;
             title: string;
           };
