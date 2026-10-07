@@ -8,12 +8,22 @@ import { CircleDot, Flag, Inbox, RefreshCw, Tag as TagIcon, Trash2, User, X, Min
 import { Button } from "@ripple/ui/components/button";
 import { Input } from "@ripple/ui/components/input";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+  ResponsiveDropdownMenu,
+  ResponsiveDropdownMenuContent,
+  ResponsiveDropdownMenuItem,
+  ResponsiveDropdownMenuLabel,
+  ResponsiveDropdownMenuSeparator,
+  ResponsiveDropdownMenuTrigger,
+} from "@/components/ui/responsive-dropdown-menu";
+import {
+  ResponsiveDialog,
+  ResponsiveDialogBody,
+  ResponsiveDialogContent,
+  ResponsiveDialogHeader,
+  ResponsiveDialogTitle,
+  ResponsiveDialogTrigger,
+} from "@/components/ui/responsive-dialog";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { UserAvatar } from "@/components/UserAvatar";
 import { useWorkspaceMembers } from "@/contexts/WorkspaceMembersContext";
@@ -56,8 +66,15 @@ const OP_VERB: Record<BulkOp["kind"], string> = {
   moveToCycle: "Moving",
 };
 
-const triggerClass =
-  "inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-foreground hover:bg-accent cursor-pointer transition-colors";
+const buttonClass =
+  "inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-foreground hover:bg-accent cursor-pointer transition-colors max-sm:h-9";
+
+// On a phone the actions are icon-only (labels stay for screen readers) and
+// sized as real touch targets — 40px, past the ~36px a fingertip needs.
+const triggerClass = cn(
+  buttonClass,
+  "max-sm:size-10 max-sm:justify-center max-sm:p-0 max-sm:[&_svg]:size-4",
+);
 
 /**
  * Floating bar over the list view while tasks are selected. Every action hands
@@ -75,6 +92,7 @@ export function TaskBulkActionBar({
   onClear,
 }: TaskBulkActionBarProps) {
   const applyBulk = useMutation(api.taskBulk.apply);
+  const isMobile = useIsMobile();
   const statuses = useQuery(api.taskStatuses.listByProject, { projectId });
   const members = useWorkspaceMembers() ?? [];
   const workspaceTags = useQuery(api.tags.listWorkspaceTags, { workspaceId }) ?? [];
@@ -118,187 +136,227 @@ export function TaskBulkActionBar({
     run({ kind: "removeTag", tag });
   };
 
+  const onTagOpenChange = (open: boolean) => {
+    setTagOpen(open);
+    if (!open) setTagQuery("");
+  };
+
+  // Same picker in the desktop popover and the mobile bottom sheet.
+  const tagPanel = (
+    <>
+      <Input
+        autoFocus
+        value={tagQuery}
+        onChange={(e) => setTagQuery(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && query) addTag(query);
+        }}
+        placeholder="Add or remove a tag…"
+        // 16px on mobile keeps iOS from zooming into the field.
+        className="mb-1 h-8 text-xs max-md:h-10 max-md:text-base"
+      />
+      <div className="max-h-64 overflow-y-auto">
+        {canCreate && (
+          <TagOption icon={<Plus className="size-3.5" />} onClick={() => addTag(query)}>
+            Add “{query}”
+          </TagOption>
+        )}
+        {removable.length > 0 && (
+          <>
+            <p className="px-2 pt-1.5 pb-1 text-[11px] text-muted-foreground">Remove</p>
+            {removable.map((t) => (
+              <TagOption key={`rm-${t}`} icon={<Minus className="size-3.5" />} onClick={() => removeTag(t)}>
+                {t}
+              </TagOption>
+            ))}
+          </>
+        )}
+        {addable.length > 0 && (
+          <>
+            <p className="px-2 pt-1.5 pb-1 text-[11px] text-muted-foreground">Add</p>
+            {addable.map((t) => (
+              <TagOption key={`add-${t}`} icon={<Plus className="size-3.5" />} onClick={() => addTag(t)}>
+                {t}
+              </TagOption>
+            ))}
+          </>
+        )}
+      </div>
+    </>
+  );
+
   const anyGithubLinked = selected.some(
     (t) => (t.externalRefs?.length ?? 0) > 0 && !t.externalRefFrozen,
   );
 
   return (
     <div className="sticky bottom-4 z-10 mt-3 flex justify-center pointer-events-none animate-fade-in">
-      <div className="pointer-events-auto flex flex-wrap items-center gap-1 rounded-lg border bg-popover px-2 py-1.5 shadow-lg">
+      {/* Phone: two rows — count, select-all and clear on top, the actions
+          spread evenly across the full width below. */}
+      <div className="pointer-events-auto flex flex-wrap items-center gap-1 rounded-lg border bg-popover px-2 py-1.5 shadow-lg max-sm:w-full">
         <span className="px-1.5 text-xs font-medium tabular-nums">
           {count} selected
         </span>
         {count < visibleCount && (
-          <button type="button" className={cn(triggerClass, "text-muted-foreground")} onClick={onSelectAll}>
+          <button type="button" className={cn(buttonClass, "text-muted-foreground")} onClick={onSelectAll}>
             Select all {visibleCount}
           </button>
         )}
 
-        <span className="mx-1 h-4 w-px bg-border" aria-hidden="true" />
+        <span className="mx-1 h-4 w-px bg-border max-sm:hidden" aria-hidden="true" />
 
-        {tooMany ? (
-          <span className="px-1.5 text-xs text-muted-foreground">
-            Select at most {BULK_MAX_TASKS} tasks
-          </span>
-        ) : (
-          <>
-            <DropdownMenu>
-              <DropdownMenuTrigger render={<button type="button" className={triggerClass} />}>
-                <CircleDot className="size-3.5" />
-                Status
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="center" side="top">
-                {(statuses ?? [])
-                  .filter((s) => !s.isTriage)
-                  .map((s) => (
-                    <DropdownMenuItem
-                      key={s._id}
-                      onClick={() => run({ kind: "status", statusId: s._id })}
+        <div className="contents max-sm:order-last max-sm:flex max-sm:basis-full max-sm:items-center max-sm:justify-between max-sm:border-t max-sm:pt-1">
+          {tooMany ? (
+            <span className="px-1.5 text-xs text-muted-foreground">
+              Select at most {BULK_MAX_TASKS} tasks
+            </span>
+          ) : (
+            <>
+              <ResponsiveDropdownMenu>
+                <ResponsiveDropdownMenuTrigger render={<button type="button" className={triggerClass} />}>
+                  <CircleDot className="size-3.5" />
+                  <span className="max-sm:sr-only">Status</span>
+                </ResponsiveDropdownMenuTrigger>
+                <ResponsiveDropdownMenuContent align="center" side="top">
+                  <ResponsiveDropdownMenuLabel className="md:hidden">
+                    Set status · {count} {noun}
+                  </ResponsiveDropdownMenuLabel>
+                  {(statuses ?? [])
+                    .filter((s) => !s.isTriage)
+                    .map((s) => (
+                      <ResponsiveDropdownMenuItem
+                        key={s._id}
+                        onSelect={() => run({ kind: "status", statusId: s._id })}
+                        className="flex items-center gap-2"
+                      >
+                        <span className={cn("size-2 rounded-full", s.color)} />
+                        {s.name}
+                      </ResponsiveDropdownMenuItem>
+                    ))}
+                </ResponsiveDropdownMenuContent>
+              </ResponsiveDropdownMenu>
+
+              <ResponsiveDropdownMenu>
+                <ResponsiveDropdownMenuTrigger render={<button type="button" className={triggerClass} />}>
+                  <Flag className="size-3.5" />
+                  <span className="max-sm:sr-only">Priority</span>
+                </ResponsiveDropdownMenuTrigger>
+                <ResponsiveDropdownMenuContent align="center" side="top">
+                  <ResponsiveDropdownMenuLabel className="md:hidden">
+                    Set priority · {count} {noun}
+                  </ResponsiveDropdownMenuLabel>
+                  {PRIORITIES.map((p) => (
+                    <ResponsiveDropdownMenuItem
+                      key={p.value}
+                      onSelect={() => run({ kind: "priority", priority: p.value })}
                       className="flex items-center gap-2"
                     >
-                      <span className={cn("size-2 rounded-full", s.color)} />
-                      {s.name}
-                    </DropdownMenuItem>
+                      {getPriorityIcon(p.value)}
+                      {p.label}
+                    </ResponsiveDropdownMenuItem>
                   ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
+                </ResponsiveDropdownMenuContent>
+              </ResponsiveDropdownMenu>
 
-            <DropdownMenu>
-              <DropdownMenuTrigger render={<button type="button" className={triggerClass} />}>
-                <Flag className="size-3.5" />
-                Priority
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="center" side="top">
-                {PRIORITIES.map((p) => (
-                  <DropdownMenuItem
-                    key={p.value}
-                    onClick={() => run({ kind: "priority", priority: p.value })}
+              <ResponsiveDropdownMenu>
+                <ResponsiveDropdownMenuTrigger render={<button type="button" className={triggerClass} />}>
+                  <User className="size-3.5" />
+                  <span className="max-sm:sr-only">Assignee</span>
+                </ResponsiveDropdownMenuTrigger>
+                <ResponsiveDropdownMenuContent align="center" side="top" className="max-h-72 overflow-y-auto">
+                  <ResponsiveDropdownMenuLabel className="md:hidden">
+                    Assign to · {count} {noun}
+                  </ResponsiveDropdownMenuLabel>
+                  <ResponsiveDropdownMenuItem onSelect={() => run({ kind: "assignee", assigneeId: null })}>
+                    Unassigned
+                  </ResponsiveDropdownMenuItem>
+                  <ResponsiveDropdownMenuSeparator />
+                  {members.map((m) => (
+                    <ResponsiveDropdownMenuItem
+                      key={m._id}
+                      onSelect={() => run({ kind: "assignee", assigneeId: m._id })}
+                      className="flex items-center gap-2"
+                    >
+                      <UserAvatar className="size-5" name={m.name} image={m.image} fallbackClassName="text-[10px]" />
+                      {m.name ?? "Unknown"}
+                    </ResponsiveDropdownMenuItem>
+                  ))}
+                </ResponsiveDropdownMenuContent>
+              </ResponsiveDropdownMenu>
+
+              <ResponsiveDropdownMenu>
+                <ResponsiveDropdownMenuTrigger render={<button type="button" className={triggerClass} />}>
+                  <RefreshCw className="size-3.5" />
+                  <span className="max-sm:sr-only">Cycle</span>
+                </ResponsiveDropdownMenuTrigger>
+                <ResponsiveDropdownMenuContent align="center" side="top" className="max-h-72 overflow-y-auto">
+                  <ResponsiveDropdownMenuLabel className="md:hidden">
+                    Move to · {count} {noun}
+                  </ResponsiveDropdownMenuLabel>
+                  {cycleTargets.map((c) => (
+                    <ResponsiveDropdownMenuItem
+                      key={c._id}
+                      onSelect={() => run({ kind: "moveToCycle", cycleId: c._id })}
+                      className="flex items-center gap-2"
+                    >
+                      <RefreshCw className="size-3.5 text-muted-foreground" />
+                      {c.name}
+                      {c.isCurrent && <span className="ml-auto text-[11px] text-muted-foreground">current</span>}
+                    </ResponsiveDropdownMenuItem>
+                  ))}
+                  {cycleTargets.length > 0 && <ResponsiveDropdownMenuSeparator />}
+                  <ResponsiveDropdownMenuItem
+                    onSelect={() => run({ kind: "moveToCycle", cycleId: null })}
                     className="flex items-center gap-2"
                   >
-                    {getPriorityIcon(p.value)}
-                    {p.label}
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
+                    <Inbox className="size-3.5 text-muted-foreground" />
+                    Backlog
+                  </ResponsiveDropdownMenuItem>
+                </ResponsiveDropdownMenuContent>
+              </ResponsiveDropdownMenu>
 
-            <DropdownMenu>
-              <DropdownMenuTrigger render={<button type="button" className={triggerClass} />}>
-                <User className="size-3.5" />
-                Assignee
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="center" side="top" className="max-h-72 overflow-y-auto">
-                <DropdownMenuItem onClick={() => run({ kind: "assignee", assigneeId: null })}>
-                  Unassigned
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                {members.map((m) => (
-                  <DropdownMenuItem
-                    key={m._id}
-                    onClick={() => run({ kind: "assignee", assigneeId: m._id })}
-                    className="flex items-center gap-2"
-                  >
-                    <UserAvatar className="size-5" name={m.name} image={m.image} fallbackClassName="text-[10px]" />
-                    {m.name ?? "Unknown"}
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
+              {isMobile ? (
+              <ResponsiveDialog open={tagOpen} onOpenChange={onTagOpenChange}>
+                <ResponsiveDialogTrigger render={<button type="button" className={triggerClass} />}>
+                  <TagIcon className="size-3.5" />
+                  <span className="max-sm:sr-only">Tags</span>
+                </ResponsiveDialogTrigger>
+                <ResponsiveDialogContent>
+                  <ResponsiveDialogHeader>
+                    <ResponsiveDialogTitle>
+                      Tags · {count} {noun}
+                    </ResponsiveDialogTitle>
+                  </ResponsiveDialogHeader>
+                  <ResponsiveDialogBody className="pb-6">{tagPanel}</ResponsiveDialogBody>
+                </ResponsiveDialogContent>
+              </ResponsiveDialog>
+            ) : (
+              <Popover open={tagOpen} onOpenChange={onTagOpenChange}>
+                <PopoverTrigger render={<button type="button" className={triggerClass} />}>
+                  <TagIcon className="size-3.5" />
+                  <span className="max-sm:sr-only">Tags</span>
+                </PopoverTrigger>
+                <PopoverContent side="top" className="w-60 p-1">
+                  {tagPanel}
+                </PopoverContent>
+              </Popover>
+            )}
 
-            <DropdownMenu>
-              <DropdownMenuTrigger render={<button type="button" className={triggerClass} />}>
-                <RefreshCw className="size-3.5" />
-                Cycle
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="center" side="top" className="max-h-72 overflow-y-auto">
-                {cycleTargets.map((c) => (
-                  <DropdownMenuItem
-                    key={c._id}
-                    onClick={() => run({ kind: "moveToCycle", cycleId: c._id })}
-                    className="flex items-center gap-2"
-                  >
-                    <RefreshCw className="size-3.5 text-muted-foreground" />
-                    {c.name}
-                    {c.isCurrent && <span className="ml-auto text-[11px] text-muted-foreground">current</span>}
-                  </DropdownMenuItem>
-                ))}
-                {cycleTargets.length > 0 && <DropdownMenuSeparator />}
-                <DropdownMenuItem
-                  onClick={() => run({ kind: "moveToCycle", cycleId: null })}
-                  className="flex items-center gap-2"
-                >
-                  <Inbox className="size-3.5 text-muted-foreground" />
-                  Backlog
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+              <button
+                type="button"
+                className={cn(triggerClass, "text-destructive hover:bg-destructive/10")}
+                onClick={() => setDeleteOpen(true)}
+              >
+                <Trash2 className="size-3.5" />
+                <span className="max-sm:sr-only">Delete</span>
+              </button>
+            </>
+          )}
+        </div>
 
-            <Popover
-              open={tagOpen}
-              onOpenChange={(open) => {
-                setTagOpen(open);
-                if (!open) setTagQuery("");
-              }}
-            >
-              <PopoverTrigger render={<button type="button" className={triggerClass} />}>
-                <TagIcon className="size-3.5" />
-                Tags
-              </PopoverTrigger>
-              <PopoverContent side="top" className="w-60 p-1">
-                <Input
-                  autoFocus
-                  value={tagQuery}
-                  onChange={(e) => setTagQuery(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && query) addTag(query);
-                  }}
-                  placeholder="Add or remove a tag…"
-                  className="mb-1 h-8 text-xs"
-                />
-                <div className="max-h-64 overflow-y-auto">
-                  {canCreate && (
-                    <TagOption icon={<Plus className="size-3.5" />} onClick={() => addTag(query)}>
-                      Add “{query}”
-                    </TagOption>
-                  )}
-                  {removable.length > 0 && (
-                    <>
-                      <p className="px-2 pt-1.5 pb-1 text-[11px] text-muted-foreground">Remove</p>
-                      {removable.map((t) => (
-                        <TagOption key={`rm-${t}`} icon={<Minus className="size-3.5" />} onClick={() => removeTag(t)}>
-                          {t}
-                        </TagOption>
-                      ))}
-                    </>
-                  )}
-                  {addable.length > 0 && (
-                    <>
-                      <p className="px-2 pt-1.5 pb-1 text-[11px] text-muted-foreground">Add</p>
-                      {addable.map((t) => (
-                        <TagOption key={`add-${t}`} icon={<Plus className="size-3.5" />} onClick={() => addTag(t)}>
-                          {t}
-                        </TagOption>
-                      ))}
-                    </>
-                  )}
-                </div>
-              </PopoverContent>
-            </Popover>
-
-            <button
-              type="button"
-              className={cn(triggerClass, "text-destructive hover:bg-destructive/10")}
-              onClick={() => setDeleteOpen(true)}
-            >
-              <Trash2 className="size-3.5" />
-              Delete
-            </button>
-          </>
-        )}
-
-        <span className="mx-1 h-4 w-px bg-border" aria-hidden="true" />
-        <Button variant="ghost" size="icon" className="size-6" onClick={onClear} aria-label="Clear selection">
-          <X className="size-3.5" />
+        <span className="mx-1 h-4 w-px bg-border max-sm:hidden" aria-hidden="true" />
+        <Button variant="ghost" size="icon" className="size-6 max-sm:ml-auto max-sm:size-10" onClick={onClear} aria-label="Clear selection">
+          <X className="size-3.5 max-sm:size-4" />
         </Button>
       </div>
 
@@ -330,7 +388,7 @@ function TagOption({
     <button
       type="button"
       onClick={onClick}
-      className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-xs hover:bg-accent cursor-pointer"
+      className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-xs hover:bg-accent cursor-pointer max-md:gap-3 max-md:rounded-lg max-md:px-3 max-md:py-3 max-md:text-sm"
     >
       <span className="text-muted-foreground">{icon}</span>
       <span className="truncate">{children}</span>

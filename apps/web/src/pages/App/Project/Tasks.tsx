@@ -3,8 +3,9 @@ import { AnimatePresence, m } from "framer-motion";
 import { SwipeToReveal } from "@/components/SwipeToReveal";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useLongPress } from "@/hooks/use-long-press";
 import { useMutation } from "convex/react";
-import { useQuery } from "convex-helpers/react/cache";;
+import { useQuery } from "convex-helpers/react/cache";
 import { CheckSquare, ArrowRight } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { api } from "@convex/_generated/api";
@@ -61,6 +62,13 @@ export function Tasks({ projectId, workspaceId, filters, sort, scope }: TasksPro
   const tasks = useFilteredTasks(allTasks, filters, sort);
 
   const selection = useTaskSelection(tasks);
+
+  // Mobile has no hover or shift-click: a long-press selects the row and turns
+  // selection mode on, after which a tap toggles (TaskRow's own click path).
+  const longPress = useLongPress((taskId: Id<"tasks">) => {
+    setSwipeOpenId(null);
+    selection.toggle(taskId, true, false);
+  });
 
   const statuses = useQuery(api.taskStatuses.listByProject, { projectId });
   const updateTask = useMutation(api.tasks.update);
@@ -125,6 +133,9 @@ export function Tasks({ projectId, workspaceId, filters, sort, scope }: TasksPro
               return (
                 <m.div
                   key={task._id}
+                  {...(isMobile ? longPress(task._id) : {})}
+                  // No text selection or iOS callout on the hold.
+                  className={cn(isMobile && "select-none [-webkit-touch-callout:none]")}
                   layout="position"
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
@@ -132,7 +143,8 @@ export function Tasks({ projectId, workspaceId, filters, sort, scope }: TasksPro
                   transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
                 >
                   <SwipeToReveal
-                    enabled={isMobile}
+                    // A swipe would fight the taps that toggle rows.
+                    enabled={isMobile && !selection.active}
                     open={swipeOpenId === task._id}
                     onOpenChange={(open) => setSwipeOpenId(open ? task._id : null)}
                     onSwipeStart={closeAllSwipes}
@@ -160,15 +172,15 @@ export function Tasks({ projectId, workspaceId, filters, sort, scope }: TasksPro
                       task={task}
                       statuses={statuses ?? undefined}
                       hideStatusMenu={isMobile}
-                      flush={isMobile}
-                      assignable={!isMobile}
+                      // Flush only inside the swipe wrapper, which rounds the
+                      // corners itself; with swipe off for selection the row
+                      // keeps them.
+                      flush={isMobile && !selection.active}
+                      assignable
                       selected={selection.isSelected(task._id)}
                       selectionActive={selection.active}
-                      onSelectedChange={
-                        isMobile
-                          ? undefined
-                          : (selected, shiftKey) => selection.toggle(task._id, selected, shiftKey)
-                      }
+                      touchSelection={isMobile}
+                      onSelectedChange={(selected, shiftKey) => selection.toggle(task._id, selected, shiftKey)}
                       onStatusChange={(statusId) => {
                         void updateTask({ taskId: task._id, statusId: statusId as Id<"taskStatuses"> });
                       }}
@@ -185,7 +197,7 @@ export function Tasks({ projectId, workspaceId, filters, sort, scope }: TasksPro
               );
             })}
           </AnimatePresence>
-          {!isMobile && selection.active && (
+          {selection.active && (
             <TaskBulkActionBar
               projectId={projectId}
               workspaceId={workspaceId}

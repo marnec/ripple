@@ -86,7 +86,9 @@ function ResponsiveDropdownMenuContent({
     return (
       <DrawerContent>
         <DrawerTitle className="sr-only">Menu</DrawerTitle>
-        <div className="flex flex-col p-3 pb-6">{children}</div>
+        {/* Scrolls inside the drawer's 80vh cap — a long list (every
+            workspace member) would otherwise run off the bottom. */}
+        <div className="flex min-h-0 flex-col overflow-y-auto p-3 pb-6">{children}</div>
       </DrawerContent>
     );
   }

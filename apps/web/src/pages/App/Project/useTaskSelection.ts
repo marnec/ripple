@@ -2,8 +2,8 @@ import { useState } from "react";
 import type { Id } from "@convex/_generated/dataModel";
 
 /**
- * Bulk selection over a rendered task list (desktop only — mobile rows are
- * swipe targets). Ids, not rows: the selection is intersected with what is
+ * Bulk selection over a rendered task list (on mobile, entered by long-press
+ * — see `Tasks.tsx`). Ids, not rows: the selection is intersected with what is
  * visible on every render, so tasks a bulk action removes, or a filter hides,
  * drop out of the count. Shift-click selects the range from the last toggled
  * row.

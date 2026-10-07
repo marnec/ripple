@@ -4,6 +4,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import {
   ResponsiveDialog,
+  ResponsiveDialogBody,
   ResponsiveDialogContent,
   ResponsiveDialogDescription,
   ResponsiveDialogFooter,
@@ -52,24 +53,28 @@ export function TaskDeleteDialog({
           </ResponsiveDialogDescription>
         </ResponsiveDialogHeader>
         {isGithubLinked && (
-          <Label className="flex items-start gap-2 text-sm font-normal">
-            <Checkbox
-              checked={closeGithubIssue}
-              onCheckedChange={(checked) =>
-                setCloseGithubIssue(checked === true)
-              }
-              className="mt-0.5"
-            />
-            <span>
-              {count === 1
-                ? "Also close the linked GitHub issue."
-                : "Also close the linked GitHub issues."}{" "}
-              <span className="text-muted-foreground">
-                {count === 1 ? "Marks the issue" : "Marks them"} as completed on GitHub. (Issues can&apos;t be
-                deleted via the API.)
+          // Body, not a bare child: in the mobile drawer only header, footer
+          // and body carry side padding.
+          <ResponsiveDialogBody>
+            <Label className="flex items-start gap-2 text-sm font-normal">
+              <Checkbox
+                checked={closeGithubIssue}
+                onCheckedChange={(checked) =>
+                  setCloseGithubIssue(checked === true)
+                }
+                className="mt-0.5"
+              />
+              <span>
+                {count === 1
+                  ? "Also close the linked GitHub issue."
+                  : "Also close the linked GitHub issues."}{" "}
+                <span className="text-muted-foreground">
+                  {count === 1 ? "Marks the issue" : "Marks them"} as completed on GitHub. (Issues can&apos;t be
+                  deleted via the API.)
+                </span>
               </span>
-            </span>
-          </Label>
+            </Label>
+          </ResponsiveDialogBody>
         )}
         <ResponsiveDialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>

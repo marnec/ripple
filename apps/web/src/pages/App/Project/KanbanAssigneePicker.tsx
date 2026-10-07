@@ -18,7 +18,16 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import {
+  ResponsiveDropdownMenu,
+  ResponsiveDropdownMenuContent,
+  ResponsiveDropdownMenuItem,
+  ResponsiveDropdownMenuLabel,
+  ResponsiveDropdownMenuSeparator,
+  ResponsiveDropdownMenuTrigger,
+} from "@/components/ui/responsive-dropdown-menu";
 import { UserAvatar } from "@/components/UserAvatar";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { useWorkspaceMembers } from "@/contexts/WorkspaceMembersContext";
 import { getErrorMessage } from "@/lib/errors";
 import { cn } from "@/lib/utils";
@@ -39,6 +48,9 @@ type KanbanAssigneePickerProps = {
  * card is also a drag handle, so every pointer event the trigger sees is
  * stopped here — otherwise a pick would start a drag and land on the detail
  * sheet on release.
+ *
+ * On mobile the picker is a bottom sheet (`ResponsiveDropdownMenu`) instead of
+ * the search popover.
  */
 export function KanbanAssigneePicker({
   taskId,
@@ -48,6 +60,7 @@ export function KanbanAssigneePicker({
   const [open, setOpen] = useState(false);
   const members = useWorkspaceMembers();
   const updateTask = useMutation(api.tasks.update);
+  const isMobile = useIsMobile();
 
   const assign = (nextAssigneeId: Id<"users"> | null) => {
     setOpen(false);
@@ -61,42 +74,93 @@ export function KanbanAssigneePicker({
     );
   };
 
+  const triggerButton = (
+    <button
+      type="button"
+      // The card owns dnd-kit's listeners and the detail-sheet click.
+      onPointerDown={(e) => e.stopPropagation()}
+      onClick={(e) => e.stopPropagation()}
+      className={cn(
+        "flex h-6 w-6 shrink-0 cursor-pointer items-center justify-center rounded-full transition-colors",
+        // A 24px circle is too small for a fingertip: widen the hit area,
+        // not the circle.
+        "max-md:relative max-md:after:absolute max-md:after:-inset-2",
+        assignee
+          ? "hover:ring-2 hover:ring-ring/50"
+          : "border border-dotted border-muted-foreground/60 text-muted-foreground/70 hover:border-foreground hover:text-foreground",
+      )}
+      aria-label={
+        assignee
+          ? `Assignee: ${assignee.name ?? "unnamed"}. Change assignee`
+          : "Assign task"
+      }
+      title={assignee ? (assignee.name ?? "Assignee") : "Assign task"}
+    />
+  );
+
+  const triggerFace = assignee ? (
+    <UserAvatar
+      className="h-6 w-6"
+      name={assignee.name}
+      image={assignee.image}
+      alt={assignee.name ?? "Assignee"}
+      fallbackClassName="text-xs"
+    />
+  ) : (
+    <UserRound className="h-3 w-3" />
+  );
+
+  if (isMobile) {
+    return (
+      // React bubbles events out of a portal through the component tree, so
+      // taps inside the sheet (and on its backdrop) would reach the row and
+      // open the task. Stop them here, around the whole menu.
+      <span
+        className="contents"
+        onClick={(e) => e.stopPropagation()}
+        onPointerDown={(e) => e.stopPropagation()}
+      >
+        <ResponsiveDropdownMenu open={open} onOpenChange={setOpen}>
+          <ResponsiveDropdownMenuTrigger render={triggerButton}>
+            {triggerFace}
+          </ResponsiveDropdownMenuTrigger>
+          <ResponsiveDropdownMenuContent>
+            <ResponsiveDropdownMenuLabel>Assign to</ResponsiveDropdownMenuLabel>
+            <ResponsiveDropdownMenuItem onSelect={() => assign(null)}>
+              <span className="flex h-6 w-6 items-center justify-center rounded-full border border-dotted border-muted-foreground/60">
+                <UserRound className="h-3 w-3 text-muted-foreground" />
+              </span>
+              <span className="flex-1 truncate text-left text-muted-foreground">
+                Unassigned
+              </span>
+              {!assigneeId && <Check className="h-4 w-4" />}
+            </ResponsiveDropdownMenuItem>
+            <ResponsiveDropdownMenuSeparator />
+            {(members ?? []).map((member) => (
+              <ResponsiveDropdownMenuItem
+                key={member._id}
+                onSelect={() => assign(member._id)}
+              >
+                <UserAvatar
+                  className="h-6 w-6"
+                  name={member.name}
+                  image={member.image}
+                  alt={member.name ?? "Member"}
+                  fallbackClassName="text-xs"
+                />
+                <span className="flex-1 truncate text-left">{member.name}</span>
+                {member._id === assigneeId && <Check className="h-4 w-4" />}
+              </ResponsiveDropdownMenuItem>
+            ))}
+          </ResponsiveDropdownMenuContent>
+        </ResponsiveDropdownMenu>
+      </span>
+    );
+  }
+
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger
-        render={
-          <button
-            type="button"
-            // The card owns dnd-kit's listeners and the detail-sheet click.
-            onPointerDown={(e) => e.stopPropagation()}
-            onClick={(e) => e.stopPropagation()}
-            className={cn(
-              "flex h-6 w-6 shrink-0 cursor-pointer items-center justify-center rounded-full transition-colors",
-              assignee
-                ? "hover:ring-2 hover:ring-ring/50"
-                : "border border-dotted border-muted-foreground/60 text-muted-foreground/70 hover:border-foreground hover:text-foreground",
-            )}
-            aria-label={
-              assignee
-                ? `Assignee: ${assignee.name ?? "unnamed"}. Change assignee`
-                : "Assign task"
-            }
-            title={assignee ? (assignee.name ?? "Assignee") : "Assign task"}
-          />
-        }
-      >
-        {assignee ? (
-          <UserAvatar
-            className="h-6 w-6"
-            name={assignee.name}
-            image={assignee.image}
-            alt={assignee.name ?? "Assignee"}
-            fallbackClassName="text-xs"
-          />
-        ) : (
-          <UserRound className="h-3 w-3" />
-        )}
-      </PopoverTrigger>
+      <PopoverTrigger render={triggerButton}>{triggerFace}</PopoverTrigger>
       <PopoverContent
         align="end"
         className="w-56 p-0"

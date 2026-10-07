@@ -54,8 +54,8 @@ type TaskRowProps = {
   hideAssignee?: boolean;
   /**
    * Render the assignee as the board's inline picker (dotted circle when
-   * unassigned) instead of a static avatar. Desktop lists only — on mobile the
-   * row is a swipe target.
+   * unassigned) instead of a static avatar. A popover on desktop, a bottom
+   * sheet on mobile.
    */
   assignable?: boolean;
   /**
@@ -66,9 +66,25 @@ type TaskRowProps = {
   selected?: boolean;
   selectionActive?: boolean;
   onSelectedChange?: (selected: boolean, shiftKey: boolean) => void;
+  /**
+   * Touch list: there is no hover to reveal the checkbox, so it only shows
+   * once selection mode is on (entered by long-press, see `useLongPress`),
+   * in the empty slot under the priority icon.
+   */
+  touchSelection?: boolean;
 };
 
-export function TaskRow({ task, statuses, onStatusChange, onClick, hideStatusMenu, flush, hideAssignee, assignable, selected, selectionActive, onSelectedChange }: TaskRowProps) {
+export function TaskRow({ task, statuses, onStatusChange, onClick, hideStatusMenu, flush, hideAssignee, assignable, selected, selectionActive, onSelectedChange, touchSelection }: TaskRowProps) {
+  const checkbox = onSelectedChange && (
+    <Checkbox
+      checked={selected ?? false}
+      aria-label={`Select ${task.title}`}
+      onCheckedChange={(checked, details) =>
+        onSelectedChange(checked, (details.event as MouseEvent | KeyboardEvent).shiftKey)
+      }
+    />
+  );
+
   return (
     <Item
       onClick={(e) => {
@@ -83,10 +99,13 @@ export function TaskRow({ task, statuses, onStatusChange, onClick, hideStatusMen
         "group/row cursor-pointer hover:bg-accent transition-colors",
         flush ? "rounded-none border-transparent!" : "border-transparent! md:border-input!",
         selected && "bg-accent/60",
+        // Touch selection mode: outline the rows still up for grabs, so the
+        // filled ones read as picked.
+        touchSelection && selectionActive && !selected && "border-input!",
       )}
     >
       <ItemMedia>
-        {onSelectedChange && (
+        {onSelectedChange && !touchSelection && (
           <span
             className={cn(
               "flex transition-opacity",
@@ -94,13 +113,7 @@ export function TaskRow({ task, statuses, onStatusChange, onClick, hideStatusMen
             )}
             onClick={(e) => e.stopPropagation()}
           >
-            <Checkbox
-              checked={selected ?? false}
-              aria-label={`Select ${task.title}`}
-              onCheckedChange={(checked, details) =>
-                onSelectedChange(checked, (details.event as MouseEvent | KeyboardEvent).shiftKey)
-              }
-            />
+            {checkbox}
           </span>
         )}
         {getPriorityIcon(task.priority)}
@@ -109,7 +122,18 @@ export function TaskRow({ task, statuses, onStatusChange, onClick, hideStatusMen
         )}
       </ItemMedia>
 
-      <ItemContent className="md:flex-1 md:min-w-0 basis-full md:basis-auto order-last md:order-0 pl-6.5 md:pl-0">
+      <ItemContent className="relative md:flex-1 md:min-w-0 basis-full md:basis-auto order-last md:order-0 pl-6.5 md:pl-0">
+        {/* On a touch row the title sits on its own line, indented under the
+            priority icon — the checkbox takes that empty slot, so turning
+            selection on moves nothing. */}
+        {onSelectedChange && touchSelection && selectionActive && (
+          <span
+            className="absolute left-0 top-1/2 flex -translate-y-1/2 animate-fade-in"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {checkbox}
+          </span>
+        )}
         <ItemTitle className={cn(task.completed && "line-through text-muted-foreground")}>
           <TaskCode task={task} className="shrink-0 hidden md:inline" />
           <span className="truncate">{task.title}</span>
