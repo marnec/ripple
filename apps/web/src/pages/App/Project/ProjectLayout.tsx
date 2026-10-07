@@ -7,19 +7,30 @@ import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { MobileHeaderTitle } from "@/contexts/HeaderSlotContext";
 import { useQuery } from "convex-helpers/react/cache";
-import { useParams, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
+import { useParams, NavLink, Navigate, Outlet, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 import { useRecordVisit } from "@/hooks/use-record-visit";
 import { useShortcut } from "@/contexts/ShortcutsContext";
 import { ImportActiveBanner } from "./ImportActiveBanner";
 import { PROJECT_TABS as tabs } from "./project-tabs";
+import { TASK_SHEET_PARAM } from "./taskSheetParam";
 
 export function ProjectLayout() {
   const { workspaceId, projectId } = useParams<QueryParams>();
+  const isMobile = useIsMobile();
+  const [searchParams] = useSearchParams();
+  const sheetTaskId = searchParams.get(TASK_SHEET_PARAM);
 
   if (!workspaceId || !projectId) {
     return <SomethingWentWrong />;
+  }
+
+  // Mobile has no task sheet — every surface navigates to the task page
+  // instead — so a `?task=` link (shared, or copied on desktop) opens the
+  // page in place of the surface it was pointing at.
+  if (isMobile && sheetTaskId) {
+    return <Navigate replace to={`/workspaces/${workspaceId}/projects/${projectId}/tasks/${sheetTaskId}`} />;
   }
 
   return (
