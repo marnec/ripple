@@ -1,4 +1,3 @@
-import { BacklinksButton } from "@/components/BacklinksDrawer";
 import { RippleSpinner } from "@/components/RippleSpinner";
 import { Button } from "@ripple/ui/components/button";
 import { cn } from "@/lib/utils";
@@ -31,7 +30,6 @@ import {
   TaskPropertiesSection,
   TaskTagPicker,
   TaskTagStrip,
-  TaskTitleField,
   TaskTitleInline,
 } from "./TaskDetail";
 import { useTaskDetailContext } from "./taskDetailContext";
@@ -119,9 +117,6 @@ function PageShell({
     return <ResourceDeleted resourceType="task" />;
   }
 
-  const title = (
-    <TaskTitleField className="text-xl font-semibold leading-snug md:text-2xl" />
-  );
   const descriptionHeading = (
     <h3 className="text-sm font-semibold text-muted-foreground">Description</h3>
   );
@@ -153,14 +148,12 @@ function PageShell({
     </div>
   );
 
-  // What points at this task, with the local graph to its right — desktop
-  // only, where the title sits in the toolbar. On a phone the toolbar is the
-  // breadcrumb, so the (wrapping, editable) title heads the column instead and
-  // context is a toggle in the header. Page-only: the sheet keeps the
-  // backlinks drawer, it has no room for a canvas.
-  const titleOrContext = isMobile ? (
-    title
-  ) : (
+  // What points at this task, with the local graph to its right. Desktop
+  // only: on a phone references are a chip among the property pills, and the
+  // title is the header's (tap to rename), so the column starts at the pills.
+  // Page-only: the sheet keeps the backlinks drawer, it has no room for a
+  // canvas.
+  const context = isMobile ? null : (
     <TaskContext taskId={taskId} workspaceId={workspaceId} className="shrink-0" />
   );
 
@@ -168,9 +161,10 @@ function PageShell({
     <div className="flex h-full min-h-0 flex-col">
       {/* Task toolbar — desktop only: identity, title and actions, like every
           other entity's `SurfaceHeader` — but no backlinks toggle: on desktop
-          a task's references are its Context section (mobile gets the toggle).
-          On mobile the breadcrumb carries code + title, the editable title
-          heads the content column, and the rest moves to HeaderSlot. */}
+          a task's references are its Context section (on mobile, a chip among
+          the property pills).
+          On mobile the header's title is the title — tap it to rename — and
+          the rest moves to HeaderSlot. */}
       {!isMobile && (
         <div className="flex h-11 shrink-0 items-center gap-2 border-b px-3">
           {/* Same order as `SurfaceHeader`: tag picker, name, tag strip — the
@@ -195,9 +189,8 @@ function PageShell({
 
       {isMobile && (
         <HeaderSlot>
-          <TaskTagPicker />
-          {/* Context's stand-in on mobile, where the section is not rendered. */}
-          <BacklinksButton resourceId={taskId} workspaceId={workspaceId} />
+          {/* Tags and references live in the property pills on a phone
+              (`TaskPropertyPills`), leaving the header to the title. */}
           {/* Switches the body between description and activity. The icon is
               the panel it leads to; without a viewer there is no activity. */}
           {detail.currentUser && (
@@ -219,14 +212,18 @@ function PageShell({
           <TaskActionsMenu size="icon" />
         </HeaderSlot>
       )}
-      <MobileHeaderTitle name={detail.titleValue} />
+      <MobileHeaderTitle
+        name={detail.task.title}
+        onRename={(title) => detail.patch({ title })}
+        resourceLabel="task"
+      />
 
       <div className="flex-1 min-h-0">
         {isWide ? (
           <WideLayout
             main={
               <div className="mx-auto flex h-full w-full max-w-3xl flex-col gap-8 px-8 py-6">
-                {titleOrContext}
+                {context}
                 {description(true)}
               </div>
             }
@@ -235,12 +232,7 @@ function PageShell({
           />
         ) : isMobile ? (
           <MobileLayout
-            head={
-              <>
-                {titleOrContext}
-                {details}
-              </>
-            }
+            head={details}
             panel={detail.currentUser ? mobilePanel : "description"}
             description={
               <TaskDescriptionSection
@@ -265,7 +257,7 @@ function PageShell({
           // the description and then the activity stacked under them.
           <div className="h-full overflow-y-auto">
             <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-6 pt-6 pb-8">
-              {titleOrContext}
+              {context}
               {details}
               {description(false)}
               {/* The timeline needs a viewer to attribute comments to;

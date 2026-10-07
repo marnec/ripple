@@ -1,4 +1,4 @@
-import { CalendarIcon, Check, Clock, Play, Plus, UserRound } from "lucide-react";
+import { CalendarIcon, Check, Clock, Link2, Play, Plus, UserRound } from "lucide-react";
 import { type ReactNode, useState } from "react";
 import type { Id } from "@convex/_generated/dataModel";
 import { Button } from "@ripple/ui/components/button";
@@ -25,6 +25,10 @@ import {
 } from "@/lib/task-utils";
 import { cn } from "@/lib/utils";
 import { ExternalAssigneeAvatars, type ExternalAssignee } from "./ExternalAssignees";
+import { BacklinksDrawer } from "@/components/BacklinksDrawer";
+import { TagPickerButton } from "@/components/TagPickerButton";
+import { useQuery } from "convex-helpers/react/cache";
+import { api } from "@convex/_generated/api";
 
 type Priority = "urgent" | "high" | "medium" | "low";
 
@@ -45,9 +49,11 @@ const TIME_CHIP_CLASS =
  * description.
  *
  * Two rows, both always visible: who / how urgent / where it stands as
- * pills, then when and how big as quieter chips (`TIME_CHIP_CLASS`). An unset
- * chip reads "+ Label", so it is its own "add" control and there is nothing
- * to fold away.
+ * pills, followed by tag and reference counts as pills too (on a phone they
+ * would otherwise crowd the header); then quieter chips (`TIME_CHIP_CLASS`) for
+ * when and how big.
+ * An unset chip reads "+ Label", so it is its own "add" control and there is
+ * nothing to fold away.
  *
  * Each pill opens a bottom sheet on a phone and a dropdown or popover
  * elsewhere. The value *is* the control, so there are no labels; each menu
@@ -55,6 +61,7 @@ const TIME_CHIP_CLASS =
  */
 export function TaskPropertyPills({
   task,
+  onSetTags,
   statuses,
   members,
   onStatusChange,
@@ -65,6 +72,9 @@ export function TaskPropertyPills({
   onEstimateChange,
 }: {
   task: {
+    _id: Id<"tasks">;
+    workspaceId: Id<"workspaces">;
+    tags?: string[];
     statusId: Id<"taskStatuses">;
     status: { name: string; color: string } | null;
     priority: string;
@@ -84,10 +94,11 @@ export function TaskPropertyPills({
   onDueDateChange: (date: string | null) => void;
   onStartDateChange: (date: string | null) => void;
   onEstimateChange: (value: number | null) => void;
+  onSetTags: (tags: string[]) => void;
 }) {
   return (
     <div className="space-y-2">
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-center justify-between">
         <div className="flex items-center gap-1.5">
           <ResponsiveDropdownMenu>
             {/* The avatar alone: whose task it is reads from the face, and
@@ -187,6 +198,16 @@ export function TaskPropertyPills({
             ))}
           </ResponsiveDropdownMenuContent>
         </ResponsiveDropdownMenu>
+        {/* Counts, not names, so the row stays one line; the names are a
+            tap away. */}
+        <TagPickerButton
+          workspaceId={task.workspaceId}
+          value={task.tags ?? []}
+          onChange={onSetTags}
+          triggerVariant="chip"
+          triggerClassName={PILL_CLASS}
+        />
+        <ReferencesChip taskId={task._id} workspaceId={task.workspaceId} />
       </div>
 
       <div className="-ml-2 flex flex-wrap items-center gap-1">
@@ -240,6 +261,37 @@ export function TaskPropertyPills({
         </ResponsiveDropdownMenu>
       </div>
     </div>
+  );
+}
+
+/**
+ * "🔗 2" — what references the task, opening the same drawer the desktop
+ * toolbar's chain icon does. Absent when nothing references it: unlike the
+ * other chips there is nothing to add from here.
+ */
+function ReferencesChip({
+  taskId,
+  workspaceId,
+}: {
+  taskId: Id<"tasks">;
+  workspaceId: Id<"workspaces">;
+}) {
+  const [open, setOpen] = useState(false);
+  const count = useQuery(api.edges.getBacklinks, { targetId: taskId, workspaceId })?.references.length ?? 0;
+  if (count === 0) return null;
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className={PILL_CLASS}
+        aria-label={`Referenced in ${count} ${count === 1 ? "place" : "places"}`}
+      >
+        <Link2 className="h-3 w-3" />
+        {count}
+      </button>
+      <BacklinksDrawer resourceId={taskId} workspaceId={workspaceId} open={open} onOpenChange={setOpen} />
+    </>
   );
 }
 

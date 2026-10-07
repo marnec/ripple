@@ -198,7 +198,12 @@ export function SurfaceHeader<TMeta extends SurfaceMeta>({
           </Button>
         </HeaderSlot>
       )}
-      <MobileHeaderTitle name={meta?.name ?? ""} />
+      {/* Renamable only while the server answers — the `isLive` rule. */}
+      <MobileHeaderTitle
+        name={meta?.name ?? ""}
+        onRename={isLive && meta ? onRename : undefined}
+        resourceLabel={named}
+      />
     </>
   );
 }

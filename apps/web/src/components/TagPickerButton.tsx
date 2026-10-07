@@ -21,8 +21,14 @@ type TagPickerButtonProps = {
    * "pill" — outlined dashed pill labeled "Add tag", suited to inline
    *           tag rows (e.g. task properties). Always-visible affordance
    *           that prevents layout shift when the first tag is added.
+   * "chip"  — "+ Tags" (muted) when empty, a count when set — the names
+   *           would wrap the row; they are in the picker. Shaped by the
+   *           caller through `triggerClassName`, so it can match a row of
+   *           sibling controls (the task's mobile property pills).
    */
-  triggerVariant?: "icon" | "pill";
+  triggerVariant?: "icon" | "pill" | "chip";
+  /** Classes for the "chip" trigger. */
+  triggerClassName?: string;
 };
 
 const TAG_NAME_MAX_LENGTH = 100;
@@ -32,6 +38,7 @@ export function TagPickerButton({
   value,
   onChange,
   triggerVariant = "icon",
+  triggerClassName,
 }: TagPickerButtonProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -73,7 +80,29 @@ export function TagPickerButton({
         if (!o) setQuery("");
       }}
     >
-      {triggerVariant === "pill" ? (
+      {triggerVariant === "chip" ? (
+        <PopoverTrigger
+          render={
+            <button
+              type="button"
+              className={cn(triggerClassName, !isActive && "text-muted-foreground")}
+              aria-label={isActive ? `Tags: ${value.join(", ")}` : "Add tag"}
+            />
+          }
+        >
+          {isActive ? (
+            <>
+              <TagIcon className="h-3 w-3" />
+              {value.length}
+            </>
+          ) : (
+            <>
+              <Plus className="h-3 w-3" />
+              Tags
+            </>
+          )}
+        </PopoverTrigger>
+      ) : triggerVariant === "pill" ? (
         <PopoverTrigger
           render={
             <button

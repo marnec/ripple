@@ -137,7 +137,9 @@ export function TaskProperties({
   );
 
   // On a phone every property is a pill (each a bottom sheet), all visible at
-  // once: no labelled rows, no "More details" fold. See `TaskPropertyPills`.
+  // once: no labelled rows, no "More details" fold. Tags are always among
+  // them — `hideTags` is about the desktop toolbar, which a phone does not
+  // have. See `TaskPropertyPills`.
   if (isMobile) {
     return (
       <div className="space-y-2">
@@ -151,8 +153,8 @@ export function TaskProperties({
           onDueDateChange={onDueDateChange}
           onStartDateChange={onStartDateChange}
           onEstimateChange={onEstimateChange}
+          onSetTags={onSetTags}
         />
-        {!hideTags && tagsRow}
       </div>
     );
   }

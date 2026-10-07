@@ -28,8 +28,8 @@ const LIST_MAX_HEIGHT = 160;
  * viewer cannot open are dropped server-side by both queries.
  *
  * Desktop only. On a phone the section would push the description down for
- * information most visits do not need, so it renders nothing and the page
- * puts the backlinks toggle (the chain icon) in its header instead.
+ * information most visits do not need, so it renders nothing; the property
+ * pills carry a references chip that opens the backlinks drawer instead.
  */
 export function TaskContext({
   taskId,
