@@ -6,7 +6,7 @@ import { query } from "./_generated/server";
 import { mutation } from "./functions";
 import { logTaskActivity } from "./auditLog";
 import { getAll } from "convex-helpers/server/relationships";
-import { requireWorkspaceMember, requireResourceMember, getUser, checkWorkspaceMember } from "./authHelpers";
+import { requireWorkspaceMember, requireResourceMember, getUser, checkWorkspaceMember, checkChannelAccessBatch } from "./authHelpers";
 
 // ── Helpers ─────────────────────────────────────────────────────────
 
@@ -176,12 +176,17 @@ async function enrichEdges(
 /**
  * Fetch and enrich references pointing to a target resource.
  * Shared between getBacklinks query and remove mutations.
+ *
+ * `hasHidden` is set when a reference exists that the caller may not see — a
+ * mention from a closed channel or DM they are not in. It is a flag, not a
+ * count or a list: the delete warning needs to know *that* deleting breaks
+ * something, and nothing more about a conversation the caller is outside of.
  */
 export async function getEnrichedBacklinks(
   ctx: GenericQueryCtx<DataModel>,
   targetId: string,
   workspaceId: Id<"workspaces">,
-): Promise<EnrichedEdge[]> {
+): Promise<{ references: EnrichedEdge[]; hasHidden: boolean }> {
   const allEdges = await ctx.db
     .query("edges")
     .withIndex("by_workspace_target", (q) =>
@@ -200,7 +205,24 @@ export async function getEnrichedBacklinks(
     return true;
   });
 
-  return enrichEdges(ctx, edges);
+  // The channel rule, not the workspace rule. A mention edge out of a closed
+  // channel or a DM carries that channel's name, and its existence says the
+  // conversation is about this target — so a colleague outside the channel
+  // must not see the backlink at all, even though the chip would 403 on click.
+  const channelIds = edges
+    .filter((e) => e.sourceType === "channel")
+    .map((e) => e.sourceId as Id<"channels">);
+  const channelAccess = channelIds.length
+    ? await checkChannelAccessBatch(ctx, channelIds)
+    : new Map();
+  const visible = edges.filter(
+    (e) => e.sourceType !== "channel" || channelAccess.has(e.sourceId as Id<"channels">),
+  );
+
+  return {
+    references: await enrichEdges(ctx, visible),
+    hasHidden: visible.length < edges.length,
+  };
 }
 
 // ── Sync (auto-tracked embeds) ──────────────────────────────────────
@@ -527,13 +549,16 @@ export const getBacklinks = query({
     targetId: v.string(),
     workspaceId: v.id("workspaces"),
   },
-  returns: v.array(backlinkValidator),
+  returns: v.object({
+    references: v.array(backlinkValidator),
+    hasHidden: v.boolean(),
+  }),
   handler: async (ctx, { targetId, workspaceId }) => {
     // The workspace rule. `getUser` is "is logged in", and the backlink rows
     // carry each source resource's name — so any account could read any
     // workspace's link graph by naming its id.
     const auth = await checkWorkspaceMember(ctx, workspaceId);
-    if (!auth) return [];
+    if (!auth) return { references: [], hasHidden: false };
     return getEnrichedBacklinks(ctx, targetId, workspaceId);
   },
 });

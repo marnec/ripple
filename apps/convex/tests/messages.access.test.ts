@@ -6,6 +6,7 @@ import {
   setupAuthenticatedUser,
   setupWorkspaceWithAdmin, channelFields } from "./helpers";
 import { ChannelRole, WorkspaceRole } from "@ripple/shared/enums/roles";
+import { withTriggers } from "../convex/dbTriggers";
 import {
   deliveredPushes,
   resetDeliveredPushes,
@@ -882,5 +883,118 @@ describe("message mention notifications", () => {
     for (const push of await scheduledPushes(t)) {
       expect(push.body).not.toContain("Project Bluebird");
     }
+  });
+});
+
+/**
+ * Backlinks are the fourth path to a channel's contents: a mention edge out of
+ * a channel names the channel and says it is discussing the target. They must
+ * follow the channel rule too, or a closed channel's / DM's existence and topic
+ * leak to every workspace member through the target's backlinks drawer.
+ */
+describe("edges.getBacklinks — channel-sourced mentions", () => {
+  function bodyMentioning(userId: string) {
+    return JSON.stringify([
+      { type: "paragraph", content: [{ type: "userMention", props: { userId } }] },
+    ]);
+  }
+
+  async function setupMentioned(
+    t: ReturnType<typeof createTestContext>,
+    channelId: Id<"channels">,
+    asMember: Awaited<ReturnType<typeof setupWorkspaceWithAdmin>>["asUser"],
+  ) {
+    const targetId = await t.run((ctx) =>
+      ctx.db.insert("users", { name: "Target", email: "target@example.com" }),
+    );
+    await asMember.mutation(api.messages.send, {
+      isomorphicId: `mention-${channelId}`,
+      body: bodyMentioning(targetId),
+      plainText: "@Target",
+      channelId,
+    });
+    return targetId;
+  }
+
+  it("hides a closed-channel mention from a workspace member outside the channel", async () => {
+    const t = createTestContext();
+    const { workspaceId, userId, asUser } = await setupWorkspaceWithAdmin(t);
+    const channelId = await setupClosedChannel(t, { workspaceId, userId });
+    const targetId = await setupMentioned(t, channelId, asUser);
+    const outsider = await setupWorkspaceOutsider(t, workspaceId);
+
+    const asMember = await asUser.query(api.edges.getBacklinks, { targetId, workspaceId });
+    expect(asMember.references.map((b) => b.sourceId)).toEqual([channelId]);
+    expect(asMember.hasHidden).toBe(false);
+
+    const asOutsider = await outsider.asUser.query(api.edges.getBacklinks, { targetId, workspaceId });
+    expect(asOutsider).toEqual({ references: [], hasHidden: true });
+  });
+
+  it("hides a DM mention from a workspace member outside the DM", async () => {
+    const t = createTestContext();
+    const { workspaceId, userId, asUser } = await setupWorkspaceWithAdmin(t);
+    const channelId = await setupDmChannel(t, { workspaceId, userIds: [userId] });
+    const targetId = await setupMentioned(t, channelId, asUser);
+    const outsider = await setupWorkspaceOutsider(t, workspaceId);
+
+    const asOutsider = await outsider.asUser.query(api.edges.getBacklinks, { targetId, workspaceId });
+    expect(asOutsider).toEqual({ references: [], hasHidden: true });
+  });
+
+  it("still shows an open-channel mention to any workspace member", async () => {
+    const t = createTestContext();
+    const { workspaceId, userId, asUser } = await setupWorkspaceWithAdmin(t);
+    const channelId = await setupOpenChannel(t, workspaceId);
+    await t.run((ctx) =>
+      ctx.db.insert("channelMembers", {
+        channelId,
+        workspaceId,
+        userId,
+        role: ChannelRole.ADMIN,
+      }),
+    );
+    const targetId = await setupMentioned(t, channelId, asUser);
+    const outsider = await setupWorkspaceOutsider(t, workspaceId);
+
+    const asOutsider = await outsider.asUser.query(api.edges.getBacklinks, { targetId, workspaceId });
+    expect(asOutsider.references.map((b) => b.sourceId)).toEqual([channelId]);
+    expect(asOutsider.hasHidden).toBe(false);
+  });
+
+  // Hiding the backlink must not also hide the warning: deleting the diagram
+  // still breaks the chip in the private channel. The outsider is told *that*
+  // a hidden reference exists — never which channel holds it.
+  it("still blocks an unforced delete on a reference the caller cannot see", async () => {
+    const t = createTestContext();
+    const { workspaceId, userId, asUser } = await setupWorkspaceWithAdmin(t);
+    const channelId = await setupClosedChannel(t, { workspaceId, userId });
+    const outsider = await setupWorkspaceOutsider(t, workspaceId);
+    const diagramId = await t.run((ctx) =>
+      withTriggers(ctx).db.insert("diagrams", { workspaceId, name: "Org chart" }),
+    );
+    await asUser.mutation(api.messages.send, {
+      isomorphicId: "diagram-ref",
+      body: JSON.stringify([
+        {
+          type: "paragraph",
+          content: [
+            {
+              type: "resourceReference",
+              props: { resourceId: diagramId, resourceType: "diagram", resourceName: "Org chart" },
+            },
+          ],
+        },
+      ]),
+      plainText: "#Org chart",
+      channelId,
+    });
+
+    const result = await outsider.asUser.mutation(api.diagrams.remove, { id: diagramId });
+
+    expect(result).toEqual({ status: "has_references", references: [], hasHiddenReferences: true });
+    expect(JSON.stringify(result)).not.toContain(channelId);
+    expect(JSON.stringify(result)).not.toContain("leadership");
+    expect(await t.run((ctx) => ctx.db.get(diagramId))).not.toBeNull();
   });
 });

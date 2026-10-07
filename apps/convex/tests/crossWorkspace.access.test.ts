@@ -1707,6 +1707,7 @@ describe("edges.getBacklinks / getFrameEmbeds — any workspace's link graph", (
         targetId: diagramB,
         workspaceId: bob.workspaceId,
       })
+      .then((r) => r.references)
       .catch(() => []);
 
     expect(backlinks, "a foreign workspace's link graph must not resolve").toEqual([]);

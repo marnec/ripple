@@ -9,8 +9,8 @@ import { useAutoHideScrollbar } from "@/hooks/use-autohide-scrollbar";
 import { ResourceDeleted } from "@/pages/ResourceDeleted";
 import SomethingWentWrong from "@/pages/SomethingWentWrong";
 import type { QueryParams } from "@convex/types/routes";
-import { MessageSquare } from "lucide-react";
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import { FileText, MessageSquare } from "lucide-react";
+import { type ReactNode, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useDefaultLayout } from "react-resizable-panels";
 import {
@@ -29,9 +29,13 @@ import {
   TaskGithubSection,
   TaskIdentity,
   TaskPropertiesSection,
+  TaskTagPicker,
+  TaskTagStrip,
   TaskTitleField,
+  TaskTitleInline,
 } from "./TaskDetail";
 import { useTaskDetailContext } from "./taskDetailContext";
+import { TaskContext } from "./TaskContext";
 import { TaskGithubActions } from "./TaskGithubActions";
 import { SafeAreaSpacer } from "@/components/SafeAreaSpacer";
 
@@ -97,7 +101,9 @@ function PageShell({
   const navigate = useNavigate();
   const isMobile = useIsMobile();
   const isWide = useMediaQuery(LG_MEDIA_QUERY);
-  const activityRef = useRef<HTMLDivElement>(null);
+  // A phone shows the description or the activity, never both stacked: the
+  // header's comment button switches between them (see the HeaderSlot below).
+  const [mobilePanel, setMobilePanel] = useState<"description" | "activity">("description");
   // Thumb shows while the description scrolls, as in the document editor.
   const descriptionScrollRef = useAutoHideScrollbar<HTMLDivElement>();
 
@@ -116,6 +122,9 @@ function PageShell({
   const title = (
     <TaskTitleField className="text-xl font-semibold leading-snug md:text-2xl" />
   );
+  const descriptionHeading = (
+    <h3 className="text-sm font-semibold text-muted-foreground">Description</h3>
+  );
   // `bounded` (wide layout, where the panel is the page's height): the box
   // grows with its content from the same minimum as below lg until it reaches
   // the bottom of the panel, then scrolls inside itself — `min-h-0` lets the
@@ -129,11 +138,7 @@ function PageShell({
         bounded && "flex min-h-0 flex-col",
       )}
       headerClassName={bounded ? "shrink-0" : undefined}
-      heading={
-        <h3 className="text-sm font-semibold text-muted-foreground">
-          Description
-        </h3>
-      }
+      heading={descriptionHeading}
       editorClassName={cn("min-h-50 md:min-h-75", bounded && "scrollbar-autohide")}
       editorScrollRef={bounded ? descriptionScrollRef : undefined}
     />
@@ -142,24 +147,43 @@ function PageShell({
   // stays above the fold, from lg so the activity under it keeps its height.
   const details = (
     <div className="space-y-5">
-      <TaskPropertiesSection collapsible />
+      <TaskPropertiesSection collapsible hideTags />
       <TaskGithubSection />
       <TaskDependenciesSection collapsible />
     </div>
   );
 
+  // What points at this task, with the local graph to its right — desktop
+  // only, where the title sits in the toolbar. On a phone the toolbar is the
+  // breadcrumb, so the (wrapping, editable) title heads the column instead and
+  // context is a toggle in the header. Page-only: the sheet keeps the
+  // backlinks drawer, it has no room for a canvas.
+  const titleOrContext = isMobile ? (
+    title
+  ) : (
+    <TaskContext taskId={taskId} workspaceId={workspaceId} className="shrink-0" />
+  );
+
   return (
     <div className="flex h-full min-h-0 flex-col">
-      {/* Task toolbar — desktop only: identity, backlinks (in the toolbar, as
-          on every other entity's `SurfaceHeader`) and actions. The title is
-          not in here at any size; it heads the content column. On mobile the
-          breadcrumb carries code + title and the rest moves to HeaderSlot. */}
+      {/* Task toolbar — desktop only: identity, title and actions, like every
+          other entity's `SurfaceHeader` — but no backlinks toggle: on desktop
+          a task's references are its Context section (mobile gets the toggle).
+          On mobile the breadcrumb carries code + title, the editable title
+          heads the content column, and the rest moves to HeaderSlot. */}
       {!isMobile && (
         <div className="flex h-11 shrink-0 items-center gap-2 border-b px-3">
+          {/* Same order as `SurfaceHeader`: tag picker, name, tag strip — the
+              task's identity chips lead its name. The name shrinks first. */}
           <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
+            <TaskTagPicker />
             <TaskIdentity className="text-sm" />
+            {/* Takes every pixel the chips leave, and keeps clear of them. */}
+            <h1 className="mx-2 flex min-w-0 flex-1 text-lg font-semibold">
+              <TaskTitleInline fill />
+            </h1>
+            <TaskTagStrip />
           </div>
-          <BacklinksButton resourceId={taskId} workspaceId={workspaceId} />
           <TaskGithubActions
             task={detail.task}
             projectId={projectId}
@@ -171,17 +195,27 @@ function PageShell({
 
       {isMobile && (
         <HeaderSlot>
+          <TaskTagPicker />
+          {/* Context's stand-in on mobile, where the section is not rendered. */}
           <BacklinksButton resourceId={taskId} workspaceId={workspaceId} />
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() =>
-              activityRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
-            }
-            aria-label="Jump to comments"
-          >
-            <MessageSquare className="size-4" />
-          </Button>
+          {/* Switches the body between description and activity. The icon is
+              the panel it leads to; without a viewer there is no activity. */}
+          {detail.currentUser && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => {
+                setMobilePanel((p) => (p === "description" ? "activity" : "description"));
+              }}
+              aria-label={mobilePanel === "description" ? "Show activity" : "Show description"}
+            >
+              {mobilePanel === "description" ? (
+                <MessageSquare className="size-4" />
+              ) : (
+                <FileText className="size-4" />
+              )}
+            </Button>
+          )}
           <TaskActionsMenu size="icon" />
         </HeaderSlot>
       )}
@@ -192,25 +226,52 @@ function PageShell({
           <WideLayout
             main={
               <div className="mx-auto flex h-full w-full max-w-3xl flex-col gap-8 px-8 py-6">
-                <div className="shrink-0">{title}</div>
+                {titleOrContext}
                 {description(true)}
               </div>
             }
             details={details}
             activity={detail.currentUser && <TaskActivitySection fillHeight />}
           />
+        ) : isMobile ? (
+          <MobileLayout
+            head={
+              <>
+                {titleOrContext}
+                {details}
+              </>
+            }
+            panel={detail.currentUser ? mobilePanel : "description"}
+            description={
+              <TaskDescriptionSection
+                className="flex min-h-0 flex-1 flex-col gap-2"
+                headerClassName="shrink-0"
+                heading={descriptionHeading}
+                // `contain: size` keeps BlockNote's intrinsic height out of
+                // the column's min-content, so flex alone sizes the box and
+                // the editor scrolls inside it (as in the sheet).
+                editorWrapper={(editor) => (
+                  <div className="min-h-0 flex-1 overflow-hidden" style={{ contain: "size" }}>
+                    {editor}
+                  </div>
+                )}
+                editorClassName="h-full overflow-y-auto scrollbar-autohide"
+              />
+            }
+            activity={<TaskActivitySection fillHeight />}
+          />
         ) : (
-          // Single scrolling column, details folded to their essentials so
-          // the description is above the fold on a phone.
+          // Single scrolling column, details folded to their essentials, with
+          // the description and then the activity stacked under them.
           <div className="h-full overflow-y-auto">
-            <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-3 pt-3 pb-8 md:px-6 md:pt-6">
-              {title}
+            <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-6 pt-6 pb-8">
+              {titleOrContext}
               {details}
               {description(false)}
               {/* The timeline needs a viewer to attribute comments to;
                   without one the block (and its divider) stays out. */}
               {detail.currentUser && (
-                <div ref={activityRef} className="scroll-mt-4 border-t pt-6">
+                <div className="border-t pt-6">
                   <TaskActivitySection />
                 </div>
               )}
@@ -225,6 +286,46 @@ function PageShell({
           void navigate(`/workspaces/${workspaceId}/projects/${projectId}`);
         }}
       />
+    </div>
+  );
+}
+
+/**
+ * The phone layout: the page is the viewport's height, never a scroller. Title
+ * and details sit on top (capped, scrolling on their own past the cap, so an
+ * expanded "More details" cannot squeeze the body out); below, one panel takes
+ * every pixel left. The description editor scrolls inside its box; the
+ * activity scrolls its list and keeps the composer pinned to the bottom.
+ *
+ * The description stays mounted while hidden — it is a live editor (BlockNote
+ * over Yjs) and rebuilding it on every switch would be the slow part. The
+ * activity mounts when shown: its query is cached, and mounting is what lands
+ * the list on the newest entry (a `display: none` list has no height to
+ * scroll to the end of).
+ */
+function MobileLayout({
+  head,
+  panel,
+  description,
+  activity,
+}: {
+  head: ReactNode;
+  panel: "description" | "activity";
+  description: ReactNode;
+  activity: ReactNode;
+}) {
+  return (
+    <div className="flex h-full flex-col">
+      <div className="max-h-[45%] shrink-0 space-y-6 overflow-y-auto px-3 pt-3 pb-4">
+        {head}
+      </div>
+      <div className={cn("flex min-h-0 flex-1 flex-col px-3 pb-3", panel !== "description" && "hidden")}>
+        {description}
+      </div>
+      {panel === "activity" && (
+        <div className="flex min-h-0 flex-1 flex-col px-3 pb-3">{activity}</div>
+      )}
+      <SafeAreaSpacer />
     </div>
   );
 }

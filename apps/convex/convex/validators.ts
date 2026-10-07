@@ -114,7 +114,13 @@ export const browsableResourceTypeValidator = v.union(
 
 export const deletionResultValidator = v.union(
   v.object({ status: v.literal("deleted") }),
-  v.object({ status: v.literal("has_references"), references: v.array(referenceValidator) }),
+  v.object({
+    status: v.literal("has_references"),
+    references: v.array(referenceValidator),
+    // A reference the caller cannot see (a private channel they are not in).
+    // Still blocks the unforced delete; see `getEnrichedBacklinks`.
+    hasHiddenReferences: v.boolean(),
+  }),
 );
 
 export const projectValidator = v.object({

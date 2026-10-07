@@ -143,7 +143,7 @@ query behind it (`convex/graph.ts`). Its nodes come from the `nodes` table, one
 row per resource; its links come from `edges` plus **tag synthesis** — `tags` /
 `entityTags` / `taskTags` are read at query time and emitted as virtual tag
 nodes and `tagged_with` links, so tags never became a `resourceType`.
-Distinct from the **local graph** (not yet built): the whole-workspace view is
+Distinct from the **local graph**: the whole-workspace view is
 unbounded in both directions — it reads five whole workspace-scoped tables, and
 its read set is those five index ranges, so any write in the workspace re-runs
 it for every subscribed client. Chat is no longer one of those writes (see
@@ -151,6 +151,17 @@ it for every subscribed client. Chat is no longer one of those writes (see
 on desktop, but the read itself is still uncapped. Treat "add it to the graph"
 as a question about which of those two surfaces you mean.
 _Avoid_: knowledge graph, node graph, graph view, force graph
+
+**Local graph**:
+One resource and its direct neighbours — depth 1, never more — from
+`getLocalGraph` (`convex/graph.ts`), drawn by `LocalGraph.tsx` beside the list
+in a task's **Context** section. Its read is two edge index ranges (into and
+out of the resource) plus one `nodes` read per neighbour, so it is bounded by
+the resource's degree and a write elsewhere in the workspace does not re-run
+it. Channel neighbours follow the channel rule, as in `getBacklinks`. Depth 2
+is ruled out on purpose: it multiplies the read by the neighbours' degree and
+reaches what a private channel *else* talks about.
+_Avoid_: mini graph, neighbourhood graph, ego graph
 
 **Reference chip**:
 The inline, name-only pointer a `#` pick inserts into a message or a document —

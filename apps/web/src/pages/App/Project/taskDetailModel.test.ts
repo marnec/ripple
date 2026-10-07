@@ -82,7 +82,15 @@ describe("createTaskPatch", () => {
     const updateTask = vi.fn().mockRejectedValue(new Error("nope"));
     const patch = createTaskPatch({ taskId, updateTask });
 
-    await expect(patch({ title: "x" })).resolves.toBeUndefined();
+    // Resolves to `false`, so a caller holding a draft knows to undo it.
+    await expect(patch({ title: "x" })).resolves.toBe(false);
+  });
+
+  it("resolves to true once the write lands", async () => {
+    const updateTask = vi.fn().mockResolvedValue(undefined);
+    const patch = createTaskPatch({ taskId, updateTask });
+
+    await expect(patch({ title: "x" })).resolves.toBe(true);
   });
 
   it("names the field that failed, so every property gets the status field's old specificity", async () => {

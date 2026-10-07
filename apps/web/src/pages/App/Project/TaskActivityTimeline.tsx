@@ -29,6 +29,7 @@ import {
   FileText,
   Minus,
   Lock,
+  SendHorizontal,
 } from "lucide-react";
 import { useLayoutEffect, useRef, useState } from "react";
 import { api } from "@convex/_generated/api";
@@ -463,58 +464,91 @@ export function TaskActivityTimeline({ taskId, currentUserId, workspaceId, membe
       <div
         className={
           fillHeight
-            ? "space-y-2 mt-3 shrink-0 border-t pt-3"
+            ? "space-y-2 mt-3 shrink-0"
             : "space-y-2"
         }
         onKeyDown={handleKeyDown}
       >
-        {isLinked && (
-          <Tabs value={lane} onValueChange={(v) => setLane(v as CommentLane)}>
-            <TabsList className="h-7 pointer-coarse:h-9">
-              <TabsTrigger value="private" className="h-6 gap-1 px-2 text-xs pointer-coarse:h-8">
-                <Lock className="h-3 w-3" />
-                Private note
-              </TabsTrigger>
-              <TabsTrigger value="reply" className="h-6 gap-1 px-2 text-xs pointer-coarse:h-8">
-                {provider === "gitlab" ? <GitlabMark className="h-3 w-3" /> : <GithubMark className="h-3 w-3" />}
-                Reply on {providerLabel(provider)}
-              </TabsTrigger>
-            </TabsList>
-          </Tabs>
-        )}
-        <div className="task-comment-editor border rounded-md p-2">
-          <BlockNoteView
-            editor={editor}
-            theme={resolvedTheme === "dark" ? "dark" : "light"}
-            sideMenu={false}
-            portalElements={BODY_PORTAL_ELEMENTS}
-            onChange={() => {
-              setIsEmpty(isBlocksEmpty(editor.document));
-            }}
-          >
-            <SuggestionMenuController
-              triggerCharacter="@"
-              getItems={getMemberItems}
-              floatingUIOptions={SUGGESTION_MENU_FLOATING_OPTIONS}
+        {/* One box, chat-composer style: the editor, then a single row of
+            controls inside the same border. The lane used to be a tab strip
+            of its own above the box — a full row on a phone, for a choice
+            between two values — so it is a toggle chip in the action row now,
+            and the send button names what it will do. */}
+        <div className="task-comment-editor rounded-md border transition-colors focus-within:border-foreground/25">
+          <div className="px-2 pt-2">
+            <BlockNoteView
+              editor={editor}
+              theme={resolvedTheme === "dark" ? "dark" : "light"}
+              sideMenu={false}
+              portalElements={BODY_PORTAL_ELEMENTS}
+              onChange={() => {
+                setIsEmpty(isBlocksEmpty(editor.document));
+              }}
+            >
+              <SuggestionMenuController
+                triggerCharacter="@"
+                getItems={getMemberItems}
+                floatingUIOptions={SUGGESTION_MENU_FLOATING_OPTIONS}
+              />
+            </BlockNoteView>
+          </div>
+          {/* `empty:hidden`: the list renders nothing until a file is added. */}
+          <div className="px-2 pt-2 empty:hidden">
+            <DraftAttachmentList attachments={attachments} />
+          </div>
+          <div className="flex items-center gap-1 p-1">
+            <AttachFilesButton
+              attachments={attachments}
+              disabled={!canAttach}
+              disabledReason="Attachments can only go on private notes"
             />
-          </BlockNoteView>
+            {isLinked && (
+              <button
+                type="button"
+                onClick={() => setLane(lane === "private" ? "reply" : "private")}
+                aria-label={
+                  lane === "private"
+                    ? `Private note. Switch to reply on ${providerLabel(provider)}`
+                    : `Reply on ${providerLabel(provider)}. Switch to private note`
+                }
+                title={
+                  lane === "private"
+                    ? "Private note — stays in Ripple. Click to reply on the issue instead."
+                    : `Posted to the linked ${providerLabel(provider)} issue. Click to make it a private note.`
+                }
+                className={cn(
+                  "flex h-7 items-center gap-1 rounded-full px-2 text-xs transition-colors pointer-coarse:h-9 pointer-coarse:px-3",
+                  lane === "private"
+                    ? "text-muted-foreground hover:bg-muted hover:text-foreground"
+                    : "bg-muted text-foreground hover:bg-muted/70",
+                )}
+              >
+                {lane === "private" ? (
+                  <Lock className="h-3 w-3" />
+                ) : provider === "gitlab" ? (
+                  <GitlabMark className="h-3 w-3" />
+                ) : (
+                  <GithubMark className="h-3 w-3" />
+                )}
+                {lane === "private" ? "Private" : providerLabel(provider)}
+              </button>
+            )}
+            <Button
+              onClick={handleSubmit}
+              disabled={!canSubmit}
+              size="sm"
+              className="ml-auto gap-1 pointer-coarse:h-9"
+            >
+              {!isLinked ? "Comment" : lane === "private" ? "Note" : "Reply"}
+              <SendHorizontal className="h-3.5 w-3.5" />
+            </Button>
+          </div>
         </div>
-        <DraftAttachmentList attachments={attachments} />
-        <div className="flex items-center gap-2">
-          <AttachFilesButton
-            attachments={attachments}
-            disabled={!canAttach}
-            disabledReason="Attachments can only go on private notes"
-          />
-          {blockedAttachments && (
-            <p className="min-w-0 flex-1 text-xs text-muted-foreground">
-              Attachments stay in Ripple — switch to a private note to send them.
-            </p>
-          )}
-          <Button onClick={handleSubmit} disabled={!canSubmit} size="sm" className="ml-auto">
-            Comment
-          </Button>
-        </div>
+        {blockedAttachments && (
+          <p className="text-xs text-muted-foreground">
+            Attachments stay in Ripple — switch to a private note to send them.
+          </p>
+        )}
       </div>
       </div>
     </div>

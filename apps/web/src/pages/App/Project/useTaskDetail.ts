@@ -17,7 +17,7 @@ import { useResourceDoc } from "../../../hooks/use-collab-session";
 import { syncState } from "@/lib/collab/connection-policy";
 import { useTaskGithubLink } from "./useTaskGithubLink";
 import { useTaskEditTracking } from "./useTaskEditTracking";
-import { useTitleDraft } from "./useTitleDraft";
+import { useTitleDraft } from "@/hooks/use-title-draft";
 
 const taskDescriptionDictionary = {
   ...richTextDictionary,

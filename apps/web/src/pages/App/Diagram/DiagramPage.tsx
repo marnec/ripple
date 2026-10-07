@@ -64,6 +64,7 @@ function DiagramPageContent({
   const updateTags = useMutation(api.diagrams.updateTags).withOptimisticUpdate(
     tagsOptimisticUpdate(api.diagrams.get),
   );
+  const renameDiagram = useMutation(api.diagrams.rename);
 
   // Per-frame embeds of this diagram: drives the "delete an embedded frame"
   // warning. Each row is one (source, frame) place that embeds a specific frame.
@@ -136,6 +137,7 @@ function DiagramPageContent({
             resourceId={diagramId}
             workspaceId={workspaceId}
             onTagsChange={(tags) => void updateTags({ id: diagramId, tags })}
+            onRename={(name) => renameDiagram({ id: diagramId, name })}
             settingsTitle="Diagram settings"
             focusable
             activeUsers={(awareness) => (

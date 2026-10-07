@@ -57,6 +57,7 @@ function renderHeader(surface: HydratedSurface<Meta>) {
           resourceId="doc-1"
           workspaceId={"ws-1" as never}
           onTagsChange={() => {}}
+          onRename={() => Promise.resolve()}
           settingsTitle="Document settings"
           tools={<div data-testid="tools" />}
           actions={(meta) => <div data-testid="actions">{meta.name}</div>}
@@ -113,6 +114,12 @@ describe("SurfaceHeader", () => {
 
       expect(screen.getByText("written on a previous visit")).toBeInTheDocument();
     });
+
+    it("shows the name as text, not as a field to rename it", () => {
+      renderHeader(offline);
+
+      expect(screen.queryByRole("textbox", { name: "Document name" })).not.toBeInTheDocument();
+    });
   });
 
   describe("while it is", () => {
@@ -124,6 +131,12 @@ describe("SurfaceHeader", () => {
       expect(screen.getByTestId("backlinks")).toBeInTheDocument();
       expect(screen.getByTestId("actions")).toBeInTheDocument();
       expect(screen.getByTitle("Document settings")).toBeInTheDocument();
+    });
+
+    it("makes the name editable in place", () => {
+      renderHeader(surfaceOf());
+
+      expect(screen.getByRole("textbox", { name: "Document name" })).toHaveValue("Quarterly plan");
     });
 
     it("shows presence only while the socket is actually up", () => {

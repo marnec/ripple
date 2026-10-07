@@ -28,6 +28,8 @@ type DeleteWarningDialogProps = {
   resourceType: "diagram" | "document" | "spreadsheet";
   resourceName: string;
   preloadedReferences?: Reference[];
+  /** Pairs with `preloadedReferences`: the delete mutation's `hasHiddenReferences`. */
+  preloadedHasHidden?: boolean;
 };
 
 const PAGE_SIZE = 5;
@@ -41,14 +43,20 @@ export function DeleteWarningDialog({
   resourceType,
   resourceName,
   preloadedReferences,
+  preloadedHasHidden,
 }: DeleteWarningDialogProps) {
   const queriedReferences = useQuery(
     api.edges.getBacklinks,
     open && !preloadedReferences ? { targetId: resourceId, workspaceId } : "skip",
   );
 
-  const references = preloadedReferences ?? queriedReferences;
-  const hasReferences = references && references.length > 0;
+  const references = preloadedReferences ?? queriedReferences?.references;
+  // References in private channels the caller is not in: their existence is
+  // all the backend discloses, but deleting still breaks them.
+  const hasHidden = preloadedReferences
+    ? (preloadedHasHidden ?? false)
+    : (queriedReferences?.hasHidden ?? false);
+  const hasReferences = references !== undefined && (references.length > 0 || hasHidden);
   const isLoading = references === undefined && open;
 
   const [page, setPage] = useState(0);
@@ -75,29 +83,37 @@ export function DeleteWarningDialog({
                 <>
                   <span className="flex items-center gap-2 text-amber-600 dark:text-amber-500 font-medium mb-3">
                     <AlertTriangle className="h-4 w-4 shrink-0" />
-                    &ldquo;{resourceName}&rdquo; is embedded in {references.length}{" "}
-                    {references.length === 1 ? "place" : "places"}:
+                    {references.length > 0 ? (
+                      <>
+                        &ldquo;{resourceName}&rdquo; is embedded in {references.length}{" "}
+                        {references.length === 1 ? "place" : "places"}:
+                      </>
+                    ) : (
+                      <>&ldquo;{resourceName}&rdquo; is referenced elsewhere</>
+                    )}
                   </span>
-                  <ul className="space-y-1.5 mb-2">
-                    {pageItems.map((ref: Reference) => {
-                      const config = SOURCE_TYPE_LABELS[ref.sourceType] ?? SOURCE_TYPE_LABELS.document;
-                      const Icon = config.icon;
-                      const href = getSourceLink(ref);
-                      return (
-                        <li key={ref._id} className="flex items-center gap-2 text-sm">
-                          <Icon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                          <Link
-                            to={href}
-                            className="truncate hover:underline text-foreground"
-                            onClick={() => onOpenChange(false)}
-                          >
-                            {ref.sourceName}
-                          </Link>
-                          <span className="text-muted-foreground text-xs shrink-0">({config.label})</span>
-                        </li>
-                      );
-                    })}
-                  </ul>
+                  {references.length > 0 && (
+                    <ul className="space-y-1.5 mb-2">
+                      {pageItems.map((ref: Reference) => {
+                        const config = SOURCE_TYPE_LABELS[ref.sourceType] ?? SOURCE_TYPE_LABELS.document;
+                        const Icon = config.icon;
+                        const href = getSourceLink(ref);
+                        return (
+                          <li key={ref._id} className="flex items-center gap-2 text-sm">
+                            <Icon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                            <Link
+                              to={href}
+                              className="truncate hover:underline text-foreground"
+                              onClick={() => onOpenChange(false)}
+                            >
+                              {ref.sourceName}
+                            </Link>
+                            <span className="text-muted-foreground text-xs shrink-0">({config.label})</span>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
                   {totalPages > 1 && (
                     <div className="flex items-center justify-between mb-2">
                       <Button
@@ -125,8 +141,14 @@ export function DeleteWarningDialog({
                       </Button>
                     </div>
                   )}
+                  {hasHidden && (
+                    <p className="text-sm text-foreground mb-2">
+                      {references.length > 0 ? "It’s also" : "It’s"} mentioned in private
+                      conversations you&rsquo;re not part of.
+                    </p>
+                  )}
                   <p className="text-sm text-muted-foreground">
-                    These embeds will appear as broken after deletion. This action cannot be undone.
+                    These references will appear as broken after deletion. This action cannot be undone.
                   </p>
                 </>
               )}

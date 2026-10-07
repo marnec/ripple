@@ -23,6 +23,8 @@ import { useState } from "react";
 import type { Id } from "@convex/_generated/dataModel";
 import { DatePickerField } from "./DatePickerField";
 import { PROPERTY_TRIGGER_CLASS, PropertyRow } from "./PropertyRow";
+import { TaskPropertyPills } from "./TaskPropertyPills";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 type TaskPropertiesProps = {
   task: {
@@ -49,6 +51,11 @@ type TaskPropertiesProps = {
    * the fold.
    */
   collapsible?: boolean;
+  /**
+   * Leave tags out: the full page keeps them in its toolbar, as every other
+   * resource's `SurfaceHeader` does.
+   */
+  hideTags?: boolean;
   onStatusChange: (statusId: Id<"taskStatuses">) => void;
   onPriorityChange: (priority: "urgent" | "high" | "medium" | "low") => void;
   onAssigneeChange: (value: string) => void;
@@ -72,6 +79,7 @@ export function TaskProperties({
   statuses,
   members,
   collapsible = false,
+  hideTags = false,
   onStatusChange,
   onPriorityChange,
   onAssigneeChange,
@@ -81,6 +89,7 @@ export function TaskProperties({
   onStartDateChange,
   onEstimateChange,
 }: TaskPropertiesProps) {
+  const isMobile = useIsMobile();
   const [detailsOpen, setDetailsOpen] = useState(false);
   // Optional properties the user asked to add in this view. The caller keys
   // this component by task, so the set never leaks onto another task.
@@ -96,6 +105,57 @@ export function TaskProperties({
   const justAdded = (p: OptionalProperty) =>
     added.has(p) && (p === "plannedStart" ? task.plannedStartDate : task.estimate) == null;
   const detailsVisible = !collapsible || detailsOpen;
+
+  const tagsRow = (
+    <PropertyRow label="Tags" alignTop>
+      <div className="flex flex-wrap items-center gap-1 py-1">
+        {task.tags?.map((tag) => (
+          <Badge
+            key={tag}
+            variant="secondary"
+            className="flex items-center gap-0.5 pr-0.5"
+          >
+            #{tag}
+            <button
+              type="button"
+              onClick={() => onRemoveTag(tag)}
+              aria-label={`Remove tag ${tag}`}
+              className="rounded-sm p-0.5 hover:text-destructive pointer-coarse:p-1.5"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          </Badge>
+        ))}
+        <TagPickerButton
+          workspaceId={task.workspaceId}
+          value={task.tags ?? []}
+          onChange={onSetTags}
+          triggerVariant="pill"
+        />
+      </div>
+    </PropertyRow>
+  );
+
+  // On a phone every property is a pill (each a bottom sheet), all visible at
+  // once: no labelled rows, no "More details" fold. See `TaskPropertyPills`.
+  if (isMobile) {
+    return (
+      <div className="space-y-2">
+        <TaskPropertyPills
+          task={task}
+          statuses={statuses}
+          members={members}
+          onStatusChange={onStatusChange}
+          onPriorityChange={onPriorityChange}
+          onAssigneeChange={onAssigneeChange}
+          onDueDateChange={onDueDateChange}
+          onStartDateChange={onStartDateChange}
+          onEstimateChange={onEstimateChange}
+        />
+        {!hideTags && tagsRow}
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-1">
@@ -277,33 +337,7 @@ export function TaskProperties({
           )}
 
           {/* Tags — the picker searches and creates, so it is the only way in. */}
-          <PropertyRow label="Tags" alignTop>
-            <div className="flex flex-wrap items-center gap-1 py-1">
-              {task.tags?.map((tag) => (
-                <Badge
-                  key={tag}
-                  variant="secondary"
-                  className="flex items-center gap-0.5 pr-0.5"
-                >
-                  #{tag}
-                  <button
-                    type="button"
-                    onClick={() => onRemoveTag(tag)}
-                    aria-label={`Remove tag ${tag}`}
-                    className="rounded-sm p-0.5 hover:text-destructive pointer-coarse:p-1.5"
-                  >
-                    <X className="h-3 w-3" />
-                  </button>
-                </Badge>
-              ))}
-              <TagPickerButton
-                workspaceId={task.workspaceId}
-                value={task.tags ?? []}
-                onChange={onSetTags}
-                triggerVariant="pill"
-              />
-            </div>
-          </PropertyRow>
+          {!hideTags && tagsRow}
 
           {addable.length > 0 && (
             <div className="flex flex-wrap gap-1 pt-1">

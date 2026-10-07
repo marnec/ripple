@@ -343,7 +343,7 @@ describe("edges.getFrameEmbeds", () => {
       workspaceId,
     });
 
-    const backlinks = await asUser.query(api.edges.getBacklinks, {
+    const { references: backlinks } = await asUser.query(api.edges.getBacklinks, {
       targetId: diagramId,
       workspaceId,
     });
@@ -625,7 +625,7 @@ describe("edges.getBacklinks", () => {
       workspaceId,
     });
 
-    const backlinks = await asUser.query(api.edges.getBacklinks, {
+    const { references: backlinks } = await asUser.query(api.edges.getBacklinks, {
       targetId: diagramId,
       workspaceId,
     });
@@ -639,7 +639,7 @@ describe("edges.getBacklinks", () => {
   it("should return empty for unauthenticated users", async () => {
     const t = createTestContext();
     const { workspaceId } = await setupWorkspaceWithAdmin(t);
-    const backlinks = await t.query(api.edges.getBacklinks, {
+    const { references: backlinks } = await t.query(api.edges.getBacklinks, {
       targetId: "someId",
       workspaceId,
     });
@@ -842,7 +842,7 @@ describe("edges.syncMentionEdges", () => {
     });
 
     // Query backlinks for the mentioned user
-    const backlinks = await asUser.query(api.edges.getBacklinks, {
+    const { references: backlinks } = await asUser.query(api.edges.getBacklinks, {
       targetId: mentionedUserId,
       workspaceId,
     });
@@ -1185,7 +1185,7 @@ describe("channel mention edges (via messages trigger)", () => {
       channelId,
     });
 
-    const backlinks = await asUser.query(api.edges.getBacklinks, { targetId: taskId, workspaceId });
+    const { references: backlinks } = await asUser.query(api.edges.getBacklinks, { targetId: taskId, workspaceId });
     // Filter out belongs_to edges (task→project), keep only mentions
     const mentionBacklinks = backlinks.filter((b) => b.edgeType === "mentions");
     expect(mentionBacklinks).toHaveLength(1);

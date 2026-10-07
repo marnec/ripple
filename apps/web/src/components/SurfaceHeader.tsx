@@ -6,6 +6,7 @@ import type { Id } from "@convex/_generated/dataModel";
 import { Button } from "@ripple/ui/components/button";
 import { BacklinksButton } from "@/components/BacklinksDrawer";
 import { FavoriteButton } from "@/components/FavoriteButton";
+import { InlineTitleField } from "@/components/InlineTitleField";
 import { SyncIndicator } from "@/components/SyncIndicator";
 import { TagInlineStrip, TagPickerButton } from "@/components/TagPickerButton";
 import {
@@ -32,6 +33,11 @@ interface SurfaceHeaderProps<TMeta extends SurfaceMeta> {
    */
   workspaceId: Id<"workspaces">;
   onTagsChange: (tags: string[]) => void;
+  /**
+   * Rename from the header. A rejection is toasted and the title reverts, so
+   * pass the mutation's promise through rather than swallowing it.
+   */
+  onRename: (name: string) => Promise<unknown>;
   /** Tooltip/aria label for the settings link, e.g. "Diagram settings". */
   settingsTitle: string;
   /** Centre of the header bar. The spreadsheet's formula bar. */
@@ -77,6 +83,7 @@ export function SurfaceHeader<TMeta extends SurfaceMeta>({
   resourceId,
   workspaceId,
   onTagsChange,
+  onRename,
   settingsTitle,
   centre,
   tools,
@@ -126,8 +133,18 @@ export function SurfaceHeader<TMeta extends SurfaceMeta>({
               />
             </>
           )}
-          <h1 className="hidden sm:block text-lg font-semibold truncate">
-            {meta?.name ?? ""}
+          {/* Editable only while the server answers — the same `isLive` rule
+              as every other control that changes the resource. */}
+          <h1 className="hidden sm:flex min-w-0 text-lg font-semibold">
+            {isLive && meta ? (
+              <InlineTitleField
+                value={meta.name}
+                onCommit={onRename}
+                ariaLabel={`${named.charAt(0).toUpperCase()}${named.slice(1)} name`}
+              />
+            ) : (
+              <span className="truncate">{meta?.name ?? ""}</span>
+            )}
           </h1>
           <TagInlineStrip tags={meta?.tags ?? []} />
         </div>

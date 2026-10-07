@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { query } from "./_generated/server";
-import { checkWorkspaceMember } from "./authHelpers";
+import type { Id } from "./_generated/dataModel";
+import { checkChannelAccess, checkChannelAccessBatch, checkWorkspaceMember, visibleChannelIds } from "./authHelpers";
 
 // ── Validators ──────────────────────────────────────────────────────
 
@@ -67,7 +68,7 @@ export const getWorkspaceGraph = query({
     // One indexed range per drawn edge kind rather than one scan of the whole
     // workspace: seven index ranges out of a 4,096 budget, and `belongs_to` is
     // never read at all.
-    const [nodeRows, edgeGroups, tagRows, entityTagRows, taskTagRows] = await Promise.all([
+    const [nodeRows, edgeGroups, tagRows, entityTagRows, taskTagRows, channelIds] = await Promise.all([
       ctx.db.query("nodes").withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId)).collect(),
       Promise.all(
         DISPLAYED_EDGE_TYPES.map((edgeType) =>
@@ -88,10 +89,19 @@ export const getWorkspaceGraph = query({
       withTags
         ? ctx.db.query("taskTags").withIndex("by_workspace_tag", (q) => q.eq("workspaceId", workspaceId)).collect()
         : [],
+      visibleChannelIds(ctx, workspaceId, auth.userId),
     ]);
     const edgeRows = edgeGroups.flat();
 
-    const nodes: Array<{ id: string; type: string; name?: string; groupId?: string }> = nodeRows.map((n) => ({
+    // The channel rule, not the workspace rule: a closed channel or DM the
+    // caller is not in is not a node of their graph. Dropping the node drops
+    // its links too (`validNodeIds` below), so neither its name nor what it
+    // talks about reaches them.
+    const visibleNodeRows = nodeRows.filter(
+      (n) => n.resourceType !== "channel" || channelIds.has(n.resourceId),
+    );
+
+    const nodes: Array<{ id: string; type: string; name?: string; groupId?: string }> = visibleNodeRows.map((n) => ({
       id: n.resourceId,
       type: n.resourceType,
       name: n.name,
@@ -143,6 +153,121 @@ export const getWorkspaceGraph = query({
 });
 
 /**
+ * Edges read per direction by `getLocalGraph`. A resource's degree is small in
+ * practice (channel mentions are one edge per channel, not per message); the
+ * cap is what keeps a pathological hub from turning a page header into a
+ * whole-table read.
+ */
+const LOCAL_GRAPH_EDGE_CAP = 200;
+
+/**
+ * The **local graph**: one resource and its direct neighbours, depth 1 only.
+ *
+ * Two index ranges — edges into the resource (`by_workspace_target`) and out
+ * of it (`by_source`) — plus one `nodes` point read per neighbour. Unlike
+ * `getWorkspaceGraph` its read set is bounded by the resource's degree, so a
+ * write elsewhere in the workspace does not re-run it.
+ *
+ * Channel neighbours follow the channel rule: a closed channel or DM the
+ * caller is not in is dropped along with its link, exactly as in
+ * `getEnrichedBacklinks`. `belongs_to` is kept (unlike the workspace graph):
+ * here the containing project is context, not clutter.
+ */
+export const getLocalGraph = query({
+  args: {
+    resourceId: v.string(),
+    workspaceId: v.id("workspaces"),
+  },
+  returns: v.object({
+    nodes: v.array(graphNodeValidator),
+    links: v.array(graphLinkValidator),
+  }),
+  handler: async (ctx, { resourceId, workspaceId }) => {
+    const empty = { nodes: [], links: [] };
+    const auth = await checkWorkspaceMember(ctx, workspaceId);
+    if (!auth) return empty;
+
+    const center = await ctx.db
+      .query("nodes")
+      .withIndex("by_resource_workspace", (q) =>
+        q.eq("resourceId", resourceId).eq("workspaceId", workspaceId),
+      )
+      .first();
+    if (!center) return empty;
+
+    const [incoming, outgoing] = await Promise.all([
+      ctx.db
+        .query("edges")
+        .withIndex("by_workspace_target", (q) =>
+          q.eq("workspaceId", workspaceId).eq("targetId", resourceId),
+        )
+        .take(LOCAL_GRAPH_EDGE_CAP),
+      ctx.db
+        .query("edges")
+        .withIndex("by_source", (q) => q.eq("sourceId", resourceId))
+        .take(LOCAL_GRAPH_EDGE_CAP),
+    ]);
+
+    // One link per neighbour; the first edge kind seen labels it. `by_source`
+    // has no workspace column, so the workspace check is ours to make.
+    const neighbours = new Map<string, { type: string; edgeType: string; outgoing: boolean }>();
+    for (const e of incoming) {
+      if (e.sourceId === resourceId || neighbours.has(e.sourceId)) continue;
+      neighbours.set(e.sourceId, { type: e.sourceType, edgeType: e.edgeType, outgoing: false });
+    }
+    for (const e of outgoing) {
+      if (e.workspaceId !== workspaceId) continue;
+      if (e.targetId === resourceId || neighbours.has(e.targetId)) continue;
+      neighbours.set(e.targetId, { type: e.targetType, edgeType: e.edgeType, outgoing: true });
+    }
+
+    const channelIds = [...neighbours]
+      .filter(([, n]) => n.type === "channel")
+      .map(([id]) => id as Id<"channels">);
+    const channelAccess = channelIds.length
+      ? await checkChannelAccessBatch(ctx, channelIds)
+      : new Map();
+
+    const visible = [...neighbours].filter(
+      ([id, n]) => n.type !== "channel" || channelAccess.has(id as Id<"channels">),
+    );
+    const nodeRows = await Promise.all(
+      visible.map(([id]) =>
+        ctx.db
+          .query("nodes")
+          .withIndex("by_resource_workspace", (q) =>
+            q.eq("resourceId", id).eq("workspaceId", workspaceId),
+          )
+          .first(),
+      ),
+    );
+
+    const toNode = (n: NonNullable<(typeof nodeRows)[number]>) => ({
+      id: n.resourceId,
+      type: n.resourceType,
+      name: n.resourceType === "channel" ? `#${n.name}` : n.name,
+      groupId: n.metadata?.type === "task" ? n.metadata.projectId : undefined,
+    });
+
+    const nodes = [toNode(center)];
+    const links: Array<{ source: string; target: string; edgeType: string }> = [];
+    visible.forEach(([id, n], i) => {
+      const row = nodeRows[i];
+      // No node row: a deleted resource whose edge has not cascaded yet.
+      if (!row) return;
+      nodes.push(toNode(row));
+      links.push(
+        n.outgoing
+          ? { source: resourceId, target: id, edgeType: n.edgeType }
+          : { source: id, target: resourceId, edgeType: n.edgeType },
+      );
+    });
+
+    return { nodes, links };
+  },
+});
+
+/**
  * Lazy-load a single node's display label.
  * Called on hover from the graph UI.
  * All resource types (including users) resolve via the nodes table.
@@ -164,6 +289,13 @@ export const getNodeLabel = query({
     const auth = await checkWorkspaceMember(ctx, node.workspaceId);
     if (!auth) return null;
 
-    return type === "channel" ? `#${node.name}` : node.name;
+    // A channel's name is the channel's own data: the channel rule, keyed off
+    // the node row (not the caller-supplied `type`, which proves nothing).
+    if (node.resourceType === "channel") {
+      const access = await checkChannelAccess(ctx, node.resourceId as Id<"channels">);
+      if (!access) return null;
+      return `#${node.name}`;
+    }
+    return node.name;
   },
 });

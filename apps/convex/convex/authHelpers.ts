@@ -2,11 +2,12 @@ import { ConvexError, v } from "convex/values";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import type { Id, Doc } from "./_generated/dataModel";
 import type { QueryCtx } from "./_generated/server";
-import { WorkspaceRole, ChannelRole } from "@ripple/shared/enums";
+import { WorkspaceRole, ChannelRole, ChannelKind, ChannelVisibility } from "@ripple/shared/enums";
 import type { YjsShareRoom } from "@ripple/shared/shareTypes";
 import { normalizeIds } from "./utils/ids";
 
 import { isPublicChannel } from "@ripple/shared/channel";
+import { WORKSPACE_CHANNEL_LIMIT } from "@ripple/shared/constants";
 // ─── Result types ────────────────────────────────────────────────────
 
 export interface AuthIdentity {
@@ -430,6 +431,48 @@ export async function checkChannelAccessBatch(
   }
 
   return access;
+}
+
+/**
+ * The channel rule applied to a whole workspace at once: the ids of every
+ * channel `userId` may see in `workspaceId` — the public ones, plus the closed
+ * channels and DMs they hold a `channelMembers` row in.
+ *
+ * Two index ranges, independent of how many private channels and DMs exist,
+ * where `checkChannelAccessBatch` would point-read each one. For a caller that
+ * holds every channel of a workspace (the workspace graph); the caller must
+ * already have checked workspace membership.
+ */
+export async function visibleChannelIds(
+  ctx: { db: QueryCtx["db"] },
+  workspaceId: Id<"workspaces">,
+  userId: Id<"users">,
+): Promise<Set<string>> {
+  const [publicChannels, memberships] = await Promise.all([
+    ctx.db
+      .query("channels")
+      .withIndex("by_kind_visibility_workspace", (q) =>
+        q
+          .eq("kind", ChannelKind.CHANNEL)
+          .eq("visibility", ChannelVisibility.PUBLIC)
+          .eq("workspaceId", workspaceId),
+      )
+      .take(WORKSPACE_CHANNEL_LIMIT),
+    // The caller's own rows: at most the channel cap plus one DM per other
+    // member (DMs are outside `WORKSPACE_CHANNEL_LIMIT`). The only caller
+    // already collects every node in the workspace, a strictly larger range.
+    // eslint-disable-next-line @convex-dev/no-collect-in-query
+    ctx.db
+      .query("channelMembers")
+      .withIndex("by_workspace_user", (q) =>
+        q.eq("workspaceId", workspaceId).eq("userId", userId),
+      )
+      .collect(),
+  ]);
+  return new Set<string>([
+    ...publicChannels.map((c) => c._id),
+    ...memberships.map((m) => m.channelId),
+  ]);
 }
 
 /**

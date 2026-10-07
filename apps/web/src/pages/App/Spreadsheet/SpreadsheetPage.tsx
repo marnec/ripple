@@ -274,6 +274,7 @@ function SpreadsheetEditor({
   const updateTags = useMutation(api.spreadsheets.updateTags).withOptimisticUpdate(
     tagsOptimisticUpdate(api.spreadsheets.get),
   );
+  const renameSpreadsheet = useMutation(api.spreadsheets.rename);
 
   // Stabilize ref identity to prevent unnecessary JSpreadsheetGrid re-renders
   const referencedCellRefs = showRefHighlights ? rawRefs ?? [] : [];
@@ -298,6 +299,7 @@ function SpreadsheetEditor({
             resourceId={spreadsheetId}
             workspaceId={workspaceId}
             onTagsChange={(tags) => void updateTags({ id: spreadsheetId, tags })}
+            onRename={(name) => renameSpreadsheet({ id: spreadsheetId, name })}
             settingsTitle="Spreadsheet settings"
             focusable
             onBacklinksOpenChange={setShowRefHighlights}

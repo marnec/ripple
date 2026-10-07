@@ -16,6 +16,7 @@ type DeleteResult = {
     workspaceId: string;
     projectId?: string;
   }>;
+  hasHiddenReferences?: boolean;
 };
 
 type ResourceConfig = {
@@ -35,6 +36,7 @@ type PendingDelete = {
   id: string;
   name: string;
   references: DeleteResult["references"];
+  hasHiddenReferences: boolean;
 };
 
 type DeleteMutationFn = (args: { id: any; force?: boolean }) => Promise<DeleteResult>;
@@ -50,7 +52,12 @@ async function executeDelete(
   try {
     const result = await deleteMutation({ id: id as any });
     if (result?.status === "has_references") {
-      setPending({ id, name, references: result.references });
+      setPending({
+        id,
+        name,
+        references: result.references,
+        hasHiddenReferences: result.hasHiddenReferences ?? false,
+      });
     } else {
       toast.success(`${resourceType.charAt(0).toUpperCase() + resourceType.slice(1)} deleted`);
       onDeleted?.();
@@ -108,6 +115,7 @@ export function useConfirmedDelete(
       resourceType={resourceType}
       resourceName={pending.name}
       preloadedReferences={pending.references}
+      preloadedHasHidden={pending.hasHiddenReferences}
     />
   ) : null;
 

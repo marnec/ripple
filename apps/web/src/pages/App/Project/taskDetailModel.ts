@@ -80,7 +80,9 @@ function patchFailureMessage(fields: TaskPatch): string {
  * Every property edit goes through the returned `patch`, so the error path is
  * written once rather than once per field, and a surface with no task selected
  * simply cannot write. The returned function never rejects — callers fire it
- * and forget it, and a failure reaches the user as a toast.
+ * and forget it, and a failure reaches the user as a toast. It resolves to
+ * whether the write landed, for the one caller that must undo a local draft
+ * on failure (`InlineTitleField`, via `TaskTitleInline`).
  */
 export function createTaskPatch({
   taskId,
@@ -88,15 +90,17 @@ export function createTaskPatch({
 }: {
   taskId: Id<"tasks"> | null;
   updateTask: (args: TaskPatch & { taskId: Id<"tasks"> }) => Promise<unknown>;
-}): (fields: TaskPatch) => Promise<void> {
+}): (fields: TaskPatch) => Promise<boolean> {
   return async (fields) => {
-    if (!taskId) return;
+    if (!taskId) return false;
     try {
       await updateTask({ ...fields, taskId });
+      return true;
     } catch (err: unknown) {
       toast.error(patchFailureMessage(fields), {
         description: getErrorMessage(err),
       });
+      return false;
     }
   };
 }

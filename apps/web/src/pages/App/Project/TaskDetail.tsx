@@ -18,6 +18,8 @@ import {
   ResponsiveDropdownMenuTrigger,
 } from "@/components/ui/responsive-dropdown-menu";
 import { TaskCode } from "@/components/TaskCode";
+import { InlineTitleField } from "@/components/InlineTitleField";
+import { TagInlineStrip, TagPickerButton } from "@/components/TagPickerButton";
 import { cn } from "@/lib/utils";
 import { TaskActivityTimeline } from "./TaskActivityTimeline";
 import { TaskDeleteDialog } from "./TaskDeleteDialog";
@@ -144,6 +146,26 @@ export function TaskTitleField({ className }: { className?: string }) {
 }
 
 /**
+ * The task title as one line of toolbar text, the way every surface shows its
+ * name (`SurfaceHeader`). For the desktop page, whose toolbar has the width;
+ * the sheet and the phone keep the wrapping `TaskTitleField`.
+ */
+export function TaskTitleInline({ className, fill }: { className?: string; fill?: boolean }) {
+  const detail = useLoadedTask();
+  if (!detail) return null;
+  return (
+    <InlineTitleField
+      value={detail.task.title}
+      onCommit={(title) => detail.patch({ title })}
+      ariaLabel="Task title"
+      placeholder="Task title"
+      fill={fill}
+      className={className}
+    />
+  );
+}
+
+/**
  * The task's secondary actions — move to another cycle, copy link, delete —
  * behind one overflow button, so the destructive action is never the control
  * sitting next to the title. A drawer on mobile (via `ResponsiveDropdownMenu`).
@@ -246,7 +268,13 @@ function TaskCycleMenuItems({
  * through the module's single `patch`, so a failure in any of them surfaces
  * the same way.
  */
-export function TaskPropertiesSection({ collapsible }: { collapsible?: boolean }) {
+export function TaskPropertiesSection({
+  collapsible,
+  hideTags,
+}: {
+  collapsible?: boolean;
+  hideTags?: boolean;
+}) {
   const detail = useLoadedTask();
   if (!detail || !detail.statuses || !detail.members) return null;
   const { task, patch } = detail;
@@ -258,6 +286,7 @@ export function TaskPropertiesSection({ collapsible }: { collapsible?: boolean }
       key={task._id}
       task={task}
       collapsible={collapsible}
+      hideTags={hideTags}
       statuses={detail.statuses}
       members={detail.members}
       onStatusChange={(statusId) => void patch({ statusId })}
@@ -276,6 +305,32 @@ export function TaskPropertiesSection({ collapsible }: { collapsible?: boolean }
       onEstimateChange={(estimate) => void patch({ estimate })}
     />
   );
+}
+
+/**
+ * Tag picker for a toolbar — the icon trigger `SurfaceHeader` gives every
+ * other resource. Pairs with `TaskTagStrip`, which shows what is set.
+ */
+export function TaskTagPicker() {
+  const detail = useLoadedTask();
+  if (!detail) return null;
+  const { task, patch } = detail;
+  return (
+    <TagPickerButton
+      workspaceId={task.workspaceId}
+      value={task.tags ?? []}
+      onChange={(tags) => void patch({ tags })}
+    />
+  );
+}
+
+/** The task's tags as a read-only strip, as in `SurfaceHeader`. */
+export function TaskTagStrip() {
+  const detail = useLoadedTask();
+  if (!detail) return null;
+  // Sized to its tags (capped) rather than `flex-1`: in the task toolbar the
+  // title is what should take the free width.
+  return <TagInlineStrip tags={detail.task.tags ?? []} className="max-w-[40%] flex-none" />;
 }
 
 /** Provider-sourced "closed by" note. Renders nothing for a native task. */

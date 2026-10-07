@@ -1,6 +1,6 @@
 import { act, renderHook } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { useTitleDraft } from "./useTitleDraft";
+import { useTitleDraft } from "./use-title-draft";
 
 describe("useTitleDraft", () => {
   it("shows the title of a task that is already loaded on first render", () => {

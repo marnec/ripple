@@ -76,10 +76,13 @@ export function BacklinksDrawer({
   open,
   onOpenChange,
 }: BacklinksDrawerProps) {
+  // `hasHidden` is ignored here on purpose: this lists what links here *that
+  // you can open*. Private-channel references only matter when deleting, and
+  // `DeleteWarningDialog` is where they surface.
   const backlinks = useQuery(
     api.edges.getBacklinks,
     open ? { targetId: resourceId, workspaceId } : "skip",
-  );
+  )?.references;
   const isMobile = useIsMobile();
 
   const count = backlinks?.length ?? 0;
@@ -144,7 +147,7 @@ export function BacklinksButton({
   const backlinks = useQuery(api.edges.getBacklinks, {
     targetId: resourceId,
     workspaceId,
-  });
+  })?.references;
   const [open, setOpen] = useState(false);
   const count = backlinks?.length ?? 0;
   const hasBacklinks = count > 0;

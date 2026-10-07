@@ -112,6 +112,7 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
   const updateTags = useMutation(api.documents.updateTags).withOptimisticUpdate(
     tagsOptimisticUpdate(api.documents.get),
   );
+  const renameDocument = useMutation(api.documents.rename);
 
   // The comments extension only exists for a real viewer, so all comment UI
   // (toggle, rail, reporter) is gated on this.
@@ -145,6 +146,7 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
               resourceId={documentId}
               workspaceId={workspaceId}
               onTagsChange={(tags) => void updateTags({ id: documentId, tags })}
+              onRename={(name) => renameDocument({ id: documentId, name })}
               settingsTitle="Document settings"
               focusable
               activeUsers={(awareness) => (

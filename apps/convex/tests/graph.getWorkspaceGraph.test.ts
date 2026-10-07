@@ -110,6 +110,59 @@ describe("graph.getWorkspaceGraph", () => {
     ).toBe(true);
   });
 
+  // The channel rule (CLAUDE.md "Permissions"): a workspace member outside a
+  // closed channel or DM must not see it as a node, its name, or its links —
+  // here, in the hover label, or anywhere else the graph reaches.
+  it("hides a closed channel from members outside it", async () => {
+    const { t, workspaceId, asUser, taskId } = await setup();
+    const privateId = await asUser.mutation(api.channels.create, {
+      workspaceId,
+      name: "leadership",
+      visibility: ChannelVisibility.PRIVATE,
+    });
+    const publicId = await asUser.mutation(api.channels.create, {
+      workspaceId,
+      name: "general",
+      visibility: ChannelVisibility.PUBLIC,
+    });
+    for (const channelId of [privateId, publicId]) {
+      await asUser.mutation(api.messages.send, {
+        isomorphicId: `mention-${channelId}`,
+        body: JSON.stringify([
+          { type: "paragraph", content: [{ type: "taskMention", props: { taskId, taskTitle: "A task" } }] },
+        ]),
+        plainText: "#A task",
+        channelId,
+      });
+    }
+    const { userId: colleagueId, asUser: colleague } = await setupAuthenticatedUser(t, {
+      email: "colleague@example.com",
+    });
+    await t.run(async (ctx) =>
+      withTriggers(ctx).db.insert("workspaceMembers", {
+        workspaceId,
+        userId: colleagueId,
+        role: WorkspaceRole.MEMBER,
+      }),
+    );
+
+    const asMember = await asUser.query(api.graph.getWorkspaceGraph, { workspaceId });
+    expect(asMember.nodes.some((n) => n.id === privateId)).toBe(true);
+    expect(asMember.links.some((l) => l.source === privateId)).toBe(true);
+
+    const asColleague = await colleague.query(api.graph.getWorkspaceGraph, { workspaceId });
+    expect(JSON.stringify(asColleague)).not.toContain(privateId);
+    expect(JSON.stringify(asColleague)).not.toContain("leadership");
+    expect(asColleague.nodes.some((n) => n.id === publicId)).toBe(true);
+    expect(asColleague.links.some((l) => l.source === publicId && l.target === taskId)).toBe(true);
+
+    expect(await asUser.query(api.graph.getNodeLabel, { id: privateId, type: "channel" })).toBe("#leadership");
+    expect(await colleague.query(api.graph.getNodeLabel, { id: privateId, type: "channel" })).toBeNull();
+    // `type` is caller-supplied: lying about it must not bypass the rule.
+    expect(await colleague.query(api.graph.getNodeLabel, { id: privateId, type: "document" })).toBeNull();
+    expect(await colleague.query(api.graph.getNodeLabel, { id: publicId, type: "channel" })).toBe("#general");
+  });
+
   it("returns an empty graph to a non-member", async () => {
     const { t, workspaceId } = await setup();
     const { asUser: outsider } = await setupAuthenticatedUser(t, {

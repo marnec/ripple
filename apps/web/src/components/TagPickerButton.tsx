@@ -181,10 +181,22 @@ export function TagPickerButton({
 // clips on overflow. Used in resource toolbars to surface applied tags
 // next to the title.
 
-export function TagInlineStrip({ tags }: { tags: readonly string[] }) {
+export function TagInlineStrip({
+  tags,
+  className,
+}: {
+  tags: readonly string[];
+  /** Override the default "take the rest of the row" sizing. */
+  className?: string;
+}) {
   if (tags.length === 0) return null;
   return (
-    <div className="hidden min-w-0 flex-1 items-center gap-1 overflow-hidden whitespace-nowrap sm:flex">
+    <div
+      className={cn(
+        "hidden min-w-0 flex-1 items-center gap-1 overflow-hidden whitespace-nowrap sm:flex",
+        className,
+      )}
+    >
       {tags.map((tag) => (
         <Badge
           key={tag}

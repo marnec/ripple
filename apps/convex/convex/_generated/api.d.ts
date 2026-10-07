@@ -1157,6 +1157,7 @@ export declare const api: {
       { force?: boolean; id: Id<"diagrams"> },
       | { status: "deleted" }
       | {
+          hasHiddenReferences: boolean;
           references: Array<{
             _id: Id<"edges">;
             edgeType: string;
@@ -1345,15 +1346,18 @@ export declare const api: {
       "query",
       "public",
       { targetId: string; workspaceId: Id<"workspaces"> },
-      Array<{
-        _id: Id<"edges">;
-        edgeType: string;
-        projectId?: string;
-        sourceId: string;
-        sourceName: string;
-        sourceType: string;
-        workspaceId: string;
-      }>
+      {
+        hasHidden: boolean;
+        references: Array<{
+          _id: Id<"edges">;
+          edgeType: string;
+          projectId?: string;
+          sourceId: string;
+          sourceName: string;
+          sourceType: string;
+          workspaceId: string;
+        }>;
+      }
     >;
     getFrameEmbeds: FunctionReference<
       "query",
@@ -1836,6 +1840,20 @@ export declare const api: {
     >;
   };
   graph: {
+    getLocalGraph: FunctionReference<
+      "query",
+      "public",
+      { resourceId: string; workspaceId: Id<"workspaces"> },
+      {
+        links: Array<{ edgeType: string; source: string; target: string }>;
+        nodes: Array<{
+          groupId?: string;
+          id: string;
+          name?: string;
+          type: string;
+        }>;
+      }
+    >;
     getNodeLabel: FunctionReference<
       "query",
       "public",
@@ -3063,6 +3081,7 @@ export declare const api: {
       { force?: boolean; id: Id<"spreadsheets"> },
       | { status: "deleted" }
       | {
+          hasHiddenReferences: boolean;
           references: Array<{
             _id: Id<"edges">;
             edgeType: string;

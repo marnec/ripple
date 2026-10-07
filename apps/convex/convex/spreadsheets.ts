@@ -184,9 +184,9 @@ export const remove = mutation({
 
     // Check for references unless force-deleting
     if (!force) {
-      const references = await getEnrichedBacklinks(ctx, id, spreadsheet.workspaceId);
-      if (references.length > 0) {
-        return { status: "has_references" as const, references };
+      const { references, hasHidden } = await getEnrichedBacklinks(ctx, id, spreadsheet.workspaceId);
+      if (references.length > 0 || hasHidden) {
+        return { status: "has_references" as const, references, hasHiddenReferences: hasHidden };
       }
     }
 
