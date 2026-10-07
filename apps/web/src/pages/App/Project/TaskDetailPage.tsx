@@ -8,7 +8,7 @@ import { useAutoHideScrollbar } from "@/hooks/use-autohide-scrollbar";
 import { ResourceDeleted } from "@/pages/ResourceDeleted";
 import SomethingWentWrong from "@/pages/SomethingWentWrong";
 import type { QueryParams } from "@convex/types/routes";
-import { FileText, MessageSquare } from "lucide-react";
+import { Eye, FileText, MessageSquare, Pencil } from "lucide-react";
 import { type ReactNode, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useDefaultLayout } from "react-resizable-panels";
@@ -102,6 +102,9 @@ function PageShell({
   // A phone shows the description or the activity, never both stacked: the
   // header's comment button switches between them (see the HeaderSlot below).
   const [mobilePanel, setMobilePanel] = useState<"description" | "activity">("description");
+  // A phone opens the description read-only, so scrolling a long one never
+  // drops a caret and raises the keyboard. Editing is a deliberate switch.
+  const [descriptionEditable, setDescriptionEditable] = useState(false);
   // Thumb shows while the description scrolls, as in the document editor.
   const descriptionScrollRef = useAutoHideScrollbar<HTMLDivElement>();
 
@@ -240,6 +243,26 @@ function PageShell({
                 className="flex min-h-0 flex-1 flex-col gap-2"
                 headerClassName="shrink-0"
                 heading={descriptionHeading}
+                // Flush right, after the presence avatars and their size:
+                // under the thumb. The icon is the current mode — viewing
+                // or editing — not the action.
+                toolbarTrailing={
+                  <button
+                    type="button"
+                    onClick={() => setDescriptionEditable((e) => !e)}
+                    aria-pressed={descriptionEditable}
+                    aria-label={descriptionEditable ? "Editing description" : "Viewing description"}
+                    className={cn(
+                      "flex size-8 shrink-0 items-center justify-center rounded-full outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring",
+                      descriptionEditable
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-muted text-muted-foreground",
+                    )}
+                  >
+                    {descriptionEditable ? <Pencil className="size-4" /> : <Eye className="size-4" />}
+                  </button>
+                }
+                readOnly={!descriptionEditable}
                 // `contain: size` keeps BlockNote's intrinsic height out of
                 // the column's min-content, so flex alone sizes the box and
                 // the editor scrolls inside it (as in the sheet).

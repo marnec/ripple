@@ -22,6 +22,8 @@ type Props = {
   sync: SyncState;
   remoteUsers: RemoteUser[];
   currentUser: { _id: Id<"users">; name?: string } | null | undefined;
+  /** Last in the cluster, flush right — the mobile view/edit switch. */
+  trailing?: React.ReactNode;
 };
 
 /**
@@ -39,6 +41,7 @@ export function TaskDescriptionToolbar({
   sync,
   remoteUsers,
   currentUser,
+  trailing,
 }: Props) {
   return (
     <div className="flex items-center gap-2 min-h-8">
@@ -57,6 +60,7 @@ export function TaskDescriptionToolbar({
           }
         />
       )}
+      {trailing}
     </div>
   );
 }

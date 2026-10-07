@@ -51,6 +51,11 @@ type TaskDescriptionEditorProps = {
    * loading state — there is nothing on the way.
    */
   unavailableOffline?: boolean;
+  /**
+   * Show, don't edit: no caret, so a tap or a scroll never raises a phone's
+   * keyboard. Local to this view — collaborators' edits still arrive.
+   */
+  readOnly?: boolean;
 };
 
 export function TaskDescriptionEditor({
@@ -62,6 +67,7 @@ export function TaskDescriptionEditor({
   hideLabel,
   loading,
   unavailableOffline,
+  readOnly = false,
 }: TaskDescriptionEditorProps) {
   const { resolvedTheme } = useTheme();
   const convex = useConvex();
@@ -231,6 +237,9 @@ export function TaskDescriptionEditor({
         )}
         {...mediaDropGuard}
         onMouseDown={(e) => {
+          // Read-only: a tap on the box's padding must not place a caret
+          // either — that is the keyboard this mode exists to keep down.
+          if (readOnly) return;
           const target = e.target as HTMLElement;
           if (target.closest(".bn-editor")) return;
           e.preventDefault();
@@ -244,6 +253,7 @@ export function TaskDescriptionEditor({
       >
         <BlockNoteView
           editor={editor}
+          editable={!readOnly}
           theme={resolvedTheme === "dark" ? "dark" : "light"}
           sideMenu={false}
           portalElements={BODY_PORTAL_ELEMENTS}

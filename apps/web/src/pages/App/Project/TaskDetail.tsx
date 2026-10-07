@@ -370,6 +370,8 @@ export function TaskDescriptionSection({
   editorWrapper,
   editorClassName,
   editorScrollRef,
+  readOnly,
+  toolbarTrailing,
 }: {
   heading: ReactNode;
   className?: string;
@@ -382,6 +384,10 @@ export function TaskDescriptionSection({
   editorClassName?: string;
   /** Ref for the editor box, when the shell makes it the scroll container. */
   editorScrollRef?: (node: HTMLDivElement | null) => void;
+  /** View-only description — see `TaskDescriptionEditor`'s `readOnly`. */
+  readOnly?: boolean;
+  /** Appended to the toolbar, after the presence avatars. */
+  toolbarTrailing?: ReactNode;
 }) {
   const detail = useLoadedTask();
   if (!detail) return null;
@@ -393,6 +399,7 @@ export function TaskDescriptionSection({
       workspaceId={detail.workspaceId}
       className={editorClassName}
       scrollRef={editorScrollRef}
+      readOnly={readOnly}
       hideLabel
       loading={!detail.descriptionReady}
       unavailableOffline={detail.unavailableOffline}
@@ -412,6 +419,7 @@ export function TaskDescriptionSection({
             sync={detail.sync}
             remoteUsers={detail.remoteUsers}
             currentUser={detail.currentUser}
+            trailing={toolbarTrailing}
           />
         </div>
       </div>
