@@ -206,11 +206,15 @@ function PageShell({
               task's identity chips lead its name. The name shrinks first. */}
           <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
             <TaskTagPicker />
-            <TaskIdentity className="text-sm" />
-            {/* Takes every pixel the chips leave, and keeps clear of them. */}
-            <h1 className="mx-2 flex min-w-0 flex-1 text-lg font-semibold">
-              <TaskTitleInline fill />
-            </h1>
+            {/* Baseline, not centre: the small mono code and the large title
+                only read as one line when their text sits on the same rule. */}
+            <div className="flex min-w-0 flex-1 items-baseline gap-2">
+              <TaskIdentity className="text-sm" />
+              {/* Takes every pixel the chips leave, and keeps clear of them. */}
+              <h1 className="mx-2 flex min-w-0 flex-1 text-lg font-semibold">
+                <TaskTitleInline fill />
+              </h1>
+            </div>
             <TaskTagStrip />
           </div>
           <TaskGithubActions
