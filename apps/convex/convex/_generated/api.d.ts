@@ -2405,6 +2405,7 @@ export declare const api: {
           authorImage?: string;
           authorIsBot?: boolean;
           body: string;
+          capturedTaskId?: Id<"tasks">;
           channelId: Id<"channels">;
           deleted: boolean;
           isomorphicId: string;
@@ -2475,6 +2476,7 @@ export declare const api: {
           authorImage?: string;
           authorIsBot?: boolean;
           body: string;
+          capturedTaskId?: Id<"tasks">;
           channelId: Id<"channels">;
           deleted: boolean;
           isomorphicId: string;
@@ -2538,6 +2540,7 @@ export declare const api: {
         authorImage?: string;
         authorIsBot?: boolean;
         body: string;
+        capturedTaskId?: Id<"tasks">;
         channelId: Id<"channels">;
         deleted: boolean;
         isomorphicId: string;
@@ -3190,6 +3193,14 @@ export declare const api: {
             externalAuthor?: { avatarUrl: string; login: string; url: string };
             internal?: boolean;
             kind: "comment";
+            quotedFrom?: {
+              authorImage?: string;
+              authorName: string;
+              channelId: Id<"channels">;
+              channelName?: string;
+              messageId: Id<"messages">;
+              sentAt: number;
+            };
             userId: Id<"users">;
             userImage?: string;
             userName: string;
@@ -3241,6 +3252,14 @@ export declare const api: {
         externalAuthor?: { avatarUrl: string; login: string; url: string };
         image?: string;
         internal?: boolean;
+        quotedFrom?: {
+          authorImage?: string;
+          authorName: string;
+          channelId: Id<"channels">;
+          channelName?: string;
+          messageId: Id<"messages">;
+          sentAt: number;
+        };
         taskId: Id<"tasks">;
         userId: Id<"users">;
       }>
@@ -3413,6 +3432,7 @@ export declare const api: {
         cycleId?: Id<"cycles">;
         dueDate?: string;
         estimate?: number;
+        fromMessageIds?: Array<Id<"messages">>;
         plannedStartDate?: string;
         position?: string;
         priority?: "urgent" | "high" | "medium" | "low";

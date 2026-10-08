@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import { Avatar, AvatarFallback, AvatarImage } from "@ripple/ui/components/avatar";
 import { useWorkspaceMembers } from "@/contexts/WorkspaceMembersContext";
 import { Button } from "@ripple/ui/components/button";
@@ -106,6 +107,16 @@ type TimelineItem = {
   externalAuthor?: { login: string; avatarUrl: string; url: string };
   /** The private lane: a team-only note that never reached the provider. */
   internal?: boolean;
+  /** A chat message copied in when the task was created from it. */
+  quotedFrom?: {
+    messageId: string;
+    channelId: string;
+    /** Absent for a DM. */
+    channelName?: string;
+    sentAt: number;
+    authorName: string;
+    authorImage?: string;
+  };
 };
 
 /**
@@ -454,6 +465,7 @@ export function TaskActivityTimeline({ taskId, currentUserId, workspaceId, membe
                     workspaceMembers={workspaceMembers}
                     workspaceId={workspaceId}
                     canAttach={!isLinked || item.internal === true}
+                    isLinked={isLinked}
                     onEdit={setEditingCommentId}
                     onDelete={handleDelete}
                     onSave={(id, body, bodyMarkdown) => {
@@ -598,6 +610,7 @@ function CommentItem({
   workspaceMembers,
   workspaceId,
   canAttach,
+  isLinked,
   onEdit,
   onDelete,
   onSave,
@@ -610,6 +623,7 @@ function CommentItem({
   workspaceId: Id<"workspaces">;
   /** Whether this comment may carry attachments — see the composer's rule. */
   canAttach: boolean;
+  isLinked: boolean;
   onEdit: (id: Id<"taskComments"> | null) => void;
   onDelete: (id: Id<"taskComments">) => void;
   onSave: (id: Id<"taskComments">, body: string, bodyMarkdown: string) => void;
@@ -617,6 +631,13 @@ function CommentItem({
 }) {
   const commentId = item.commentId as Id<"taskComments">;
   const isEditing = editingCommentId === commentId;
+  // A copied chat message speaks as whoever said it, at the time they said
+  // it; the capturer (`userName`) is only a tooltip. Its private lane is
+  // implied by the copy, so the chip is shown only where a lane exists.
+  const quoted = item.quotedFrom;
+  const authorName = quoted?.authorName ?? item.userName;
+  const authorImage = quoted ? quoted.authorImage : item.userImage;
+  const shownAt = quoted?.sentAt ?? item._creationTime;
 
   return (
     <div className="group relative flex gap-2 py-1">
@@ -629,9 +650,9 @@ function CommentItem({
           </AvatarFallback>
         ) : (
           <>
-            {item.userImage && <AvatarImage src={item.userImage} alt={item.userName} />}
+            {authorImage && <AvatarImage src={authorImage} alt={authorName} />}
             <AvatarFallback className="text-[10px]">
-              {item.userName.slice(0, 2).toUpperCase()}
+              {authorName.slice(0, 2).toUpperCase()}
             </AvatarFallback>
           </>
         )}
@@ -641,8 +662,17 @@ function CommentItem({
         {/* Name + timestamp — aligned with activity events */}
         <div className="flex items-center gap-2 leading-6">
           <MessageSquare className="h-3 w-3 text-muted-foreground shrink-0" />
-          <span className="font-medium text-sm min-w-0 truncate">{item.userName}</span>
-          {item.internal && (
+          <span className="font-medium text-sm min-w-0 truncate">{authorName}</span>
+          {quoted && (
+            <Link
+              to={`/workspaces/${workspaceId}/channels/${quoted.channelId}?message=${quoted.messageId}`}
+              className="min-w-0 truncate text-xs text-muted-foreground hover:text-foreground hover:underline"
+              title={`Added from chat by ${item.userName}`}
+            >
+              in {quoted.channelName ? `#${quoted.channelName}` : "a direct message"}
+            </Link>
+          )}
+          {item.internal && (!quoted || isLinked) && (
             <span
               className="inline-flex items-center gap-1 rounded-full border px-1.5 text-[10px] leading-4 text-muted-foreground shrink-0"
               title="Private note — never sent to the linked issue"
@@ -654,9 +684,9 @@ function CommentItem({
           <span className="flex-1" />
           <span
             className="text-xs text-muted-foreground/60 shrink-0"
-            title={new Date(item._creationTime).toLocaleString()}
+            title={new Date(shownAt).toLocaleString()}
           >
-            {formatRelativeTimestamp(item._creationTime)}
+            {formatRelativeTimestamp(shownAt)}
           </span>
         </div>
 

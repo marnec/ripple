@@ -8,7 +8,7 @@ import { useMutation, usePaginatedQuery } from "convex/react";
 import { useQuery } from "convex-helpers/react/cache";;
 import { SearchIcon, Settings } from "lucide-react";
 import React, { Fragment, Suspense, useContext, useEffect, useRef, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 import { Button } from "@ripple/ui/components/button";
@@ -22,7 +22,15 @@ const LazyMessageComposer = React.lazy(() =>
   import("./MessageComposer").then((m) => ({ default: m.MessageComposer })),
 );
 import { SearchDialog } from "./SearchDialog";
-import { ChatContext, type EditingMessage, type ReplyingToMessage } from "./ChatContext";
+import {
+  ChatContext,
+  MESSAGE_SELECTION_MAX,
+  type EditingMessage,
+  type ReplyingToMessage,
+  type SelectedMessage,
+} from "./ChatContext";
+import { MessageSelectionBar } from "./MessageSelectionBar";
+import { isPublicChannel } from "@ripple/shared/channel";
 import { ChatDropOverlay } from "./ChatDropOverlay";
 import { useFileDrop } from "@/hooks/use-file-drop";
 import { computeGroupPositions } from "./messageGrouping";
@@ -54,8 +62,30 @@ export function Chat({ channelId, variant = "full" }: { channelId: Id<"channels"
   );
   const [editingMessage, setEditingMessage] = useState<EditingMessage>({ id: null, body: null });
   const [replyingTo, setReplyingTo] = useState<ReplyingToMessage>(null);
-  const [viewMode, setViewMode] = useState<'chat' | 'context'>('chat');
-  const [contextMessageId, setContextMessageId] = useState<Id<"messages"> | null>(null);
+  const [selection, setSelection] = useState<ReadonlyMap<Id<"messages">, SelectedMessage> | null>(null);
+  const toggleSelected = (message: SelectedMessage) => {
+    setReplyingTo(null);
+    setEditingMessage({ id: null, body: null });
+    setSelection((prev) => {
+      const next = new Map(prev ?? []);
+      if (next.has(message.id)) {
+        next.delete(message.id);
+      } else if (next.size >= MESSAGE_SELECTION_MAX) {
+        toast.error(`A task can start from at most ${MESSAGE_SELECTION_MAX} messages`);
+        return prev;
+      } else {
+        next.set(message.id, message);
+      }
+      return next;
+    });
+  };
+  const clearSelection = () => setSelection(null);
+  // A message shown in its surrounding context instead of the live list —
+  // either jumped to from search, or linked from outside the channel as
+  // `?message=<id>` (a task's "From chat" card).
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [jumpedMessageId, setJumpedMessageId] = useState<Id<"messages"> | null>(null);
+  const contextMessageId = jumpedMessageId ?? (searchParams.get("message") as Id<"messages"> | null);
   const [searchInput, setSearchInput] = useState("");
   const [isSearchDialogOpen, setIsSearchDialogOpen] = useState(false);
   const [searchDialogTerm, setSearchDialogTerm] = useState("");
@@ -131,13 +161,17 @@ export function Chat({ channelId, variant = "full" }: { channelId: Id<"channels"
   };
 
   const handleJumpToMessage = (messageId: Id<"messages">) => {
-    setContextMessageId(messageId);
-    setViewMode('context');
+    setJumpedMessageId(messageId);
   };
 
   const handleBackToChat = () => {
-    setViewMode('chat');
-    setContextMessageId(null);
+    setJumpedMessageId(null);
+    if (searchParams.has("message")) {
+      setSearchParams((prev) => {
+        prev.delete("message");
+        return prev;
+      }, { replace: true });
+    }
   };
 
   const handleSearchSubmit = () => {
@@ -165,10 +199,13 @@ export function Chat({ channelId, variant = "full" }: { channelId: Id<"channels"
         replyingTo,
         setReplyingTo,
         attachDroppedFilesRef,
+        selection,
+        toggleSelected,
+        clearSelection,
       }}
     >
       {/* Show message context view when jumping to a specific message */}
-      {viewMode === 'context' && contextMessageId ? (
+      {contextMessageId ? (
         <MessageContext
           messageId={contextMessageId}
           channelId={channelId}
@@ -284,14 +321,21 @@ export function Chat({ channelId, variant = "full" }: { channelId: Id<"channels"
             </MessageList>
           </div>
 
-          <Suspense fallback={<div className="shrink-0 h-24 border-t" />}>
-            <LazyMessageComposer
-              handleSubmit={(content: string, plainText: string) => void handleSubmit(content, plainText)}
-              channelId={channelId}
+          {selection ? (
+            <MessageSelectionBar
               workspaceId={workspaceId as Id<"workspaces">}
-              showCallButton={variant === "full"}
+              widensAudience={!!channel && !isPublicChannel(channel)}
             />
-          </Suspense>
+          ) : (
+            <Suspense fallback={<div className="shrink-0 h-24 border-t" />}>
+              <LazyMessageComposer
+                handleSubmit={(content: string, plainText: string) => void handleSubmit(content, plainText)}
+                channelId={channelId}
+                workspaceId={workspaceId as Id<"workspaces">}
+                showCallButton={variant === "full"}
+              />
+            </Suspense>
+          )}
         </div>
       )}
     </ChatContext.Provider>

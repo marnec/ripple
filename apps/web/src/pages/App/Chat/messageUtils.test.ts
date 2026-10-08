@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { attachmentKindFor, hasImageBlocks } from "./messageUtils";
+import { attachmentKindFor, hasImageBlocks, taskTitleFromMessage } from "./messageUtils";
 
 describe("attachmentKindFor", () => {
   it("routes image MIME types to the inline image path", () => {
@@ -25,5 +25,21 @@ describe("hasImageBlocks", () => {
   it("is true only for a top-level image block", () => {
     expect(hasImageBlocks([{ type: "image" }])).toBe(true);
     expect(hasImageBlocks([{ type: "file" }, { type: "paragraph" }])).toBe(false);
+  });
+});
+
+describe("taskTitleFromMessage", () => {
+  it("takes the first non-empty line, whitespace collapsed", () => {
+    expect(taskTitleFromMessage("\n  login   is broken \nsteps: ...")).toBe("login is broken");
+  });
+
+  it("cuts a long line at a word boundary with an ellipsis", () => {
+    const title = taskTitleFromMessage("word ".repeat(60));
+    expect(title.length).toBeLessThanOrEqual(121);
+    expect(title.endsWith("word…")).toBe(true);
+  });
+
+  it("returns an empty title for an image-only message", () => {
+    expect(taskTitleFromMessage("")).toBe("");
   });
 });

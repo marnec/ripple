@@ -10,6 +10,7 @@ import { cascadeDelete, logCascadeSummary } from "./cascadeDelete";
 
 import { priorityValidator, taskStatusValidator, userValidator, projectValidator } from "./validators";
 import { requireWorkspaceMember, requireResourceMember, checkWorkspaceMember, checkResourceMember, filterWorkspaceRecipients, getWorkspaceMembership } from "./authHelpers";
+import { captureMessagesIntoTask } from "./lib/messageCapture";
 import { syncTaskTags, normalizeTagList } from "./tagSync";
 import { applyStatusSideEffects } from "./taskStatusSideEffects";
 import { getAll } from "convex-helpers/server/relationships";
@@ -243,10 +244,14 @@ export const create = mutation({
     // The board passes the cycle it is showing; anything else omits it and the
     // task lands in the backlog.
     cycleId: v.optional(v.id("cycles")),
+    // "Create task" from chat: these messages are copied onto the new task
+    // as its opening comments — see `lib/messageCapture.ts`.
+    fromMessageIds: v.optional(v.array(v.id("messages"))),
   },
   returns: v.id("tasks"),
   handler: async (ctx, args) => {
     const { userId } = await requireWorkspaceMember(ctx, args.workspaceId);
+
 
     // Get project to access workspaceId. `requireWorkspaceMember` authorized
     // `args.workspaceId`, which says nothing about who owns `args.projectId` —
@@ -331,6 +336,15 @@ export const create = mutation({
       plannedStartDate: args.plannedStartDate,
       estimate: args.estimate,
     });
+
+    if (args.fromMessageIds) {
+      await captureMessagesIntoTask(ctx, {
+        taskId,
+        workspaceId: project.workspaceId,
+        userId,
+        messageIds: args.fromMessageIds,
+      });
+    }
 
     // Sync initial tags to the central tag tables (ID is known only after insert).
     if (args.tags && args.tags.length > 0) {

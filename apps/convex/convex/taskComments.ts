@@ -9,6 +9,7 @@ import { logTaskActivity } from "./auditLog";
 import { requireResourceMember, filterWorkspaceRecipients } from "./authHelpers";
 import { notify } from "./utils/notify";
 import { externalAuthorsByComment } from "./utils/commentExternalAuthors";
+import { quotedAuthorIds, quotedFromView, quotedFromViewValidator } from "./lib/messageCapture";
 import {
   maybeEnqueueCommentCreate,
   maybeEnqueueCommentDelete,
@@ -39,6 +40,8 @@ export const list = query({
     // Absent for public comments, so the timeline renders its lock chip only
     // where one applies.
     internal: v.optional(v.boolean()),
+    // Set on a chat message copied in at task creation.
+    quotedFrom: v.optional(quotedFromViewValidator),
   })),
   handler: async (ctx, { taskId }) => {
     await requireResourceMember(ctx, "tasks", taskId);
@@ -53,7 +56,7 @@ export const list = query({
       .collect();
 
     // Batch fetch all authors
-    const userIds = [...new Set(comments.map((c) => c.userId))];
+    const userIds = [...new Set([...comments.map((c) => c.userId), ...quotedAuthorIds(comments)])];
     const users = await getAll(ctx.db, userIds);
     const userMap = new Map(users.map((u, i) => [userIds[i], u]));
 
@@ -82,6 +85,7 @@ export const list = query({
         image: user?.image,
         externalAuthor: externalAuthorByComment.get(comment._id),
         internal: comment.internal,
+        quotedFrom: quotedFromView(comment, userMap),
       };
     });
 

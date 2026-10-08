@@ -139,6 +139,11 @@ export default defineSchema({
     channelId: v.id("channels"),
     deleted: v.boolean(),
     replyToId: v.optional(v.id("messages")),
+    // The task this message was copied into ("Create task" with messages
+    // selected — `lib/messageCapture.ts`); the latest one if it was captured
+    // more than once. Read by nothing on the hot path: chat draws a marker
+    // from the id alone and resolves the task only when it is clicked.
+    capturedTaskId: v.optional(v.id("tasks")),
   })
     .index("by_channel", ["channelId"])
     .index("undeleted_by_channel", ["channelId", "deleted"])
@@ -794,6 +799,19 @@ export default defineSchema({
     userId: v.id("users"),
     body: v.string(),
     deleted: v.boolean(),
+    // A chat message copied in when the task was created from it
+    // (`lib/messageCapture.ts`). `userId` is whoever captured it; this is who
+    // said it, and where. `channelName` is a snapshot taken at capture, absent
+    // for a DM. A copy: later edits to the message do not reach it.
+    quotedFrom: v.optional(
+      v.object({
+        messageId: v.id("messages"),
+        authorId: v.id("users"),
+        channelId: v.id("channels"),
+        channelName: v.optional(v.string()),
+        sentAt: v.number(),
+      }),
+    ),
     // The private lane. `true` = a team-only note on a task linked to an
     // external issue: never pushed, no `taskCommentIntegrationLinks` row, a
     // lock chip in the timeline. Chosen in the composer at creation and never

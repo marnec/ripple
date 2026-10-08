@@ -1220,6 +1220,7 @@ export type DataModel = {
   messages: {
     document: {
       body: string;
+      capturedTaskId?: Id<"tasks">;
       channelId: Id<"channels">;
       deleted: boolean;
       isomorphicId: string;
@@ -1233,6 +1234,7 @@ export type DataModel = {
       | "_creationTime"
       | "_id"
       | "body"
+      | "capturedTaskId"
       | "channelId"
       | "deleted"
       | "isomorphicId"
@@ -1836,6 +1838,13 @@ export type DataModel = {
         message: string;
         occurredAt: number;
       };
+      quotedFrom?: {
+        authorId: Id<"users">;
+        channelId: Id<"channels">;
+        channelName?: string;
+        messageId: Id<"messages">;
+        sentAt: number;
+      };
       taskId: Id<"tasks">;
       userId: Id<"users">;
       _id: Id<"taskComments">;
@@ -1851,6 +1860,12 @@ export type DataModel = {
       | "lastSyncError.httpStatus"
       | "lastSyncError.message"
       | "lastSyncError.occurredAt"
+      | "quotedFrom"
+      | "quotedFrom.authorId"
+      | "quotedFrom.channelId"
+      | "quotedFrom.channelName"
+      | "quotedFrom.messageId"
+      | "quotedFrom.sentAt"
       | "taskId"
       | "userId";
     indexes: {

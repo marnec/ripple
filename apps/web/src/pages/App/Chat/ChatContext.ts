@@ -12,6 +12,16 @@ export type ReplyingToMessage = {
   imageUrl?: string;
 } | null;
 
+/** What a selected message contributes to "Create task": its title seed and order. */
+export type SelectedMessage = {
+  id: Id<"messages">;
+  plainText: string;
+  sentAt: number;
+};
+
+/** Ceiling on selected messages — `CAPTURE_MAX` on the server. */
+export const MESSAGE_SELECTION_MAX = 50;
+
 type ChatContextType = {
   editingMessage: EditingMessage;
   setEditingMessage: (msg: EditingMessage) => void;
@@ -28,6 +38,15 @@ type ChatContextType = {
    * the composer chunk is still loading, in which case a drop is a no-op.
    */
   attachDroppedFilesRef: RefObject<((files: File[]) => void) | null>;
+  /**
+   * Messages picked for "Create task", or null outside selection mode. While
+   * it is non-null a click on a message toggles it instead of acting on it,
+   * and the selection bar stands in for the composer.
+   */
+  selection: ReadonlyMap<Id<"messages">, SelectedMessage> | null;
+  /** Enter selection mode with `message` picked, or toggle it once in. */
+  toggleSelected: (message: SelectedMessage) => void;
+  clearSelection: () => void;
 };
 
 export const ChatContext = createContext<ChatContextType | null>(null);

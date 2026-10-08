@@ -6,6 +6,7 @@ import type { Id } from "./_generated/dataModel";
 import { auditLog } from "./auditLog";
 import { checkResourceMember } from "./authHelpers";
 import { externalAuthorsByComment } from "./utils/commentExternalAuthors";
+import { quotedAuthorIds, quotedFromView, quotedFromViewValidator } from "./lib/messageCapture";
 
 type AuditEntry = {
   _id: string;
@@ -53,6 +54,8 @@ const timelineItemValidator = v.union(
     // The private lane — a team-only note on a linked task, never pushed.
     // Absent for public comments. Same shape as `taskComments.list`.
     internal: v.optional(v.boolean()),
+    // Set on a chat message copied in at task creation.
+    quotedFrom: v.optional(quotedFromViewValidator),
   }),
 );
 
@@ -90,6 +93,7 @@ export const timeline = query({
       ...new Set([
         ...auditActorIds,
         ...comments.map((c) => String(c.userId)),
+        ...quotedAuthorIds(comments),
       ]),
     ] as Id<"users">[];
     const users = await getAll(ctx.db, allUserIds);
@@ -143,6 +147,7 @@ export const timeline = query({
         body: c.body,
         externalAuthor: externalAuthorByComment.get(c._id),
         internal: c.internal,
+        quotedFrom: quotedFromView(c, userMap),
       };
     });
 

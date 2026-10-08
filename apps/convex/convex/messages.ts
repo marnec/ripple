@@ -66,6 +66,7 @@ const enrichedMessageValidator = v.object({
   channelId: v.id("channels"),
   deleted: v.boolean(),
   replyToId: v.optional(v.id("messages")),
+  capturedTaskId: v.optional(v.id("tasks")),
   author: v.string(),
   authorImage: v.optional(v.string()),
   authorIsBot: v.optional(v.boolean()),
@@ -527,7 +528,12 @@ async function enrichWithReactions<T extends { _id: Id<"messages"> }>(
 }
 
 async function enrichMessages<
-  T extends { _id: Id<"messages">; body: string; channelId: Id<"channels">; replyToId?: Id<"messages"> },
+  T extends {
+    _id: Id<"messages">;
+    body: string;
+    channelId: Id<"channels">;
+    replyToId?: Id<"messages">;
+  },
 >(
   ctx: { db: DatabaseReader },
   messages: T[],

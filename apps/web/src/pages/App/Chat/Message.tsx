@@ -2,8 +2,8 @@ import { UserContext } from "@/pages/App/UserContext";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 import type { MessageWithAuthor } from "@convex/types/channel";
-import { useMutation } from "convex/react";
-import { CornerUpLeft, Loader2, Pencil, Plus, Trash2, X as XIcon } from "lucide-react";
+import { useConvex, useMutation } from "convex/react";
+import { Check, CornerUpLeft, ListPlus, ListTodo, Loader2, Pencil, Plus, Trash2, X as XIcon } from "lucide-react";
 import React, { Suspense, useContext, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { api } from "@convex/_generated/api";
@@ -28,6 +28,7 @@ import { MessageQuotePreview } from "./MessageQuotePreview";
 import { Avatar, AvatarFallback, AvatarImage } from "@ripple/ui/components/avatar";
 import { AssistantAvatar } from "@/components/AssistantAvatar";
 import { isMessageEditable } from "@shared/constants";
+import { toast } from "sonner";
 
 const EmojiPicker = React.lazy(() => import("emoji-picker-react"));
 
@@ -135,7 +136,13 @@ export function Message({ message, groupInfo = DEFAULT_GROUP_INFO, index = 0 }: 
     : (isAssistant ? "end" : "start");
   const messageRef = useRef<HTMLLIElement>(null);
 
-  const { setEditingMessage, setReplyingTo } = useChatContext()
+  const { setEditingMessage, setReplyingTo, selection, toggleSelected } = useChatContext()
+  // Selection mode ("Create task"): a click picks the message instead of
+  // acting on it, and the context menu is out of the way.
+  const selecting = selection !== null;
+  const selected = selection?.has(message._id) ?? false;
+  const handleSelect = () =>
+    toggleSelected({ id: message._id, plainText: message.plainText, sentAt: message._creationTime });
   const deleteMessage = useMutation(api.messages.remove)
   const toggleReaction = useMutation(api.messageReactions.toggle);
 
@@ -195,6 +202,21 @@ export function Message({ message, groupInfo = DEFAULT_GROUP_INFO, index = 0 }: 
     void navigate(`/workspaces/${workspaceId}/diagrams/${diagramId}`);
   };
 
+  // "Open task" on a message copied into one. Only the id rides on the
+  // message, so the task is resolved on click rather than subscribed to.
+  const convex = useConvex();
+  const handleOpenCapturedTask = () => {
+    const taskId = message.capturedTaskId;
+    if (!taskId || !workspaceId) return;
+    void convex.query(api.tasks.get, { taskId }).then((task) => {
+      if (!task) {
+        toast.error("That task no longer exists");
+        return;
+      }
+      void navigate(`/workspaces/${workspaceId}/projects/${task.projectId}/tasks/${taskId}`);
+    });
+  };
+
   const formattedTime = new Date(_creationTime).toLocaleTimeString(undefined, { timeStyle: 'short' });
 
   const initials = author
@@ -215,20 +237,43 @@ export function Message({ message, groupInfo = DEFAULT_GROUP_INFO, index = 0 }: 
 
   return (
     <>
-      <ContextMenu>
+      <ContextMenu disabled={selecting}>
         <li
           ref={messageRef}
           className={cn(
             "relative flex flex-col text-sm animate-fade-in",
             position === "solo" || position === "last" ? "mb-2" : "mb-px",
+            selecting && "cursor-pointer rounded-md",
+            selected && "bg-primary/10",
           )}
+          onClickCapture={
+            selecting
+              ? (e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  handleSelect();
+                }
+              : undefined
+          }
           style={{
             animationDelay: `${Math.min(index, MESSAGE_STAGGER_CAP) * MESSAGE_STAGGER_DELAY}ms`,
             animationFillMode: "backwards",
           }}
         >
+          <div className="flex items-center">
+          {selecting && (
+            <span
+              aria-hidden
+              className={cn(
+                "mx-1.5 flex size-4 shrink-0 items-center justify-center rounded-full border transition-colors",
+                selected ? "border-primary bg-primary text-primary-foreground" : "border-muted-foreground/40",
+              )}
+            >
+              {selected && <Check className="size-3" />}
+            </span>
+          )}
           {/* Message row: avatar + bubble */}
-          <div className={cn("flex items-end", layout.row)}>
+          <div className={cn("flex min-w-0 flex-1 items-end", layout.row)}>
             {/* Avatar column */}
             <div className={cn("w-9.5 shrink-0", layout.gutter)}>
               {!showAvatar ? (
@@ -315,6 +360,7 @@ export function Message({ message, groupInfo = DEFAULT_GROUP_INFO, index = 0 }: 
               </MentionedUsersContext.Provider>
             </ContextMenuTrigger>
           </div>
+          </div>
         </li>
         <ContextMenuContent className="w-56">
           {/* Quick reaction row */}
@@ -372,6 +418,18 @@ export function Message({ message, groupInfo = DEFAULT_GROUP_INFO, index = 0 }: 
             <ContextMenuItem onClick={handleReply}>
               <CornerUpLeft className="mr-2 h-4 w-4" />
               Reply
+            </ContextMenuItem>
+          )}
+          {!message.deleted && (
+            <ContextMenuItem onClick={handleSelect}>
+              <ListPlus className="mr-2 h-4 w-4" />
+              Create task
+            </ContextMenuItem>
+          )}
+          {message.capturedTaskId && (
+            <ContextMenuItem onClick={handleOpenCapturedTask}>
+              <ListTodo className="mr-2 h-4 w-4" />
+              Open task
             </ContextMenuItem>
           )}
         </ContextMenuContent>
