@@ -72,7 +72,10 @@ export function TaskContext({
   if (isMobile) return null;
 
   return (
-    <div className={cn("flex gap-4", className)}>
+    // A size container, so the graph can bow out on the section's own width
+    // rather than the viewport's: the wide layout's side panel and the
+    // narrow column squeeze it at different viewport widths.
+    <div className={cn("@container flex gap-4", className)}>
       <div className="min-w-0 flex-1">
         <section className="space-y-2">
           <div className="flex items-center gap-2">
@@ -176,8 +179,9 @@ export function TaskContext({
 
       {/* Always there, at final size: a task with no links yet is a lone
           dot, and the list beside it never reflows when the canvas (or its
-          lazy chunk) arrives. */}
-      <div className="shrink-0" style={{ width: GRAPH_WIDTH, height: GRAPH_HEIGHT + LOCAL_GRAPH_CAPTION_HEIGHT }}>
+          lazy chunk) arrives. Below `@xl` (36rem: the graph plus ~15rem of
+          list) it is dropped — the list is the part that carries meaning. */}
+      <div className="hidden shrink-0 @xl:block" style={{ width: GRAPH_WIDTH, height: GRAPH_HEIGHT + LOCAL_GRAPH_CAPTION_HEIGHT }}>
         {graph && (
           <Suspense fallback={null}>
             <LazyLocalGraph

@@ -156,7 +156,11 @@ export function MessageRenderer({ blocks, onImageClick, onDiagramOpen }: Message
         </div>
       )}
       {hasText && (
-        <div className={thumbnailUrl ? "px-3 pb-2 pt-1.5" : undefined}>
+        // `wrap-anywhere`, not `break-words`: a long URL is one unbreakable
+        // word, and only `anywhere` lets it count toward the fit-content
+        // bubble's min-content width — with `break-word` the bubble still
+        // sizes to the whole URL and it spills past the edge.
+        <div className={cn("wrap-anywhere", thumbnailUrl && "px-3 pb-2 pt-1.5")}>
           {renderBlockGroups(rest)}
         </div>
       )}
