@@ -40,8 +40,12 @@ interface SurfaceHeaderProps<TMeta extends SurfaceMeta> {
   onRename: (name: string) => Promise<unknown>;
   /** Tooltip/aria label for the settings link, e.g. "Diagram settings". */
   settingsTitle: string;
-  /** Centre of the header bar. The spreadsheet's formula bar. */
-  centre?: ReactNode;
+  /**
+   * A row of its own under the bar, kept in focus mode. The spreadsheet's
+   * formula bar. It owns its row styling (border, padding, when to hide), so
+   * a row that hides itself on a phone leaves no empty strip behind.
+   */
+  subbar?: ReactNode;
   /**
    * Controls that keep working without the server — commenting, presenting
    * from the local scene. Deliberately not `isLive`-gated.
@@ -85,7 +89,7 @@ export function SurfaceHeader<TMeta extends SurfaceMeta>({
   onTagsChange,
   onRename,
   settingsTitle,
-  centre,
+  subbar,
   tools,
   actions,
   activeUsers,
@@ -105,19 +109,18 @@ export function SurfaceHeader<TMeta extends SurfaceMeta>({
 
   // Focus mode drops everything that identifies or changes the resource —
   // including, deliberately, the sync indicator; `Layout` still owns the way
-  // back out. What survives is `centre`, which is not chrome: the spreadsheet's
+  // back out. What survives is `subbar`, which is not chrome: the spreadsheet's
   // formula bar is where a cell's raw value is read and edited, so hiding it
   // would not remove a distraction, it would remove the surface's main control.
-  if (isFocused) {
-    return centre ? (
-      <div className="flex items-center border-b py-1.5 pr-3">{centre}</div>
-    ) : null;
-  }
+  if (isFocused) return subbar ?? null;
 
   return (
     <>
       <div className="flex items-center justify-between px-3 py-1.5 border-b">
-        <div className="flex h-8 min-w-0 items-center gap-4">
+        {/* As on the task page: the title takes every pixel the chips and
+            controls leave, so a long name truncates at the controls instead
+            of collapsing to the input's minimum. */}
+        <div className="flex h-8 min-w-0 flex-1 items-center gap-4">
           {isLive && meta && (
             <>
               <FavoriteButton
@@ -135,11 +138,12 @@ export function SurfaceHeader<TMeta extends SurfaceMeta>({
           )}
           {/* Editable only while the server answers — the same `isLive` rule
               as every other control that changes the resource. */}
-          <h1 className="hidden sm:flex min-w-0 text-lg font-semibold">
+          <h1 className="hidden sm:flex min-w-0 flex-1 mr-2 text-lg font-semibold">
             {isLive && meta ? (
               <InlineTitleField
                 value={meta.name}
                 onCommit={onRename}
+                fill
                 ariaLabel={`${named.charAt(0).toUpperCase()}${named.slice(1)} name`}
               />
             ) : (
@@ -148,7 +152,6 @@ export function SurfaceHeader<TMeta extends SurfaceMeta>({
           </h1>
           <TagInlineStrip tags={meta?.tags ?? []} />
         </div>
-        {centre}
         <div className="flex h-8 items-center gap-3">
           <SyncIndicator state={sync} />
           {doc.isConnected && activeUsers?.(doc.awareness)}
@@ -186,6 +189,7 @@ export function SurfaceHeader<TMeta extends SurfaceMeta>({
           )}
         </div>
       </div>
+      {subbar}
       {isLive && meta && isMobile && (
         <HeaderSlot>
           <Button

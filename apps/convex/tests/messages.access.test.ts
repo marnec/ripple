@@ -942,6 +942,21 @@ describe("edges.getBacklinks — channel-sourced mentions", () => {
     expect(asOutsider).toEqual({ references: [], hasHidden: true });
   });
 
+  it("labels a DM mention with the other participant, not as a deleted channel", async () => {
+    // A DM has no `nodes` row by design, which is what the backlink name is
+    // normally read from — a missing node used to render "Deleted channel".
+    const t = createTestContext();
+    const { workspaceId, userId, asUser } = await setupWorkspaceWithAdmin(t);
+    const partner = await setupWorkspaceOutsider(t, workspaceId);
+    const channelId = await setupDmChannel(t, { workspaceId, userIds: [userId, partner.userId] });
+    const targetId = await setupMentioned(t, channelId, asUser);
+
+    const asParticipant = await asUser.query(api.edges.getBacklinks, { targetId, workspaceId });
+    expect(asParticipant.references.map((b) => [b.sourceId, b.sourceName])).toEqual([
+      [channelId, "Nosy Colleague"],
+    ]);
+  });
+
   it("still shows an open-channel mention to any workspace member", async () => {
     const t = createTestContext();
     const { workspaceId, userId, asUser } = await setupWorkspaceWithAdmin(t);

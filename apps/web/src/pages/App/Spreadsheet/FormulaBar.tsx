@@ -240,7 +240,9 @@ export function FormulaBar({
   };
 
   return (
-    <div className="hidden md:flex flex-1 min-w-0 items-center gap-2 px-4">
+    // Its own row under the surface header (`subbar`). Desktop only, and the
+    // row hides with it — the header renders no wrapper around it.
+    <div className="hidden md:flex min-w-0 items-center gap-2 border-b px-3 py-1.5">
       <span
         className="font-mono text-xs text-muted-foreground tabular-nums w-12 text-right select-none"
         aria-label="Active cell"

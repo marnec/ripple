@@ -6,6 +6,8 @@ import { query } from "./_generated/server";
 import { mutation } from "./functions";
 import { logTaskActivity } from "./auditLog";
 import { getAll } from "convex-helpers/server/relationships";
+import { isDirectMessage } from "@ripple/shared/channel";
+import { channelLabel } from "./lib/dmLabel";
 import { requireWorkspaceMember, requireResourceMember, getUser, checkWorkspaceMember, checkChannelAccessBatch } from "./authHelpers";
 
 // ── Helpers ─────────────────────────────────────────────────────────
@@ -158,6 +160,27 @@ async function enrichEdges(
   withNodeId.forEach((e, i) => nodeByEdgeId.set(e._id, batchNodes[i]));
   withoutNodeId.forEach((e, i) => nodeByEdgeId.set(e._id, fallbackNodes[i]));
 
+  // A DM has no node row by design (see the channels trigger in
+  // dbTriggers.ts), so "no node" does not mean "deleted" for a channel
+  // source: read the channel itself and label a DM from its participants,
+  // relative to the viewer, as the sidebar does. Edges reaching here already
+  // passed the channel rule, so the viewer is in the DM.
+  const dmLabels = new Map<string, string>();
+  const nodelessChannels = edges.filter(
+    (e) => e.sourceType === "channel" && !nodeByEdgeId.get(e._id),
+  );
+  if (nodelessChannels.length > 0) {
+    const viewerId = (await getUser(ctx)) ?? undefined;
+    await Promise.all(
+      nodelessChannels.map(async (e) => {
+        const channel = await ctx.db.get(e.sourceId as Id<"channels">);
+        if (channel && isDirectMessage(channel)) {
+          dmLabels.set(e.sourceId, await channelLabel(ctx, channel, viewerId));
+        }
+      }),
+    );
+  }
+
   return edges.map((edge) => {
     const node = nodeByEdgeId.get(edge._id);
     return {
@@ -166,7 +189,7 @@ async function enrichEdges(
       sourceId: edge.sourceId,
       sourceName: node
         ? (edge.sourceType === "channel" ? `#${node.name}` : node.name)
-        : `Deleted ${edge.sourceType}`,
+        : (dmLabels.get(edge.sourceId) ?? `Deleted ${edge.sourceType}`),
       edgeType: edge.edgeType,
       workspaceId: edge.workspaceId,
       projectId:

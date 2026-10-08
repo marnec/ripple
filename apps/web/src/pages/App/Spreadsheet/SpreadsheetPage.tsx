@@ -306,7 +306,7 @@ function SpreadsheetEditor({
             activeUsers={(awareness) => (
               <SurfaceActiveUsers awareness={awareness} viewer={viewer} />
             )}
-            centre={
+            subbar={
               <FormulaBar
                 binding={binding}
                 selection={selection}
